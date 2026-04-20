@@ -1,0 +1,31 @@
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      }
+    },
+    "production": {
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_SUPABASE_URL": "https://lpdszzdmhzrowtppngjb.supabase.co",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZHN6emRtaHpyb3d0cHBuZ2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjI1MjksImV4cCI6MjA3NjE5ODUyOX0.hl8QZIOJtJ2WqbIFU3Dx8sR47A1cg3qnXrjXsuFSM24",
+        "EXPO_PUBLIC_API_URL": "https://dhub-gxid.onrender.com",
+        "DIRA_PAYMENT_URL": "https://dhubpayment.onrender.com",
+        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "REPLACE_ME_OR_USE_EAS_SECRET"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
