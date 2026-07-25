@@ -1,0 +1,13 @@
+# .easignore
+# This file tells EAS Build which files to exclude from the project archive uploaded to Expo servers.
+
+supabase/
+supabase_migrations.sql
+DHUB_DEVELOPMENT_BIBLE.md
+README.md
+
+.git/
+node_modules/
+.expo/
+android/
+ios/
