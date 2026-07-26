@@ -8,18 +8,18 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    Image,
+    Linking,
+    Modal,
+    ScrollView,
+    StatusBar,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from "react-native";
 import MapView from 'react-native-maps';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -30,7 +30,7 @@ import { triggerPushNotifications } from '../../hooks/usePushNotifications';
 import { LocationService } from '../../services/LocationService';
 import { StudentStackParamList } from "../../types";
 import { supabase } from '../../utils/supabaseClient';
-import { uploadListingMedia } from '../../utils/upload';
+import { uploadListingMedia } from '../../utils/upload.native';
 
 const { width } = Dimensions.get("window");
 

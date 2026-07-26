@@ -1,4 +1,4 @@
-// src/lib/supabaseClient.ts
+// src/utild/supabaseClient.ts
 
 import { createClient } from '@supabase/supabase-js';
 import { storage } from './storage';
@@ -26,6 +26,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: false,
-    storage: storage, // ✅ Platform-specific storage
+    storage: storage, 
+    flowType: 'pkce',// ✅ Platform-specific storage
   },
 });

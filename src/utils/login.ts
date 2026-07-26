@@ -1,8 +1,8 @@
 // src/utils/login.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Session } from '@supabase/supabase-js';
-import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
+import { Platform } from 'react-native';
 import { clearLocalSession, getLocalSession } from '../utils/localSession';
 import { supabase } from '../utils/supabaseClient';
 import { authLogger } from './logger';
@@ -126,12 +126,8 @@ export const loginWithPhone = async (
     let rawText: string;
     try {
       rawText = await res.text();
-      // Sensitive logging removed
-      // console.log(`[${STEP}] [${requestId}] Raw response length:`, rawText.length);
-      // console.log(`[${STEP}] [${requestId}] Raw response preview:`, rawText.substring(0, 500));
       authLogger.log(STEP, `[${requestId}] Raw response`, {
         length: rawText.length,
-        // preview removed for security
       });
     } catch (textError: any) {
       console.error(`[${STEP}] [${requestId}] Failed to read response text:`, textError);
@@ -239,7 +235,6 @@ export const signUpWithEmail = async (
   authLogger.log(STEP, `[${requestId}] Attempting signup for ${email}`);
   console.log(`[${STEP}] [${requestId}] signUpWithEmail started`, { email, profile });
 
-  // Step 1: Create the Auth user with ALL metadata.
   const { data, error } = await supabase.auth.signUp({
     email: email.toLowerCase().trim(),
     password,
@@ -269,7 +264,6 @@ export const signUpWithEmail = async (
   console.log(`[${STEP}] [${requestId}] Auth user created:`, data.user.id);
   authLogger.success(STEP, `[${requestId}] Auth user created: ${data.user.id}. Trigger will handle DB record.`);
 
-  // Step 2: Non-blocking enrichment sync
   syncProfileData(data.user.id, profile).catch((err: any) => {
     console.warn(`[${STEP}] [${requestId}] Enrichment sync deferred (non-fatal):`, err.message);
     authLogger.warn(STEP, `[${requestId}] Enrichment sync deferred (non-fatal): ${err.message}`);
@@ -343,104 +337,72 @@ export const signUpWithPhone = async (
 };
 
 // ----------------------
-// GOOGLE / OAUTH REDIRECT HANDLING
-// ----------------------
-// ----------------------
 // DEEP LINK / OAUTH HANDOVER
 // ----------------------
 export const createSessionFromUrl = async (url: string) => {
   const STEP = 'DEEP_LINK';
   const requestId = Math.random().toString(36).substring(2, 10);
-  if (isProcessingRedirect) {
-    console.warn(`[${STEP}] [${requestId}] SKIP: Already processing a redirect.`);
-    authLogger.warn(STEP, `[${requestId}] SKIP: Already processing a redirect.`);
-    return null;
-  }
-  
-  console.log(`[${STEP}] [${requestId}] Processing URL:`, url);
-  authLogger.log(STEP, `[${requestId}] Processing URL: ${url}`);
 
   try {
-    const parsed = Linking.parse(url);
-    let { code, access_token, refresh_token, error, error_description } = (parsed.queryParams || {}) as any;
+    const parsed = new URL(url);
+    let access_token = parsed.hash
+      ? new URLSearchParams(parsed.hash.substring(1)).get('access_token')
+      : null;
+    let refresh_token = parsed.hash
+      ? new URLSearchParams(parsed.hash.substring(1)).get('refresh_token')
+      : null;
+    let code = parsed.hash
+      ? new URLSearchParams(parsed.hash.substring(1)).get('code')
+      : null;
+    let error = parsed.hash
+      ? new URLSearchParams(parsed.hash.substring(1)).get('error')
+      : null;
+    let error_description = parsed.hash
+      ? new URLSearchParams(parsed.hash.substring(1)).get('error_description')
+      : null;
 
-    // 1. Extract from Fragment (#) if not in Query
-    if (url.includes('#')) {
-      const hash = url.split('#')[1];
-      const parts = hash.split('&');
-      parts.forEach(part => {
-        const [key, value] = part.split('=');
-        if (key === 'access_token') access_token = decodeURIComponent(value);
-        if (key === 'refresh_token') refresh_token = decodeURIComponent(value);
-        if (key === 'code') code = decodeURIComponent(value);
-        if (key === 'error') error = decodeURIComponent(value);
-        if (key === 'error_description') error_description = decodeURIComponent(value.replace(/\+/g, ' '));
-      });
+    if (!access_token && !refresh_token && !code) {
+      access_token = parsed.searchParams.get('access_token');
+      refresh_token = parsed.searchParams.get('refresh_token');
+      code = parsed.searchParams.get('code');
+      error = parsed.searchParams.get('error');
+      error_description = parsed.searchParams.get('error_description');
     }
 
-    // 2. Check for Supabase Errors (e.g. Expired Link)
     if (error || error_description) {
       const msg = error_description || error || 'Authentication failed';
-      console.error(`[${STEP}] [${requestId}] Supabase Error:`, msg);
-      authLogger.error(STEP, `[${requestId}] Supabase Error: ${msg}`);
+      console.error(`[${STEP}] Error:`, msg);
       throw new Error(msg);
     }
 
-    const getParam = (p: any) => (Array.isArray(p) ? p[0] : p || undefined);
-    const codeStr = getParam(code);
-    const atStr = getParam(access_token);
-    const rtStr = getParam(refresh_token);
-
-    if (!codeStr && !atStr) {
-      console.log(`[${STEP}] [${requestId}] No auth tokens found in URL.`);
-      authLogger.log(STEP, `[${requestId}] No auth tokens found in URL. Handing back to app.`);
-      return null;
+    if (code) {
+      console.log(`[${STEP}] Exchanging code for session...`);
+      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) throw exchangeError;
+      return data.session;
     }
 
-    isProcessingRedirect = true;
-    let session: Session | null = null;
-
-    // 3. Exchange or Set Session
-    if (codeStr) {
-      console.log(`[${STEP}] [${requestId}] Exchanging PKCE code for session...`);
-      authLogger.log(STEP, `[${requestId}] Exchanging PKCE code for session...`);
-      const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(codeStr);
-      if (exchangeError) {
-        console.error(`[${STEP}] [${requestId}] exchangeCodeForSession error:`, exchangeError);
-        throw exchangeError;
-      }
-      session = data.session;
-    } else if (atStr && rtStr) {
-      console.log(`[${STEP}] [${requestId}] Setting session from implicit tokens...`);
-      authLogger.log(STEP, `[${requestId}] Setting session from implicit tokens...`);
+    if (access_token && refresh_token) {
+      console.log(`[${STEP}] Setting session from tokens...`);
       const { data, error: setError } = await supabase.auth.setSession({
-        access_token: atStr,
-        refresh_token: rtStr,
+        access_token,
+        refresh_token,
       });
-      if (setError) {
-        console.error(`[${STEP}] [${requestId}] setSession error:`, setError);
-        throw setError;
-      }
-      session = data.session;
+      if (setError) throw setError;
+      return data.session;
     }
 
-    if (session) {
-      console.log(`[${STEP}] [${requestId}] Session established for user:`, session.user.id);
-      authLogger.success(STEP, `[${requestId}] Session established for ${session.user.id}. Handing over to Gatekeeper.`);
-      return session;
-    }
-    
+    console.log(`[${STEP}] No auth tokens found in URL.`);
     return null;
   } catch (err: any) {
-    console.error(`[${STEP}] [${requestId}] Fatal Deep Link Error:`, err.message);
-    authLogger.error(STEP, `[${requestId}] Fatal Deep Link Error: ${err.message}`);
+    console.error(`[${STEP}] Error:`, err.message);
     throw err;
-  } finally {
-    // Small delay to prevent race conditions on double-events
-    setTimeout(() => { isProcessingRedirect = false; }, 1000);
   }
 };
 
+// ----------------------
+// SYNC PROFILE DATA
+// ----------------------
 export const syncProfileData = async (userId: string, profile: any) => {
   const STEP = 'SYNC_PROFILE';
   const requestId = Math.random().toString(36).substring(2, 10);
@@ -448,7 +410,6 @@ export const syncProfileData = async (userId: string, profile: any) => {
   console.log(`[${STEP}] [${requestId}] Starting syncProfileData for user:`, userId, 'profile:', profile);
 
   try {
-    // 0. Session Verification
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) {
       console.warn(`[${STEP}] [${requestId}] No active session found. Sync deferred.`);
@@ -456,8 +417,7 @@ export const syncProfileData = async (userId: string, profile: any) => {
       return;
     }
 
-    // 1. Auth Metadata Update
-    authLogger.log(STEP, `[${requestId}] Step 1/3: Syncing Auth Metadata (Metadata, Role, Numbers)...`);
+    authLogger.log(STEP, `[${requestId}] Step 1/3: Syncing Auth Metadata...`);
     console.log(`[${STEP}] [${requestId}] Updating auth metadata with:`, {
       full_name: profile.fullName,
       role: profile.role,
@@ -491,7 +451,6 @@ export const syncProfileData = async (userId: string, profile: any) => {
       authLogger.success(STEP, `[${requestId}] Auth Metadata synced.`);
     }
 
-    // 2. Public User Record
     authLogger.log(STEP, `[${requestId}] Step 2/3: Upserting record into public.users...`);
     console.log(`[${STEP}] [${requestId}] Upserting public.users with:`, { id: userId, full_name: profile.fullName, phone: profile.whatsappNumber, momo: profile.mobileMoney });
     const upsertUser = async () => {
@@ -518,10 +477,8 @@ export const syncProfileData = async (userId: string, profile: any) => {
     } catch (err: any) {
       console.error(`[${STEP}] [${requestId}] Public user upsert failed or timed out:`, err.message);
       authLogger.error(STEP, `[${requestId}] Public user upsert failed or timed out: ${err.message}`);
-      // If the main table fails, we might have a serious problem, but we try to continue
     }
 
-    // 3. Sub-Profiles (Roles & Categories)
     authLogger.log(STEP, `[${requestId}] Step 3/3: Syncing ${profile.role} specific data...`);
     console.log(`[${STEP}] [${requestId}] Syncing sub-profiles for role:`, profile.role);
     const syncSubProfile = async () => {
@@ -559,12 +516,14 @@ export const syncProfileData = async (userId: string, profile: any) => {
   }
 };
 
+// ============================================================
+// ✅ CORRECTED loginWithGoogle – using official Supabase OAuth flow
+// ============================================================
 export const loginWithGoogle = async () => {
-  const STEP = 'GOOGLE_LOGIN';
-  const requestId = Math.random().toString(36).substring(2, 10);
   try {
-    const redirectTo = Linking.createURL('auth/callback');
-    console.log(`[${STEP}] [${requestId}] Google login redirect URL:`, redirectTo);
+    const redirectTo = makeRedirectUri({
+      path: 'auth/callback',
+    });
 
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -572,26 +531,40 @@ export const loginWithGoogle = async () => {
         redirectTo,
         skipBrowserRedirect: true,
         queryParams: { prompt: 'consent select_account' },
+        // PKCE is automatically used when flowType: 'pkce' is set in client
       },
     });
 
-    if (error) throw error;
-
-    console.log(`[${STEP}] [${requestId}] Opening auth session with URL:`, data.url);
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
-
-    if (result.type === 'success') {
-      console.log(`[${STEP}] [${requestId}] Browser closed with success, handling URL...`);
-      await createSessionFromUrl(result.url);
-    } else {
-      console.log(`[${STEP}] [${requestId}] Browser result type:`, result.type);
+    if (error) {
+      console.error('Supabase signInWithOAuth error:', error);
+      throw error;
     }
-  } catch (err: any) {
-    console.error(`[${STEP}] [${requestId}] Google login error:`, err.message || err);
+
+    if (Platform.OS === 'web') {
+      // Full-page redirect to Google
+      if (data.url) {
+        window.location.href = data.url;
+      } else {
+        throw new Error('No OAuth URL returned');
+      }
+    } else {
+      // Native: open in browser
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo);
+      if (result.type === 'success') {
+        await createSessionFromUrl(result.url);
+      } else {
+        throw new Error('Sign-in was cancelled.');
+      }
+    }
+  } catch (err) {
+    console.error('Google login error:', err);
     throw err;
   }
 };
 
+// ----------------------
+// LOGOUT
+// ----------------------
 export const logout = async () => {
   const STEP = 'LOGOUT';
   const requestId = Math.random().toString(36).substring(2, 10);
@@ -605,4 +578,15 @@ export const logout = async () => {
   } catch (err) {
     console.error(`[${STEP}] [${requestId}] Logout error:`, err);
   }
+};
+
+export default {
+  loginWithPhone,
+  loginWithEmail,
+  signUpWithEmail,
+  signUpWithPhone,
+  createSessionFromUrl,
+  syncProfileData,
+  loginWithGoogle,
+  logout,
 };

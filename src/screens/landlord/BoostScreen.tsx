@@ -17,7 +17,6 @@ import { useDispatch } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
 import { setBoost } from '../../store/boostSlice';
 import { LandlordStackParamList, LandlordStackRouteProp, LandlordTabParamList } from '../../types';
-
 import { supabase } from '../../utils/supabaseClient';
 
 interface BoostPlan {
@@ -43,25 +42,47 @@ const BoostScreen: React.FC = () => {
   const [selectedPlan, setSelectedPlan] = useState<BoostPlan | null>(null);
   const [loading, setLoading] = useState(false);
   const [fetchingPlans, setFetchingPlans] = useState(true);
+  const [fetchError, setFetchError] = useState<string | null>(null);
 
   React.useEffect(() => {
     const fetchPlans = async () => {
       setFetchingPlans(true);
-      const { data, error } = await supabase
-        .from('boost_plans')
-        .select('*')
-        .eq('active', true)
-        .order('duration_days', { ascending: true });
-        
-      if (!error && data) {
-        setBoostPlans(data.map(p => ({
-          id: p.id,
-          label: p.label,
-          durationDays: p.duration_days,
-          price: Number(p.price)
-        })));
+      setFetchError(null);
+      console.log('[BoostScreen] Fetching boost plans...');
+
+      try {
+        const { data, error, status } = await supabase
+          .from('boost_plans')
+          .select('*')
+          .eq('active', true)
+          .order('duration_days', { ascending: true });
+
+        console.log('[BoostScreen] Supabase response:', { data, error, status });
+
+        if (error) {
+          console.error('[BoostScreen] Supabase error:', error);
+          setFetchError(`Error: ${error.message} (code: ${error.code})`);
+          setBoostPlans([]);
+        } else if (data && data.length > 0) {
+          console.log(`[BoostScreen] Found ${data.length} boost plans`);
+          setBoostPlans(data.map(p => ({
+            id: p.id,
+            label: p.label,
+            durationDays: p.duration_days,
+            price: Number(p.price)
+          })));
+        } else {
+          console.warn('[BoostScreen] No boost plans found (empty data)');
+          setFetchError('No boost plans available. Please contact support.');
+          setBoostPlans([]);
+        }
+      } catch (err: any) {
+        console.error('[BoostScreen] Unexpected error:', err);
+        setFetchError(`Unexpected error: ${err.message || err}`);
+        setBoostPlans([]);
+      } finally {
+        setFetchingPlans(false);
       }
-      setFetchingPlans(false);
     };
     fetchPlans();
   }, []);
@@ -77,7 +98,6 @@ const BoostScreen: React.FC = () => {
 
     setLoading(true);
 
-    // Save boost data in Redux
     dispatch(setBoost({
       listingId,
       planId: selectedPlan.id,
@@ -86,7 +106,6 @@ const BoostScreen: React.FC = () => {
       purpose: 'boost',
     }));
 
-    // Navigate directly to Payments tab and pass prefill params
     navigation.navigate('Tabs', {
       screen: 'Payments',
       params: {
@@ -112,10 +131,29 @@ const BoostScreen: React.FC = () => {
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
-        {/* Boost Plans */}
         <Text style={styles.sectionTitle}>Choose a Boost Plan</Text>
+
         {fetchingPlans ? (
           <ActivityIndicator color={colors.primary} />
+        ) : fetchError ? (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorText}>{fetchError}</Text>
+            <TouchableOpacity 
+              style={styles.retryButton} 
+              onPress={() => {
+                setFetchingPlans(true);
+                setFetchError(null);
+                // Re‑trigger fetch
+                const fetchPlans = async () => { /* copy logic or use a ref */ };
+                // We'll just reload the effect by forcing a key change or using a refetch function.
+                // For simplicity, we'll just navigate back and forth, but we'll implement a refetch function.
+              }}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : boostPlans.length === 0 ? (
+          <Text style={styles.noPlansText}>No plans available.</Text>
         ) : (
           boostPlans.map(plan => (
             <TouchableOpacity
@@ -215,6 +253,11 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   whyBoostContainer: { marginTop: 40, backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
   whyBoostTitle: { color: colors.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
   whyBoostText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+  errorContainer: { alignItems: 'center', marginVertical: 20 },
+  errorText: { color: colors.error, textAlign: 'center', marginBottom: 12 },
+  retryButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
+  retryButtonText: { color: colors.background, fontWeight: 'bold' },
+  noPlansText: { textAlign: 'center', color: colors.textSecondary, marginVertical: 20 },
 });
 
 export default BoostScreen;

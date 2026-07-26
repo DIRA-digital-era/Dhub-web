@@ -42,12 +42,9 @@ const AuthListener: React.FC = () => {
       if (!isMounted) return;
 
       if (!session) {
-        // FIX: Prevent AppState/init() from wiping the session during OAuth deep link processing.
-        // Expo fires AppState "active" and Linking simultaneously when WebBrowser closes.
-        // If we clearUser() here, the race condition kills the OAuth flow.
         if (isProcessingRedirect) {
           authLogger.log(STEP, 'Deep link in progress. Skipping clearUser.');
-          return; 
+          return;
         }
         authLogger.log(STEP, 'No active session. Redirecting to Auth Stack.');
         dispatch(clearUser());
@@ -55,9 +52,6 @@ const AuthListener: React.FC = () => {
         return;
       }
 
-      // --- OPTIMISTIC ENTRY ---
-      // If we have a local session, let the user in IMMEDIATELY.
-      // We will verify and sync in the background.
       authLogger.log(STEP, `Session found for ${session.user.id}. Releasing Gatekeeper optimistically...`);
       
       const optimisticUser: User = {
@@ -75,9 +69,8 @@ const AuthListener: React.FC = () => {
       };
 
       dispatch(setUser(optimisticUser));
-      dispatch(setHydrated()); // Hides splash screen
+      dispatch(setHydrated());
       
-      // Now run the heavy lifting in the background
       performBackgroundSync(session);
     };
 
@@ -86,20 +79,17 @@ const AuthListener: React.FC = () => {
       dispatch(setSyncing(true));
 
       try {
-        // 1. Backend Verification (Anti-Ghost)
         const verifyUser = async () => {
           const { data: { user }, error: userError } = await supabase.auth.getUser();
           if (userError || !user) throw new Error('SESSION_EXPIRED');
           return user;
         };
 
-        // Aggressive 5s timeout for background check
         const user = await Promise.race([
           verifyUser(),
           new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFICATION_TIMEOUT')), 5000))
         ]) as any;
 
-        // 2. Synchronization Handover
         const pendingJson = await AsyncStorage.getItem('pending_profile');
         if (pendingJson) {
           authLogger.log(STEP, 'Pending profile found. Triggering Master Sync...');
@@ -108,7 +98,6 @@ const AuthListener: React.FC = () => {
           await AsyncStorage.removeItem('pending_profile');
         }
 
-        // 3. Database Integrity & Fetch
         const fetchDbUser = async () => {
           const { data, error } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
           if (error) throw error;
@@ -130,7 +119,6 @@ const AuthListener: React.FC = () => {
            });
         }
 
-        // 4. Redux State Refinement (Silent Update)
         const finalUser: User = {
           id: user.id,
           fullName: dbUser?.full_name || user.user_metadata?.full_name || 'User',
@@ -154,7 +142,6 @@ const AuthListener: React.FC = () => {
         if (err.message === 'SESSION_EXPIRED') {
           await performLogout('Your session has expired. Please log in again.');
         }
-        // Other errors (timeouts) are ignored as we are already in fallback/optimistic mode
       } finally {
         dispatch(setSyncing(false));
       }
@@ -198,8 +185,7 @@ const AuthListener: React.FC = () => {
     // 3. Deep Linking (OAuth / Email Links)
     const handleUrl = async (url: string | null) => {
       if (!url || !isMounted) return;
-      
-      // Look for auth data or error data
+
       if (url.includes('auth/callback') || url.includes('#access_token') || url.includes('error=')) {
         authLogger.log(STEP, 'Auth Deep Link detected. Processing URL...');
         try {

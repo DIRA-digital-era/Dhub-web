@@ -1,12 +1,14 @@
 // src/navigation/AuthStack.tsx
-import React from 'react';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from 'react';
+import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
+import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
 import SignInScreen from '../screens/auth/SignInScreen';
 import SignUpScreen from '../screens/auth/SignUpScreen';
 import VerifyOtpScreen from '../screens/auth/VerifyOtpScreen';
-import ForgotPasswordScreen from '../screens/auth/ForgotPasswordScreen';
-import EmailVerificationScreen from '../screens/auth/EmailVerificationScreen';
 import { AuthStackParamList } from '../types';
+
+// Inside the Stack.Navigator:
 
 const Stack = createNativeStackNavigator<AuthStackParamList>();
 

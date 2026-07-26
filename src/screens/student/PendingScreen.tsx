@@ -3,6 +3,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
   ActivityIndicator,
   Alert,
@@ -17,9 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { StudentStackNavigationProp, StudentStackRouteProp } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
-
-// ─── Component ────────────────────────────────────────────────────────────────
-import { useTranslation } from 'react-i18next';
 
 const PendingScreen: React.FC = () => {
   const { t } = useTranslation();
@@ -61,9 +59,6 @@ const PendingScreen: React.FC = () => {
   const [canPay, setCanPay] = useState(false);
   const [paid, setPaid] = useState(false);
 
-  // GLM: Removed isBookingExpired function. The database cron job (clean_expired_bookings)
-  // now handles all expiries automatically to prevent UI bloat and client-side drift.
-
   // ── Fetch initial booking ──────────────────────────────────────────────────
   useEffect(() => {
     const fetchBooking = async () => {
@@ -78,30 +73,26 @@ const PendingScreen: React.FC = () => {
           .eq('id', bookingId)
           .single();
 
-        if (error || !data) throw error;
-
-        let fetchedBooking = data;
-
-                // GLM: Removed manual expiry DB call. Status is now updated by the cron job.
-        // If a user opens an already-expired booking from a deep link, just show the alert.
-
-        setBooking(fetchedBooking);
-
-                if (fetchedBooking.approval_status === 'rejected' || fetchedBooking.status === 'cancelled') {
-          // GLM: Simplified logic. We just check the DB state. No more client-side date math.
-          const title = t('booking.declined_title');
-          const message = t('booking.declined_msg');
-
-          Alert.alert(title, message);
-          navigation.goBack();
+        if (error || !data) {
+          Alert.alert(t('common.error'), t('booking.not_found'));
+          goHome(); // ✅ go home on error
           return;
         }
 
-        setCanPay(fetchedBooking.approval_status === 'approved');
-        setPaid(fetchedBooking.payment_status === 'completed');
+        setBooking(data);
+
+        if (data.approval_status === 'rejected' || data.status === 'cancelled') {
+          Alert.alert(t('booking.declined_title'), t('booking.declined_msg'));
+          goHome();
+          return;
+        }
+
+        setCanPay(data.approval_status === 'approved');
+        setPaid(data.payment_status === 'completed');
       } catch (err) {
         console.error('[PendingScreen] fetch error:', err);
         Alert.alert(t('common.error'), t('booking.failed_msg'));
+        goHome();
       } finally {
         setLoading(false);
       }
@@ -128,14 +119,14 @@ const PendingScreen: React.FC = () => {
 
           if (updated.approval_status === 'rejected' || updated.status === 'cancelled') {
             Alert.alert(t('booking.declined_title'), t('booking.declined_msg'));
-            navigation.goBack();
+            goHome();
           }
 
           if (updated.approval_status === 'approved') setCanPay(true);
           if (updated.payment_status === 'completed') setPaid(true);
         }
       )
-      .subscribe();
+      .subscribe(); // ✅ .on() before .subscribe()
 
     return () => { supabase.removeChannel(channel); };
   }, [bookingId]);
@@ -146,7 +137,6 @@ const PendingScreen: React.FC = () => {
       Alert.alert(t('booking.not_approved_title'), t('booking.not_approved_msg'));
       return;
     }
-    // Initial Payment: Caution Fee + 5000 FCFA Service Fee
     const caution = booking.caution_fee ?? 0;
     const initialPaymentAmount = caution + 5000;
 
@@ -158,9 +148,17 @@ const PendingScreen: React.FC = () => {
       receiverPhone: booking.landlord?.phone ?? '',
       receiverName: booking.landlord?.full_name ?? '',
       landlordId: booking.landlord_id,
-            paymentType: 'initial',
-            listingType: booking.listing?.listing_type || 'Apartment',
-          } as any);
+      paymentType: 'initial',
+      listingType: booking.listing?.listing_type || 'Apartment',
+    } as any);
+  };
+
+  // ── Go to Home – reset stack ─────────────────────────────────────────────
+  const goHome = () => {
+    navigation.reset({
+      index: 0,
+      routes: [{ name: 'StudentTabs', params: { screen: 'Home' } }],
+    });
   };
 
   // ── Derived helpers ────────────────────────────────────────────────────────
@@ -194,9 +192,9 @@ const PendingScreen: React.FC = () => {
         <View style={styles.centered}>
           <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
           <Text style={styles.errorTitle}>{t('booking.not_found')}</Text>
-          <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={18} color={COLORS.gold} />
-            <Text style={styles.outlineButtonText}>{t('common.back')}</Text>
+          <TouchableOpacity style={styles.outlineButton} onPress={goHome}>
+            <Ionicons name="home-outline" size={18} color={COLORS.gold} />
+            <Text style={styles.outlineButtonText}>{t('common.home')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -215,7 +213,9 @@ const PendingScreen: React.FC = () => {
           <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('booking.pending_title')}</Text>
-        <View style={styles.headerBtn} />
+        <TouchableOpacity style={styles.headerBtn} onPress={goHome}>
+          <Ionicons name="home-outline" size={24} color={COLORS.greyDark} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -459,7 +459,6 @@ const TimelineStep = ({
 
   return (
     <View style={timelineStyles.row}>
-      {/* Dot + connector */}
       <View style={timelineStyles.dotColumn}>
         <View
           style={[
@@ -478,8 +477,6 @@ const TimelineStep = ({
           <View style={[timelineStyles.connector, done && timelineStyles.connectorDone]} />
         )}
       </View>
-
-      {/* Label */}
       <View style={timelineStyles.labelColumn}>
         <Text style={[timelineStyles.label, done && timelineStyles.labelDone]}>{label}</Text>
         <Text style={timelineStyles.sublabel}>{sublabel}</Text>
@@ -535,8 +532,6 @@ const getStyles = (COLORS: any) => ({
       fontSize: 20, fontWeight: '600', color: COLORS.greyDark,
       marginTop: 16, marginBottom: 24,
     },
-
-    // Header
     header: {
       flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
       paddingHorizontal: 16, paddingVertical: 12,
@@ -549,11 +544,7 @@ const getStyles = (COLORS: any) => ({
       width: 40, height: 40, borderRadius: 20,
       backgroundColor: COLORS.offWhite, justifyContent: 'center', alignItems: 'center',
     },
-
-    // Scroll
     scrollContent: { paddingBottom: 24 },
-
-    // Hero banner
     heroBanner: {
       alignItems: 'center', paddingVertical: 32, paddingHorizontal: 24,
       backgroundColor: COLORS.card,
@@ -575,8 +566,6 @@ const getStyles = (COLORS: any) => ({
       fontSize: 14, color: COLORS.greyMedium, textAlign: 'center', lineHeight: 20,
       paddingHorizontal: 8,
     },
-
-    // Card
     card: {
       marginHorizontal: 16, marginTop: 16,
       backgroundColor: COLORS.card, borderRadius: 20, padding: 20,
@@ -588,8 +577,6 @@ const getStyles = (COLORS: any) => ({
       flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16,
     },
     cardTitle: { fontSize: 16, fontWeight: '600', color: COLORS.greyDark },
-
-    // Landlord
     landlordRow: {
       flexDirection: 'row', alignItems: 'center', gap: 12,
     },
@@ -602,8 +589,6 @@ const getStyles = (COLORS: any) => ({
     landlordInfo: { flex: 1 },
     landlordName: { fontSize: 16, fontWeight: '600', color: COLORS.greyDark, marginBottom: 2 },
     landlordSub: { fontSize: 13, color: COLORS.greyMedium },
-
-    // Info / alert boxes
     infoBox: {
       marginHorizontal: 16, marginTop: 16,
       flexDirection: 'row', alignItems: 'flex-start', gap: 10,
@@ -617,13 +602,9 @@ const getStyles = (COLORS: any) => ({
       backgroundColor: COLORS.successLight, borderColor: '#A9DFBF',
     },
     successBoxText: { color: COLORS.success },
-
-    // Amount value
     amountValue: {
       fontSize: 16, fontWeight: '700', color: COLORS.gold,
     },
-
-    // Footer / CTA
     footer: {
       backgroundColor: COLORS.card, paddingHorizontal: 20, paddingVertical: 16,
       borderTopWidth: 1, borderTopColor: COLORS.border,
@@ -640,15 +621,12 @@ const getStyles = (COLORS: any) => ({
     footerNote: {
       textAlign: 'center', marginTop: 8, fontSize: 13, color: COLORS.greyMedium,
     },
-
-    // Outline button (error state)
     outlineButton: {
       flexDirection: 'row', alignItems: 'center', gap: 8,
       paddingHorizontal: 24, paddingVertical: 12,
       borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.gold,
     },
     outlineButtonText: { color: COLORS.gold, fontSize: 15, fontWeight: '600' },
-
     bottomSpacer: { height: 16 },
   }),
   timelineStyles: StyleSheet.create({

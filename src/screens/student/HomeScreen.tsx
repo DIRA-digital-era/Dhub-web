@@ -10,6 +10,7 @@ import {
   Linking,
   Modal,
   Platform,
+  RefreshControl,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -17,7 +18,6 @@ import {
   TextInput,
   TouchableOpacity,
   View,
-  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DiraBranding } from '../../components/DiraBranding';
@@ -114,6 +114,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
     fetchUnread();
 
+// ✅ CORRECT – add listener before subscribe
     const channel = supabase
       .channel(`student_notifs_${user.id}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, fetchUnread)

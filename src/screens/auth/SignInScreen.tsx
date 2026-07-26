@@ -5,7 +5,6 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
@@ -14,23 +13,21 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback,
+  TouchableWithoutFeedback, // ✅ Fixed: added missing import
   View
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
 
+import * as Linking from 'expo-linking';
 import ButtonPrimary from '../../components/ButtonPrimary';
+import { DiraBranding } from '../../components/DiraBranding';
+import { LanguageSelector } from '../../components/LanguageSelector';
+import { useTheme } from '../../context/ThemeContext';
 import type { AppDispatch } from '../../store/store';
 import { AuthStackParamList } from '../../types';
 import { normalizePhone } from '../../utils/authHelpers';
-import * as Linking from 'expo-linking';
+import { loginWithEmail, loginWithGoogle, loginWithPhone } from '../../utils/login';
 import { supabase } from '../../utils/supabaseClient';
-import { useTheme } from '../../context/ThemeContext';
-import { LanguageSelector } from '../../components/LanguageSelector';
-import { DiraBranding } from '../../components/DiraBranding';
-import { loginWithPhone, loginWithEmail, loginWithGoogle, SimpleUserProfile } from '../../utils/login';
-import { setUser } from '../../store/authSlice';
-import { User } from '../../store/authSlice';
 
 type SignInScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
@@ -62,7 +59,7 @@ const SignInScreen: React.FC = () => {
 
   const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
-  // Clear local loading if global error occurs (e.g. from AuthListener)
+  // Clear local loading if global error occurs
   React.useEffect(() => {
     if (globalError && loading) {
       setLoading(false);
@@ -142,17 +139,19 @@ const SignInScreen: React.FC = () => {
     setLoading(true);
     setErrorMessage('');
     try {
+      const redirectUrl = Platform.OS === 'web' 
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL('auth/callback');
+      
       const { error } = await supabase.auth.signInWithOtp({
         email: identifier.trim(),
         options: {
-          emailRedirectTo: Linking.createURL('auth/callback'),
-          shouldCreateUser: true, // Allow creating users (invitation style)
+          emailRedirectTo: redirectUrl,
+          shouldCreateUser: true,
         },
       });
       if (error) throw error;
       
-      // Navigate to the new verification screen
-      // We'll pass a flag to indicate it might be an invitation/signup link
       navigation.navigate('EmailVerification', { 
         email: identifier.trim(), 
         mode: 'signup' 
@@ -173,8 +172,11 @@ const SignInScreen: React.FC = () => {
     setLoading(true);
     setErrorMessage('');
     try {
+      const resetRedirectUrl = Platform.OS === 'web' 
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL('auth/callback');      
       const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), {
-        redirectTo: Linking.createURL('auth/callback'),
+        redirectTo: resetRedirectUrl,
       });
       if (error) throw error;
       
@@ -316,8 +318,8 @@ const SignInScreen: React.FC = () => {
                 </TouchableOpacity>
               </View>
             </View>
-            </ScrollView>
-          </TouchableWithoutFeedback>
+          </ScrollView>
+        </TouchableWithoutFeedback>
       </KeyboardAvoidingView>
 
       <View style={styles.footer}>
@@ -397,13 +399,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderTopColor: colors.border,
     paddingVertical: 8,
   },
-  brandingWrapper: {
-    marginTop: 0,
-    marginBottom: 2,
-  },
-  languageWrapper: {
-    paddingBottom: Platform.OS === 'ios' ? 10 : 5,
-  },
+  brandingWrapper: { marginTop: 0, marginBottom: 2 },
+  languageWrapper: { paddingBottom: Platform.OS === 'ios' ? 10 : 5 },
 });
 
 export default SignInScreen;

@@ -6,32 +6,43 @@ import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Keyboard,
-    KeyboardAvoidingView,
-    Linking,
-    Platform,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  KeyboardAvoidingView,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapPickerModal from '../../components/MapPickerModal';
+import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { MediaItem } from '../../types';
 import { requestLocationPermission } from '../../utils/location';
-import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseClient';
+// ✅ FIX: import from the conditional upload (not upload.native)
 import { uploadListingMedia } from '../../utils/upload';
 
 const { width } = Dimensions.get('window');
+
+// ─── Web‑safe alert helper ───────────────────────────────────────────────
+const showAlert = (title: string, message?: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    // On web, fallback to native alert if React Native Alert fails
+    const msg = message ? `${title}\n${message}` : title;
+    window.alert(msg);
+    // Buttons are ignored on web; we handle via simple alert
+    return;
+  }
+  Alert.alert(title, message, buttons);
+};
 
 const UploadListingScreen: React.FC = () => {
   const navigation = useNavigation();
@@ -75,7 +86,6 @@ const UploadListingScreen: React.FC = () => {
     price_unit: 'per_month' as 'per_month' | 'per_night',
   });
 
-  // Auto-switch price unit when listing type changes
   const handleListingTypeChange = (value: string) => {
     const isDailyType = value === 'guest_house' || value === 'hotel';
     setForm(p => ({
@@ -112,19 +122,14 @@ const UploadListingScreen: React.FC = () => {
 
   const handleInputFocus = (inputName: string) => {
     setFocusedInput(inputName);
-    // Let the ScrollView handle natural scrolling, just ensure enough padding at bottom
   };
 
   const pickMedia = async () => {
     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (!permission.granted) {
-      Alert.alert(
+      showAlert(
         'Permission Needed',
-        'Enable media permissions to upload images and videos.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Open Settings', onPress: () => Linking.openSettings() }
-        ]
+        'Enable media permissions to upload images and videos.'
       );
       return;
     }
@@ -185,20 +190,32 @@ const UploadListingScreen: React.FC = () => {
   const handleSubmit = async () => {
     if (!user) return;
 
-    if (!form.title || !form.price || !form.city || !form.address) {
-      Alert.alert('Missing Information', 'Please fill in all required fields marked with *');
+    // ─── Validation ────────────────────────────────────────────────
+    if (!form.title?.trim()) {
+      showAlert('Missing Information', 'Please enter a property title.');
       return;
     }
-
-    if (!form.terms || form.terms.trim().length < 10) {
-      Alert.alert('Terms Required', 'Please provide the Terms & Conditions for this listing.');
+    if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) {
+      showAlert('Missing Information', 'Please enter a valid price.');
       return;
     }
-
+    if (!form.city?.trim()) {
+      showAlert('Missing Information', 'Please enter a city.');
+      return;
+    }
+    if (!form.address?.trim()) {
+      showAlert('Missing Information', 'Please enter an address.');
+      return;
+    }
     if (form.latitude === null || form.longitude === null) {
-      Alert.alert('Location Required', 'Please select the listing location on the map.');
+      showAlert('Location Required', 'Please select a location on the map.');
       return;
     }
+    if (!form.terms || form.terms.trim().length < 10) {
+      showAlert('Terms Required', 'Please provide Terms & Conditions (at least 10 characters).');
+      return;
+    }
+    // ─── End validation ──────────────────────────────────────────
 
     setLoading(true);
     try {
@@ -217,7 +234,7 @@ const UploadListingScreen: React.FC = () => {
           latitude: form.latitude,
           longitude: form.longitude,
           rooms: form.rooms ? Number(form.rooms) : null,
-          media: [], // Start with empty media
+          media: [],
           available: true,
           terms_text: form.terms,
           terms_marker: marker,
@@ -249,13 +266,13 @@ const UploadListingScreen: React.FC = () => {
           listingId,
           item.type === 'video' ? item.thumbUrl : undefined,
           item.mimeType,
-          (progress) => {
-            setUploadProgress(prev => {
-              const newProgress = [...prev];
-              newProgress[index] = progress;
-              return newProgress;
-            });
-          },
+        (progress: number) => {
+          setUploadProgress(prev => {
+            const newProgress = [...prev];
+            newProgress[index] = progress;
+            return newProgress;
+          });
+        },
           abortControllerRef.current!.signal
         );
       });
@@ -273,12 +290,12 @@ const UploadListingScreen: React.FC = () => {
         throw new Error("Media upload succeeded, but failed to link to property: " + updateError.message);
       }
 
-      Alert.alert('Success!', 'Your property listing has been created successfully.', [
+      showAlert('Success!', 'Your property listing has been created successfully.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: any) {
       console.error('Error creating listing:', err);
-      Alert.alert('Error', err.message || 'Failed to create listing. Please try again.');
+      showAlert('Error', err.message || 'Failed to create listing. Please try again.');
       abortControllerRef.current = null;
       setLoading(false);
     }
@@ -687,7 +704,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   },
   content: {
     padding: 16,
-    paddingBottom: 200, // Extra padding to prevent keyboard overlap
+    paddingBottom: 200,
   },
   section: {
     backgroundColor: colors.card,
@@ -955,4 +972,5 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     borderRadius: 4,
   },
 });
+
 export default UploadListingScreen;

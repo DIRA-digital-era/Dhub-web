@@ -185,7 +185,7 @@ const EditListingScreen: React.FC = () => {
           listingId,
           item.type === 'video' ? item.thumbUrl : undefined,
           item.mimeType,
-          (progress) => {
+          (progress: number) => {
             setUploadProgress(prev => {
               const newProgress = [...prev];
               newProgress[index] = progress;

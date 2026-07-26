@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",
+    "@hookform/resolvers": "^3.10.0",
     "@mapbox/polyline": "^1.2.1",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "@react-native-community/datetimepicker": "8.4.4",
@@ -43,10 +44,12 @@
     "eventemitter3": "^5.0.1",
     "expo": "~54.0.36",
     "expo-asset": "~12.0.13",
+    "expo-auth-session": "^57.0.5",
     "expo-blob": "^0.1.6",
     "expo-build-properties": "~1.0.10",
     "expo-checkbox": "~5.0.8",
     "expo-constants": "~18.0.13",
+    "expo-crypto": "^57.0.1",
     "expo-device": "~8.0.10",
     "expo-document-picker": "~14.0.8",
     "expo-file-system": "~19.0.23",
@@ -80,6 +83,7 @@
     "lru-cache": "*",
     "react": "19.1.0",
     "react-dom": "19.1.0",
+    "react-hook-form": "^7.54.2",
     "react-i18next": "^17.0.11",
     "react-native": "0.81.5",
     "react-native-country-codes-picker": "^2.3.5",
@@ -103,7 +107,8 @@
     "rimraf": "*",
     "text-encoding": "*",
     "uuid": "*",
-    "world-countries": "^5.1.0"
+    "world-countries": "^5.1.0",
+    "yup": "^1.6.1"
   },
   "devDependencies": {
     "@types/mapbox__polyline": "^1.0.5",
@@ -117,4 +122,3 @@
   },
   "private": true
 }
-

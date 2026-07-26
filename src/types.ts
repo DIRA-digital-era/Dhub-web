@@ -347,6 +347,7 @@ export type AuthStackParamList = {
   ForgotPassword: { email?: string; phone?: string };
   ResetPassword: { phone: string; mode: 'reset' };
   EmailVerification: { email: string; mode: 'signup' | 'recovery' };
+  AuthCallback: undefined; // new
 };
 
 export type RootStackParamList = {

@@ -1,11 +1,9 @@
-// src/screens/student/BookingScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import { Asset } from 'expo-asset';
-import * as Device from 'expo-device';
-import * as FileSystem from 'expo-file-system/legacy';
+import * as Device from 'expo-device'; // ✅ Added missing import
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
+import { sha256 } from 'js-sha256';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
@@ -25,20 +23,15 @@ import {
 } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DateTimePicker from '../../components/DateTimePicker';
-
-import { sha256 } from 'js-sha256';
 import uuid from 'react-native-uuid';
+import DateTimePicker from '../../components/DateTimePicker';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
 import { triggerPushNotifications } from '../../hooks/usePushNotifications';
 import { ListingDetails, StudentStackNavigationProp, StudentStackRouteProp } from '../../types';
+import { generateBookingPDFHTML } from '../../utils/generateBookingPDF';
 import { supabase } from '../../utils/supabaseClient';
 
-const dhubLogo = require('../../components/dhub_logo_no_bg.png');
-
-// ─── Component ────────────────────────────────────────────────────────────────
-// ─── Component ────────────────────────────────────────────────────────────────
 const BookingScreen: React.FC = () => {
   const { t } = useTranslation();
   const navigation = useNavigation<StudentStackNavigationProp>();
@@ -81,6 +74,7 @@ const BookingScreen: React.FC = () => {
   const [showFeeModal, setShowFeeModal] = useState(false);
   const [showSignatureModal, setShowSignatureModal] = useState(false);
   const [showContractModal, setShowContractModal] = useState(false);
+  const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
 
   const [startDate, setStartDate] = useState<Date>(new Date());
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -309,285 +303,185 @@ ${t('booking.default_terms_template')}`;
 
   const totals = computeTotal();
 
-  // ── PDF download ─────────────────────────────────────────────────────────────
-  const handleDownloadPDF = async () => {
-    if (!listing) return;
-    setPdfLoading(true);
+  // ── PDF download – NEW VERSION using helper ──────────────────────────────
+const handleDownloadPDF = async () => {
+  if (!listing || !totals) return;
+  setPdfLoading(true);
+
+  try {
+    const html = await generateBookingPDFHTML({
+      listing,
+      user,
+      startDate,
+      endDate,
+      totals,
+      agreementId,
+      agreementHash,
+      signedAt,
+      signatureText,
+    });
+
+    if (Platform.OS === 'web') {
+      // Use setTimeout to avoid blocking the parent tab
+      setTimeout(() => {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+          win.print();
+        } else {
+          Alert.alert('Error', 'Unable to open print dialog. Please allow popups.');
+        }
+        setPdfLoading(false);
+      }, 100);
+      return;
+    }
+
+    // Native
+    const { uri } = await Print.printToFileAsync({ html });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: t('booking.download_pdf'),
+      });
+    } else {
+      Alert.alert(t('common.success'), `${t('common.success')}: ${uri}`);
+    }
+  } catch (err) {
+    console.error('[BookingScreen] PDF error:', err);
+    Alert.alert(t('common.error'), t('booking.failed'));
+  } finally {
+    setPdfLoading(false);
+  }
+};
+
+  // ── Create booking ───────────────────────────────────────────────────────────
+  const performBooking = async () => {
+    setSubmitting(true);
     try {
-      const logoAsset = Asset.fromModule(dhubLogo);
-      await logoAsset.downloadAsync();
-      const logoUri = logoAsset.localUri || logoAsset.uri || '';
-      const logoDataUri = logoUri
-        ? `data:image/png;base64,${await FileSystem.readAsStringAsync(logoUri, {
-            encoding: 'base64',
-          })}`
-        : '';
-      const verificationPayload = `DHUB-CONTRACT:${agreementId || 'UNSIGNED'}`;
-      const qrUri = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(verificationPayload)}`;
+      const { total, rentAmount, cautionFee, durationType: currentDurationType } = totals!;
+      const termsVersion = computeTermsVersion();
 
-      const escapeHtml = (value: string | null | undefined) =>
-        String(value || '')
-          .replace(/&/g, '&amp;')
-          .replace(/</g, '&lt;')
-          .replace(/>/g, '&gt;')
-          .replace(/"/g, '&quot;')
-          .replace(/'/g, '&#39;');
+      const bookingPayload = {
+        listing_id: listing!.id,
+        student_id: user!.id,
+        landlord_id: listing!.landlord!.id,
+        amount: rentAmount,
+        total_amount: total,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        status: 'pending',
+        approval_status: 'pending',
+        payment_status: 'pending',
+        contract_status: 'signed',
+        duration_type: currentDurationType,
+        caution_fee: cautionFee,
+        caution_status: 'held',
+        agreement_id: agreementId,
+        agreement_hash: agreementHash,
+        signature_method: 'typed_name',
+        signature_text: signatureText.trim(),
+        signed_at: signedAt,
+        agreement_device_info: deviceInfo || {},
+        terms_version: termsVersion,
+        agreed_to_terms: true,
+      };
 
-      const agreementDetails = signatureAccepted
-        ? `<div style="margin-bottom: 20px;">
-             <h2 style="font-size:18px; margin:0 0 12px; color:#111827;">${escapeHtml(t('booking.agreement_details'))}</h2>
-             <p><strong>${escapeHtml(t('booking.agreement_id_label'))}:</strong> ${escapeHtml(agreementId)}</p>
-             <p><strong>${escapeHtml(t('booking.signed_at_label'))}:</strong> ${escapeHtml(signedAt ? new Date(signedAt).toLocaleString() : '')}</p>
-             <p><strong>${escapeHtml(t('booking.signature_method_label'))}:</strong> ${escapeHtml(t('booking.signature_method_typed'))}</p>
-             <p><strong>${escapeHtml(t('booking.signature_text_label'))}:</strong> ${escapeHtml(signatureText)}</p>
-             <p><strong>${escapeHtml(t('booking.agreement_hash_label'))}:</strong> ${escapeHtml(agreementHash)}</p>
-             <p><strong>${escapeHtml(t('booking.contract_status_label'))}:</strong> ${escapeHtml(t('booking.contract_status_signed'))}</p>
-           </div>`
-        : '';
+      console.log('[BookingScreen] Inserting booking payload:', JSON.stringify(bookingPayload, null, 2));
 
-      const contractTextHtml = getContractText()
-        .split('\n\n')
-        .map((paragraph) => `<p>${escapeHtml(paragraph)}</p>`)
-        .join('');
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .insert(bookingPayload)
+        .select()
+        .single();
 
-      const html = `
-        <html>
-          <head>
-            <meta charset="utf-8" />
-            <style>
-              body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; background: #F3F4F6; }
-              @page { size: A4; margin: 20mm; }
-              html, body { width: 210mm; min-height: 297mm; margin: 0; padding: 0; }
-              body { margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: #111827; background: #F3F4F6; }
-              .page { width: 100%; max-width: 210mm; margin: 0 auto; padding: 32px; background: #FFFFFF; }
-              .brand-bar { display: flex; justify-content: space-between; align-items: center; gap: 18px; margin-bottom: 20px; }
-              .brand-mark { display: flex; align-items: center; gap: 18px; }
-              .brand-logo img { width: 120px; height: auto; display: block; }
-              .brand-text { display: flex; flex-direction: column; }
-              .brand-title { font-size: 28px; font-weight: 900; margin: 0; color: #D4AF37; letter-spacing: 0.6px; }
-              .brand-subtitle { margin: 6px 0 0; font-size: 12px; color: #6B7280; text-transform: uppercase; letter-spacing: 1.1px; }
-              .document-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; margin-bottom: 18px; padding-bottom: 16px; border-bottom: 1px solid #E5E7EB; }
-              .document-header .header-copy { display: flex; flex-direction: column; gap: 6px; }
-              .document-header .header-contact { font-size: 11px; color: #6B7280; line-height: 1.5; }
-              .document-header .header-meta { text-align: right; font-size: 11px; color: #6B7280; text-transform: uppercase; letter-spacing: 0.06em; }
-              .document-footer { margin-top: 32px; padding-top: 20px; border-top: 1px solid #E5E7EB; display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; font-size: 11px; color: #6B7280; line-height: 1.5; }
-              .document-footer .footer-text { max-width: 65%; }
-              .document-footer .footer-legal { text-align: right; }
-              .section { margin-bottom: 28px; }
-              .section h2 { margin: 0 0 12px; font-size: 16px; letter-spacing: 0.4px; text-transform: uppercase; color: #111827; }
-              .section p, .section li { margin: 0 0 14px; font-size: 14px; line-height: 1.85; color: #374151; }
-              .section p strong { color: #111827; }
-              .section ul { padding-left: 20px; }
-              .meta-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
-              .meta-card { background: #FEF3C7; border: 1px solid #FDE68A; border-radius: 16px; padding: 18px; }
-              .meta-label { font-size: 11px; color: #92400E; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 8px; }
-              .meta-value { font-size: 15px; color: #7C2D12; font-weight: 700; }
-              .summary-box { background: #F9FAFB; border: 1px solid #E5E7EB; border-radius: 20px; padding: 22px; }
-              .footer-note { margin-top: 28px; font-size: 12px; color: #6B7280; line-height: 1.8; }
-              .divider { height: 1px; background: linear-gradient(90deg, rgba(212,175,55,0) 0%, rgba(212,175,55,0.45) 50%, rgba(212,175,55,0) 100%); margin: 30px 0; }
-              .qr-panel { display: flex; flex-direction: row; align-items: center; gap: 18px; margin-top: 16px; }
-              .qr-card { background: #111827; border-radius: 18px; padding: 16px; display: inline-flex; }
-              .qr-card img { display: block; width: 160px; height: 160px; }
-              .qr-copy { max-width: 460px; font-size: 12px; color: #F9FAFB; line-height: 1.6; }
-              .qr-copy strong { color: #FCD34D; }
-            </style>
-          </head>
-          <body>
-            <div class="page">
-              <div class="document-header">
-                <div class="header-copy">
-                  <div class="brand-mark">
-                    <div class="brand-logo"><img src="${escapeHtml(logoDataUri || logoUri)}" alt="DHUB logo" /></div>
-                    <div class="brand-text">
-                      <p class="brand-title">DHUB</p>
-                      <p class="brand-subtitle">Student Booking Agreement</p>
-                    </div>
-                  </div>
-                  <div class="header-contact">+237 6 82 36 64 72 • AWICUL Building Commercial Avenue Bda (HQ)</div>
-                </div>
-                <div class="header-meta">
-                  <div>${escapeHtml(t('booking.contract_view_title'))}</div>
-                  <div style="margin-top:4px;">${escapeHtml(new Date().toLocaleDateString())}</div>
-                </div>
-              </div>
-
-              <div class="section">
-                <h2>${escapeHtml(listing.title)}</h2>
-                ${contractTextHtml}
-              </div>
-
-              ${agreementDetails ? `
-                <div class="section summary-box">
-                  ${agreementDetails}
-                </div>
-              ` : ''}
-
-              <div class="qr-panel">
-                <div class="qr-card">
-                  <img src="${escapeHtml(qrUri)}" alt="DHUB verification QR code" />
-                </div>
-                <div class="qr-copy">
-                  <p><strong>Scan to verify</strong> — this QR code links to the DHUB contract verification payload for this booking.</p>
-                  <p><strong>Contract ID:</strong> ${escapeHtml(agreementId || 'UNSIGNED')}</p>
-                  <p><strong>Document type:</strong> Booking Agreement</p>
-                </div>
-              </div>
-
-              <div class="meta-grid">
-                <div class="meta-card">
-                  <div class="meta-label">${escapeHtml(t('booking.signed_by'))}</div>
-                  <div class="meta-value">${escapeHtml(user?.fullName || t('booking.student_placeholder'))}</div>
-                </div>
-                <div class="meta-card">
-                  <div class="meta-label">${escapeHtml(t('booking.enforceable_note'))}</div>
-                  <div class="meta-value">${escapeHtml(t('booking.contract_status_signed'))}</div>
-                </div>
-              </div>
-
-              <div class="divider"></div>
-              <p class="footer-note">This agreement is issued by DHUB and represents an electronically authenticated booking document. Keep it with your payment confirmation for landlord verification or contract review.</p>
-              <div class="document-footer">
-                <div class="footer-text">DHUB commercial HQ • AWICUL Building Commercial Avenue Bda • +237 6 82 36 64 72 • info@diracmr.com</div>
-                <div class="footer-legal">Printed on ${escapeHtml(new Date().toLocaleDateString())}</div>
-              </div>
-            </div>
-          </body>
-        </html>
-      `;
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: t('booking.download_pdf') });
-      } else {
-        Alert.alert(t('common.success'), `${t('common.success')}: ${uri}`);
+      if (error) {
+        console.error('[BookingScreen] Insert error:', JSON.stringify(error, null, 2));
+        const errorText = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+        const isMissingCautionColumn = error.code === 'PGRST204' ||
+          (/column|schema cache|could not find/i.test(errorText) && /caution_fee|caution_status/i.test(errorText));
+        if (isMissingCautionColumn) {
+          console.warn('[BookingScreen] Retrying without caution columns (migration pending)');
+          const fallbackPayload = { ...bookingPayload };
+          delete (fallbackPayload as any).caution_fee;
+          delete (fallbackPayload as any).caution_status;
+          const { data: bookingFallback, error: fallbackError } = await supabase
+            .from('bookings')
+            .insert(fallbackPayload)
+            .select()
+            .single();
+          if (fallbackError) {
+            console.error('[BookingScreen] Fallback insert error:', fallbackError);
+            throw fallbackError;
+          }
+          if (!bookingFallback) throw new Error('Booking was not returned after insert (fallback)');
+          console.log('[BookingScreen] Fallback booking created:', bookingFallback.id);
+          triggerPushNotifications();
+          navigation.navigate('PendingScreen', { bookingId: bookingFallback.id });
+          return;
+        }
+        throw error;
       }
-    } catch (err) {
-      console.error('[BookingScreen] PDF error:', err);
-      Alert.alert(t('common.error'), t('booking.failed'));
+
+      if (!booking) throw new Error('Booking was not returned after insert.');
+      console.log('[BookingScreen] Booking created successfully:', booking.id);
+      triggerPushNotifications();
+      navigation.navigate('PendingScreen', { bookingId: booking.id });
+    } catch (err: any) {
+      console.error('[BookingScreen] createBooking error:', err);
+      if (err?.code === '23505') {
+        const { data: existing } = await supabase
+          .from('bookings')
+          .select('id')
+          .eq('listing_id', listing!.id)
+          .eq('student_id', user!.id)
+          .in('status', ['pending', 'confirmed'])
+          .maybeSingle();
+        if (existing) {
+          console.log('[BookingScreen] Existing booking found, navigating:', existing.id);
+          navigation.replace('PendingScreen', { bookingId: existing.id });
+          return;
+        }
+      }
+      const details = err?.message ? `\n\n${err.message}` : '';
+      Alert.alert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
     } finally {
-      setPdfLoading(false);
+      setSubmitting(false);
     }
   };
 
-  // ── Create booking ───────────────────────────────────────────────────────────
   const handleCreateBooking = async () => {
+    console.log('[BookingScreen] handleCreateBooking called');
     if (!signatureAccepted || !agreementId || !agreementHash) {
+      console.warn('[BookingScreen] Missing signature or agreement');
       Alert.alert(t('booking.signature_required_title'), t('booking.signature_required_msg'));
       return;
     }
-    if (!listing || !user?.id) return;
+    if (!listing || !user?.id) {
+      console.warn('[BookingScreen] Missing listing or user');
+      Alert.alert(t('common.error'), t('booking.not_found'));
+      return;
+    }
     if (!listing.landlord) {
+      console.warn('[BookingScreen] Missing landlord');
       Alert.alert(t('common.error'), t('booking.not_found'));
       return;
     }
     if (!totals) {
+      console.warn('[BookingScreen] Missing totals');
       Alert.alert(t('common.error'), t('booking.invalid_dates_msg'));
       return;
     }
-    const { total, rentAmount, cautionFee, durationType: currentDurationType } = totals;
-    
-    const termsVersion = computeTermsVersion();
-
-    const createBooking = async () => {
-      setSubmitting(true);
-      try {
-        const bookingPayload = {
-          listing_id: listing.id,
-          student_id: user.id,
-          landlord_id: listing.landlord!.id,
-          amount: rentAmount,
-          total_amount: total,
-          start_date: startDate.toISOString().split('T')[0],
-          end_date: endDate.toISOString().split('T')[0],
-          status: 'pending',
-          payment_status: 'pending',
-          contract_status: 'signed',
-          duration_type: currentDurationType,
-          caution_fee: cautionFee,
-          caution_status: 'held',
-          agreement_id: agreementId,
-          agreement_hash: agreementHash,
-          signature_method: 'typed_name',
-          signature_text: signatureText.trim(),
-          signed_at: signedAt,
-          agreement_device_info: deviceInfo || {},
-          terms_version: termsVersion,
-          agreed_to_terms: true,
-        };
-
-        const insertBooking = async (payload: Record<string, unknown>) =>
-          supabase
-            .from('bookings')
-            .insert(payload)
-            .select()
-            .single();
-
-        let { data: booking, error } = await insertBooking(bookingPayload);
-
-        const errorText = `${error?.message || ''} ${error?.details || ''} ${error?.hint || ''}`;
-        const isMissingCautionColumn =
-          error &&
-          (error.code === 'PGRST204' || /column|schema cache|could not find/i.test(errorText)) &&
-          /caution_fee|caution_status/i.test(errorText);
-
-        if (isMissingCautionColumn) {
-          console.warn(
-            '[BookingScreen] bookings table is missing caution columns. Retrying without escrow columns; apply the latest Supabase migration to store them.',
-            error
-          );
-
-          const fallbackPayload = { ...bookingPayload } as Record<string, unknown>;
-          delete (fallbackPayload as any).caution_fee;
-          delete (fallbackPayload as any).caution_status;
-          ({ data: booking, error } = await insertBooking(fallbackPayload));
-        }
-
-        if (error) throw error;
-
-        if (!booking) {
-          throw new Error('Booking was not returned after insert.');
-        }
-
-        // Flush push notifications
-        triggerPushNotifications();
-
-        navigation.navigate('PendingScreen', { bookingId: booking.id });
-      } catch (err: any) {
-        console.error('[BookingScreen] createBooking error:', err);
-
-        if (err?.code === '23505') {
-          const { data: existing } = await supabase
-          .from('bookings')
-            .select('id')
-            .eq('listing_id', listing.id)
-            .eq('student_id', user.id)
-            .in('status', ['pending', 'confirmed'])
-            .maybeSingle();
-
-          if (existing) {
-            navigation.replace('PendingScreen', { bookingId: existing.id });
-            return;
-          }
-        }
-
-        const details = err?.message ? `\n\n${err.message}` : '';
-        Alert.alert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
-      } finally {
-        setSubmitting(false);
-      }
-    };
 
     if (!listing.is_verified) {
-      Alert.alert(
-        "Unverified Listing",
-        "This listing has not been physically verified by DHUB. Book at your own risk.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Proceed Anyway", style: "destructive", onPress: createBooking }
-        ]
-      );
-    } else {
-      createBooking();
+      console.log('[BookingScreen] Unverified listing, showing modal');
+      setShowUnverifiedModal(true);
+      return;
     }
+
+    console.log('[BookingScreen] Verified listing, proceeding to create booking');
+    await performBooking();
   };
 
   // ── Loading state ─────────────────────────────────────────────────────────────
@@ -856,6 +750,8 @@ ${t('booking.default_terms_template')}`;
         <View style={styles.bottomSpacer} />
       </ScrollView>
 
+      {/* ─── Modals ────────────────────────────────────────────────────────── */}
+      {/* Contract Modal */}
       <Modal
         visible={showContractModal}
         transparent
@@ -899,6 +795,7 @@ ${t('booking.default_terms_template')}`;
         </View>
       </Modal>
 
+      {/* Fee Info Modal */}
       <Modal
         visible={showFeeModal}
         transparent
@@ -943,6 +840,7 @@ ${t('booking.default_terms_template')}`;
         </View>
       </Modal>
 
+      {/* Signature Modal */}
       <Modal
         visible={showSignatureModal}
         transparent
@@ -1054,6 +952,60 @@ ${t('booking.default_terms_template')}`;
               </View>
             </View>
           </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* Unverified Listing Modal */}
+      <Modal
+        visible={showUnverifiedModal}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowUnverifiedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Ionicons name="alert-circle" size={28} color={COLORS.danger} />
+              <Text style={[styles.modalTitle, { color: COLORS.danger }]}>
+                Unverified Listing
+              </Text>
+            </View>
+            <Text style={styles.modalDescription}>
+              This listing has not been physically verified by DHUB. Booking unverified properties carries risks such as:
+            </Text>
+            <View style={styles.bulletList}>
+              <Text style={styles.bulletItem}>• The property may not match the photos</Text>
+              <Text style={styles.bulletItem}>• Amenities could be missing</Text>
+              <Text style={styles.bulletItem}>• The landlord may not be legitimate</Text>
+              <Text style={styles.bulletItem}>• You may lose your caution fee</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.learnMoreButton}
+              onPress={() => {
+                setShowUnverifiedModal(false);
+                navigation.navigate('Legal');
+              }}
+            >
+              <Text style={styles.learnMoreButtonText}>Learn More</Text>
+            </TouchableOpacity>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalCloseButton, { flex: 1 }]}
+                onPress={() => setShowUnverifiedModal(false)}
+              >
+                <Text style={styles.modalCloseButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.learnMoreButton, { flex: 1, backgroundColor: COLORS.danger }]}
+                onPress={() => {
+                  setShowUnverifiedModal(false);
+                  performBooking();
+                }}
+              >
+                <Text style={styles.learnMoreButtonText}>Proceed Anyway</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </Modal>
 
@@ -1450,6 +1402,10 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     borderWidth: 1, borderColor: COLORS.border,
   },
   qrLabel: { marginTop: 10, fontSize: 12, color: COLORS.greyMedium, textAlign: 'center' },
+
+  // bullet list for unverified modal
+  bulletList: { marginVertical: 12, paddingLeft: 8 },
+  bulletItem: { fontSize: 14, color: COLORS.greyDark, marginBottom: 4, lineHeight: 20 },
 
   // Footer
   footer: {

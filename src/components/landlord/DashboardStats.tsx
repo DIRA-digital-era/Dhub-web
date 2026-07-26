@@ -1,9 +1,9 @@
 // src/components/landlord/DashboardStats.tsx
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { supabase } from '../../utils/supabaseClient';
+import React, { useEffect, useState } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import { useTheme } from '../../context/ThemeContext';
+import { supabase } from '../../utils/supabaseClient';
 
 interface Stats {
   totalListings: number;
@@ -118,7 +118,7 @@ const DashboardStats: React.FC<Props> = ({ landlordId }) => {
   const statCards = [
     { label: 'Total Listings', value: stats.totalListings, icon: 'business-outline', color: '#D4AF37' },
     { label: 'Active Bookings', value: stats.activeBookings, icon: 'calendar-outline', color: '#10B981' },
-    { label: 'Total Revenue', value: `$${stats.totalRevenue.toLocaleString()}`, icon: 'cash-outline', color: '#3B82F6' },
+    { label: 'Total Revenue', value: `${stats.totalRevenue.toLocaleString()}XAF`, icon: 'cash-outline', color: '#3B82F6' },
     { label: 'Avg Rating', value: stats.avgRating, icon: 'star-outline', color: '#F59E0B' },
   ];
 

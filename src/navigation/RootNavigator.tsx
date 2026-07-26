@@ -1,15 +1,15 @@
 // src/navigation/RootNavigator.tsx
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import React from 'react';
 import { ActivityIndicator, SafeAreaView } from 'react-native';
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useSelector } from 'react-redux';
-import { RootState } from '../store/store';
 import { useTheme } from '../context/ThemeContext';
+import { RootState } from '../store/store';
 
 // Stacks
 import AuthStack from './AuthStack';
-import StudentStack from './StudentStack';
 import LandlordStack from './LandlordStack';
+import StudentStack from './StudentStack';
 
 // Password Update Screen
 import UpdatePasswordScreen from '../screens/auth/UpdatePasswordScreen';
@@ -23,7 +23,6 @@ import { RootStackParamList } from '../types';
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
 const RootNavigator: React.FC = () => {
-  // Redux-driven
   const userRole = useSelector((state: RootState) => state.auth.user?.role);
   const loading = useSelector((state: RootState) => state.auth.isLoading);
   const requiresPasswordUpdate = useSelector((state: RootState) => state.auth.requiresPasswordUpdate);

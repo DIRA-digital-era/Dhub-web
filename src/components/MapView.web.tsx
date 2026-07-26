@@ -1,16 +1,12 @@
+// src/components/MapView.web.tsx
 import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
-// A context to pass the Google Map instance down to children (Marker, Polyline)
-const MapContext = createContext<any>(null);
-
-// --- Helper to load the Google Maps Script ---
+// Load Google Maps Script
 let googleMapsPromise: Promise<void> | null = null;
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google && (window as any).google.maps) {
-    return Promise.resolve();
-  }
+  if ((window as any).google && (window as any).google.maps) return Promise.resolve();
   if (googleMapsPromise) return googleMapsPromise;
 
   googleMapsPromise = new Promise((resolve, reject) => {
@@ -25,7 +21,8 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   return googleMapsPromise;
 };
 
-// --- Types ---
+const MapContext = createContext<any>(null);
+
 interface MapViewProps {
   region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
   initialRegion?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
@@ -38,25 +35,12 @@ interface MapViewProps {
   followsUserLocation?: boolean;
   onPress?: (e: any) => void;
   onRegionChangeComplete?: (region: any) => void;
+  scrollEnabled?: boolean;   // map to gestureHandling
+  zoomEnabled?: boolean;     // map to gestureHandling
+  rotateEnabled?: boolean;   // map to gestureHandling
+  pitchEnabled?: boolean;    // map to gestureHandling
 }
 
-interface MarkerProps {
-  coordinate: { latitude: number; longitude: number };
-  title?: string;
-  description?: string;
-  pinColor?: string;
-  onPress?: () => void;
-  draggable?: boolean;
-  onDragEnd?: (e: any) => void;
-}
-
-interface PolylineProps {
-  coordinates: { latitude: number; longitude: number }[];
-  strokeColor?: string;
-  strokeWidth?: number;
-}
-
-// --- Components ---
 export const MapView: React.FC<MapViewProps> = ({
   region,
   initialRegion,
@@ -65,18 +49,28 @@ export const MapView: React.FC<MapViewProps> = ({
   style,
   onRegionChangeComplete,
   onPress,
+  scrollEnabled = true,
+  zoomEnabled = true,
+  rotateEnabled = true,
+  pitchEnabled = true,
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS || 'AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8'; // Fallback web key
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
+                 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS || 
+                 'AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8'; // fallback
 
   useEffect(() => {
     let isMounted = true;
     loadGoogleMapsScript(apiKey).then(() => {
       if (!isMounted || !mapRef.current) return;
-
       const center = region || initialRegion;
       if (!center) return;
+
+      // Determine gesture handling
+      const gestureHandling = (!scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled)
+        ? 'none'
+        : 'auto';
 
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: center.latitude, lng: center.longitude },
@@ -85,6 +79,10 @@ export const MapView: React.FC<MapViewProps> = ({
         mapTypeControl: false,
         streetViewControl: false,
         fullscreenControl: false,
+        gestureHandling: gestureHandling,
+        zoomControl: zoomEnabled,
+        rotateControl: rotateEnabled,
+        tilt: pitchEnabled ? 45 : 0,
       });
 
       setMapInstance(map);
@@ -113,8 +111,9 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     return () => { isMounted = false; };
-  }, [apiKey, region, initialRegion, mapType]);
+  }, [apiKey, region, initialRegion, mapType, scrollEnabled, zoomEnabled, rotateEnabled, pitchEnabled]);
 
+  // Update map center when region prop changes
   useEffect(() => {
     if (mapInstance && region) {
       mapInstance.panTo({ lat: region.latitude, lng: region.longitude });
@@ -131,7 +130,15 @@ export const MapView: React.FC<MapViewProps> = ({
   );
 };
 
-export const Marker: React.FC<MarkerProps> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd }) => {
+export const Marker: React.FC<{ 
+  coordinate: { latitude: number; longitude: number };
+  title?: string;
+  description?: string;
+  pinColor?: string;
+  onPress?: () => void;
+  draggable?: boolean;
+  onDragEnd?: (e: any) => void;
+}> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd, draggable }) => {
   const map = useContext(MapContext);
   useEffect(() => {
     if (!map) return;
@@ -139,21 +146,27 @@ export const Marker: React.FC<MarkerProps> = ({ coordinate, title, pinColor = 'r
       position: { lat: coordinate.latitude, lng: coordinate.longitude },
       map: map,
       title: title,
+      draggable: draggable || false,
       icon: pinColor === 'gold' ? 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png' : undefined,
     });
     if (onPress) marker.addListener('click', onPress);
     if (onDragEnd) {
-      marker.setDraggable(true);
       marker.addListener('dragend', (e: any) => {
-        if (e.latLng) onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+        if (e.latLng) {
+          onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+        }
       });
     }
     return () => { marker.setMap(null); };
-  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor]);
+  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor, draggable]);
   return null;
 };
 
-export const Polyline: React.FC<PolylineProps> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
+export const Polyline: React.FC<{
+  coordinates: { latitude: number; longitude: number }[];
+  strokeColor?: string;
+  strokeWidth?: number;
+}> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
   const map = useContext(MapContext);
   useEffect(() => {
     if (!map || coordinates.length === 0) return;

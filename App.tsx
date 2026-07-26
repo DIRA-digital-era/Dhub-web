@@ -1,5 +1,5 @@
 // App.tsx
-import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
+import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/native";
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import React from "react";
@@ -7,15 +7,16 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider, useSelector } from "react-redux";
 import SplashScreen from "./SplashScreen";
 import AuthListener from "./src/components/AuthListener";
+import GlobalNotification from "./src/components/GlobalNotification";
+import WebDownloadBanner from './src/components/WebDownloadBanner';
+import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
+import { usePushNotifications } from "./src/hooks/usePushNotifications";
 import { useVersionCheck } from "./src/hooks/useVersionCheck";
+import "./src/i18n";
+import { navigationRef } from "./src/navigation/navigationRef";
 import RootNavigator from "./src/navigation/RootNavigator";
 import UpdateRequiredScreen from "./src/screens/common/UpdateRequiredScreen";
 import store, { RootState } from "./src/store/store";
-import { usePushNotifications } from "./src/hooks/usePushNotifications";
-import { navigationRef } from "./src/navigation/navigationRef";
-import "./src/i18n";
-import GlobalNotification from "./src/components/GlobalNotification";
-import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 
 /**
  * ✅ This component blocks the app until Supabase session
@@ -91,6 +92,7 @@ function ThemedApp() {
         <AppGate />
       </NavigationContainer>
       <StatusBar style={isDark ? "light" : "dark"} />
+      <WebDownloadBanner />
     </SafeAreaProvider>
   );
 }

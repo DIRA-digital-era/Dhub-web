@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import {
   Alert,
   KeyboardAvoidingView,
+  Linking,
   Modal,
   Platform,
   ScrollView,
@@ -13,12 +14,11 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Linking
+  View
 } from "react-native";
+import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
-import { useTheme } from "../../context/ThemeContext";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
