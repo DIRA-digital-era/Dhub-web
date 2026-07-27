@@ -15,9 +15,10 @@ serve(async (req) => {
 
   const supabase = createClient(supabaseUrl, supabaseKey);
 
+  // ✅ Include price_unit
   const { data: listing, error } = await supabase
     .from("listings")
-    .select("title, price, city, media, description")
+    .select("title, price, city, media, description, price_unit")
     .eq("id", listingId)
     .single();
 
@@ -30,14 +31,16 @@ serve(async (req) => {
   if (listing.media && Array.isArray(listing.media)) {
     const firstImage = listing.media.find((m: any) => m.type === "image");
     if (firstImage) {
-      const url = firstImage.thumbUrl || firstImage.url;
-      imageUrl = url?.startsWith("/media/") ? mediaBase + url : url || "";
+      const imgUrl = firstImage.thumbUrl || firstImage.url;
+      imageUrl = imgUrl?.startsWith("/media/") ? mediaBase + imgUrl : imgUrl || "";
     }
   }
   if (!imageUrl) imageUrl = "https://dhubweb.diracmr.com/icon.png";
 
   const title = listing.title;
-  const description = `${listing.city || ""} • ${listing.price ? listing.price.toLocaleString() : ""} FCFA/month`;
+  const priceUnit = listing.price_unit === "per_night" ? "night" : "month";
+  const priceDisplay = listing.price ? `${listing.price.toLocaleString()} FCFA/${priceUnit}` : "";
+  const description = `${listing.city || ""} • ${priceDisplay}`;
 
   const html = `<!DOCTYPE html>
 <html>
@@ -49,7 +52,6 @@ serve(async (req) => {
   <meta property="og:image" content="${imageUrl}" />
   <meta property="og:url" content="https://dhubweb.diracmr.com/listing/${listingId}" />
   <meta name="twitter:card" content="summary_large_image" />
-  <meta http-equiv="refresh" content="0; url=https://dhubweb.diracmr.com/?listingId=${listingId}" />
   <style>
     body { font-family: system-ui, sans-serif; text-align: center; padding: 40px; background: #f5f5f5; margin:0; }
     .container { max-width: 600px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
@@ -63,7 +65,7 @@ serve(async (req) => {
   <div class="container">
     <h1>${title}</h1>
     ${listing.city ? `<p>📍 ${listing.city}</p>` : ""}
-    <p class="price">${listing.price ? listing.price.toLocaleString() : ""} FCFA / month</p>
+    <p class="price">${priceDisplay || "Price not set"}</p>
     ${imageUrl ? `<img src="${imageUrl}" alt="${title}" />` : ""}
     <p>${listing.description ? listing.description.substring(0, 200) + "..." : ""}</p>
     <a href="https://dhubweb.diracmr.com/?listingId=${listingId}" class="btn">View on DHUB</a>

@@ -100,20 +100,21 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      const url = Platform.OS === 'web'
-        ? `${window.location.origin}/listing/${listingId}`
-        : `dhub://listing/${listingId}`;
-      await Share.share({
-        message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
-        url: url,
-        title: listing?.title,
-      });
-    } catch (error: any) {
-      console.log('Error sharing:', error.message);
-    }
-  };
+const handleShare = async () => {
+  try {
+    const url = Platform.OS === 'web'
+      ? `https://dhubweb.diracmr.com/listing/${listingId}`  // Branded web URL
+      : `dhub://listing/${listingId}`;                      // Deep link for native
+
+    await Share.share({
+      message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
+      url: url,
+      title: listing?.title,
+    });
+  } catch (error: any) {
+    console.log('Error sharing:', error.message);
+  }
+};
 
   const handleEdit = () => navigation.navigate('EditListing', { listingId });
 

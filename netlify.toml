@@ -2,7 +2,15 @@
   command = "npx expo export --platform web"
   publish = "dist"
 
+# SPA fallback
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
+
+# Proxy /listing/* to Supabase Edge Function
+[[redirects]]
+  from = "/listing/*"
+  to = "https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=:splat"
+  status = 200
+  force = true

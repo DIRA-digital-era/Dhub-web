@@ -3,6 +3,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import React from "react";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider, useSelector } from "react-redux";
 import SplashScreen from "./SplashScreen";
@@ -86,7 +87,24 @@ function ThemedApp() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={navigationTheme}
+        onReady={() => {
+          // 🟢 Web-only: parse the URL for a listing ID and navigate
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const path = window.location.pathname;
+            const match = path.match(/^\/listing\/(.+)/);
+            if (match) {
+              const listingId = match[1];
+              // Navigate to the listing details screen
+              navigationRef.navigate('ListingDetails', { listingId });
+              // Clean the URL to avoid re-navigation on refresh
+              window.history.replaceState({}, document.title, '/');
+            }
+          }
+        }}
+      >
         <AuthListener />
         <GlobalNotification />
         <AppGate />
