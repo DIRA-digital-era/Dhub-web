@@ -2,15 +2,23 @@
   command = "npx expo export --platform web"
   publish = "dist"
 
-# SPA fallback
+# SPA fallback – all unmatched routes go to index.html
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
 # Proxy /listing/* to Supabase Edge Function
+# :splat captures the ID and passes it as the 'id' query parameter
 [[redirects]]
   from = "/listing/*"
   to = "https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=:splat"
   status = 200
   force = true
+
+# Headers for caching and security on the OG pages
+[[headers]]
+  for = "/listing/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, s-maxage=604800"
+    X-Content-Type-Options = "nosniff"
