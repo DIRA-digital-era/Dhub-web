@@ -2,6 +2,7 @@
 import { Asset } from 'expo-asset';
 import * as FileSystem from 'expo-file-system/legacy';
 import { Platform } from 'react-native';
+import { generateQRDataUri } from './generateQRDataUri';
 
 // Cache the logo base64 to avoid repeated file reads
 let logoBase64Cache: string | null = null;
@@ -66,10 +67,7 @@ export async function generateBookingPDFHTML(params: {
   const logoDataUri = logoBase64 ? `data:image/png;base64,${logoBase64}` : '';
 
   // ─── FULL CONTRACT TEXT (landlord's terms) ──────────────────────────────
-  // This is the actual agreement text the landlord uploaded.
-  // We pull it from listing.terms_text.
   const landlordTerms = listing.terms_text || 'No specific terms provided. Standard rental agreement applies.';
-
   const contractText = `
 ${landlordTerms}
 
@@ -99,12 +97,10 @@ By electronically signing below, the tenant confirms they have read and accepted
     </div>
   ` : '';
 
-  // ─── QR Code payload ────────────────────────────────────────────────────
-  // This is the data that will be encoded in the QR code.
-  // When scanned, it should point to the verification page.
+  // ─── QR Code – generate a data URI (PNG) ──────────────────────────────
   const qrPayload = `DHUB-CONTRACT:${agreementId || 'UNSIGNED'}`;
- // Change from http:// to https://
-const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(qrPayload)}`;
+  const qrDataUri = await generateQRDataUri(qrPayload, 250);
+
   // ─── Full HTML ──────────────────────────────────────────────────────────
   return `
 <!DOCTYPE html>
@@ -204,7 +200,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&dat
       border: 8px solid #fff;
       padding: 4px;
       border-radius: 8px;
-      background: #fff
+      background: #fff;
     }
     .footer {
       margin-top: 40px;
@@ -246,7 +242,7 @@ const qrImageUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&dat
     ${agreementDetailsHtml}
 
     <div class="qr">
-      <img src="${escapeHtml(qrImageUrl)}" alt="QR Code" />
+      <img src="${escapeHtml(qrDataUri)}" alt="QR Code" />
       <p style="font-size:12px;">Scan to verify agreement</p>
     </div>
   </div>

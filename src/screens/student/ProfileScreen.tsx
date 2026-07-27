@@ -1,3 +1,4 @@
+// src/screens/student/ProfileScreen.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
@@ -289,6 +290,8 @@ export default function ProfileScreen() {
           <ProfileButton icon="calendar" label={t('profile.view_bookings')} onPress={() => navigation.navigate("ViewBookingsScreen" as never)} colors={colors} />
           <ProfileButton icon="card" label="My Payments" onPress={() => navigation.navigate("Payments" as never)} colors={colors} />
           <ProfileButton icon="notifications" label={t('common.notifications')} onPress={() => navigation.navigate("Notifications" as never)} colors={colors} />
+          {/* ✅ Added Terms & Privacy Policy button */}
+          <ProfileButton icon="document-text" label={t('profile.terms')} onPress={() => navigation.navigate("Legal" as never)} colors={colors} />
           <ProfileButton icon="lock-closed" label={t('profile.change_password')} onPress={() => setChangePasswordVisible(true)} colors={colors} />
           <ProfileButton icon="warning" label="Report a Landlord" onPress={() => navigation.navigate("ReportUser" as never)} colors={colors} />
           <ProfileButton icon="bug" label={t('profile.report_bug')} onPress={() => navigation.navigate("ReportBug" as never)} colors={colors} />

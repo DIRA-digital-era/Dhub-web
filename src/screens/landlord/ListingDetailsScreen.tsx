@@ -1,7 +1,7 @@
 // src/screens/landlord/ListingDetailsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, RouteProp, useNavigation } from '@react-navigation/native';
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -60,6 +60,10 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [requestingVerif, setRequestingVerif] = useState(false);
   const [infoModalVisible, setInfoModalVisible] = useState(false);
+
+  // ─── Verification Modal State ──────────────────────────────────────────────
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [verificationFee, setVerificationFee] = useState<number>(5000);
 
   useEffect(() => {
     loadListing();
@@ -140,40 +144,46 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     navigation.navigate('BoostScreen', { listingId });
   };
 
-  const handleRequestVerification = async () => {
+  // ─── Verification Handler with Modal ──────────────────────────────────────
+  const handleRequestVerificationPress = async () => {
+    if (requestingVerif || listing?.is_verified) return;
+
     setRequestingVerif(true);
     try {
       const { data: configData, error: configError } = await supabase
         .from('pricing_configs')
         .select('config_value')
         .eq('config_key', 'verification_fee')
-        .single();
+        .maybeSingle();
+
       if (configError) throw configError;
       const fee = configData?.config_value ? Number(configData.config_value) : 5000;
-      Alert.alert(
-        "Request Verification",
-        `This requires a non-refundable displacement fee of ${fee.toLocaleString()} FCFA for a DHUB agent to physically verify this listing.`,
-        [
-          { text: "Cancel", style: "cancel" },
-          {
-            text: `Proceed to Pay ${fee.toLocaleString()} FCFA`,
-            onPress: () => {
-              navigation.navigate('Payments' as any, {
-                listingId: listingId,
-                amount: fee,
-                description: `Verification fee for listing ${listingId}`,
-                reason: 'verification',
-              });
-            }
-          }
-        ]
-      );
+      setVerificationFee(fee);
+      setShowVerificationModal(true);
     } catch (err) {
       console.error('Error fetching verification fee:', err);
       Alert.alert('Error', 'Could not fetch verification fee. Please try again.');
     } finally {
       setRequestingVerif(false);
     }
+  };
+
+  const handleProceedToVerificationPayment = () => {
+    setShowVerificationModal(false);
+    // ✅ Navigation with cast to avoid TypeScript error
+    navigation.navigate('Tabs' as any, {
+      screen: 'Payments',
+      params: {
+        listingId: listingId,
+        amount: verificationFee,
+        description: `Verification fee for listing ${listingId}`,
+        reason: 'verification',
+      },
+    });
+  };
+
+  const handleCancelVerification = () => {
+    setShowVerificationModal(false);
   };
 
   const handleContactLandlord = () => {
@@ -190,11 +200,12 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     );
   };
 
-  const onViewableItemsChanged = ({ viewableItems }: any) => {
+  // ✅ Memoized to prevent FlatList crash
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
     if (viewableItems.length > 0) {
       setActiveImageIndex(viewableItems[0].index);
     }
-  };
+  }, []);
 
   if (loading) {
     return (
@@ -244,6 +255,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
   return (
     <View style={styles.container}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
@@ -253,6 +265,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           <Ionicons name="pencil-outline" size={22} color={colors.primary} />
         </TouchableOpacity>
       </View>
+
       <ScrollView showsVerticalScrollIndicator={false}>
         {allMedia.length > 0 && (
           <View style={styles.gallerySection}>
@@ -278,6 +291,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             )}
           </View>
         )}
+
         <View style={styles.content}>
           <View style={styles.titleSection}>
             <View style={styles.titleRow}>
@@ -299,6 +313,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               <Text style={styles.perMonth}>/month</Text>
             </Text>
           </View>
+
           <View style={styles.keyDetails}>
             <View style={styles.detailItem}>
               <Ionicons name="bed-outline" size={20} color={colors.primary} />
@@ -310,6 +325,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               <Text style={styles.detailText}>{listing.city || 'City'}</Text>
             </View>
           </View>
+
           <TouchableOpacity
             style={[styles.quickActionBtn, { width: '100%', marginTop: 12, marginBottom: 24, backgroundColor: colors.primary, borderColor: colors.primary, paddingVertical: 14, shadowColor: colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }]}
             onPress={handleShare}
@@ -317,6 +333,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             <Ionicons name="arrow-redo" size={24} color={colors.background} />
             <Text style={[styles.quickActionText, { color: colors.background, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
           </TouchableOpacity>
+
           <View style={[styles.section, styles.switchSection]}>
             <View style={styles.switchRow}>
               <View style={styles.switchLeft}>
@@ -335,6 +352,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               {listing.available ? 'Property is currently available' : 'Property is marked as unavailable'}
             </Text>
           </View>
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="document-text-outline" size={20} color={colors.primary} />
@@ -342,6 +360,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             </View>
             <Text style={styles.description}>{listing.description || 'No description provided for this property.'}</Text>
           </View>
+
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="map-outline" size={20} color={colors.primary} />
@@ -360,6 +379,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               )}
             </View>
           </View>
+
           {videos.length > 0 && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -369,6 +389,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               <Text style={styles.videoCount}>{videos.length} video{videos.length > 1 ? 's' : ''} available</Text>
             </View>
           )}
+
           {listing.landlord && (
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
@@ -404,10 +425,15 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               </View>
             </View>
           )}
+
           <View style={styles.actionButtonsContainer}>
             {!listing.is_verified && (
               <View style={styles.verifyContainer}>
-                <TouchableOpacity style={styles.verifyButton} onPress={handleRequestVerification} disabled={requestingVerif}>
+                <TouchableOpacity
+                  style={styles.verifyButton}
+                  onPress={handleRequestVerificationPress}
+                  disabled={requestingVerif}
+                >
                   {requestingVerif ? (
                     <ActivityIndicator color={colors.background} />
                   ) : (
@@ -435,6 +461,8 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           </View>
         </View>
       </ScrollView>
+
+      {/* ─── Info Modal ──────────────────────────────────────────────────────── */}
       <Modal animationType="slide" transparent={true} visible={infoModalVisible} onRequestClose={() => setInfoModalVisible(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
@@ -455,6 +483,47 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           </View>
         </View>
       </Modal>
+
+      {/* ─── Verification Confirmation Modal ───────────────────────────────── */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={showVerificationModal}
+        onRequestClose={handleCancelVerification}
+      >
+        <View style={styles.verificationModalOverlay}>
+          <View style={styles.verificationModalContent}>
+            <View style={styles.verificationModalHeader}>
+              <Ionicons name="shield-checkmark-outline" size={28} color={colors.primary} />
+              <Text style={styles.verificationModalTitle}>Request Verification</Text>
+            </View>
+            <Text style={styles.verificationModalDescription}>
+              This requires a non-refundable displacement fee of{' '}
+              <Text style={styles.verificationFeeText}>
+                {verificationFee.toLocaleString()} FCFA
+              </Text>
+              {' '}for a DHUB agent to physically verify this listing.
+            </Text>
+            <View style={styles.verificationModalActions}>
+              <TouchableOpacity
+                style={[styles.verificationModalButton, styles.verificationCancelButton]}
+                onPress={handleCancelVerification}
+              >
+                <Text style={styles.verificationCancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.verificationModalButton, styles.verificationProceedButton]}
+                onPress={handleProceedToVerificationPayment}
+              >
+                <Text style={styles.verificationProceedButtonText}>
+                  Proceed to Pay {verificationFee.toLocaleString()} FCFA
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <MapPickerModal
         visible={mapModalVisible}
         onClose={() => setMapModalVisible(false)}
@@ -469,6 +538,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
   );
 };
 
+// ─── Styles ──────────────────────────────────────────────────────────────────
 const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
   centered: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background },
@@ -549,6 +619,77 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   modalButton: { backgroundColor: colors.primary, paddingVertical: 16, borderRadius: 12, alignItems: 'center' },
   modalButtonText: { color: colors.background, fontSize: 16, fontWeight: '600' },
   verifiedBadge: { backgroundColor: colors.primary, borderRadius: 12, paddingHorizontal: 6, paddingVertical: 3, marginLeft: 8, flexDirection: 'row', alignItems: 'center', justifyContent: 'center' },
+
+  // ─── Verification Modal Styles ────────────────────────────────────────────
+  verificationModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    padding: 20,
+  },
+  verificationModalContent: {
+    backgroundColor: colors.background,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 12,
+  },
+  verificationModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 16,
+  },
+  verificationModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text,
+  },
+  verificationModalDescription: {
+    fontSize: 15,
+    color: colors.textSecondary,
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  verificationFeeText: {
+    color: colors.primary,
+    fontWeight: '700',
+  },
+  verificationModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  verificationModalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  verificationCancelButton: {
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  verificationCancelButtonText: {
+    color: colors.text,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  verificationProceedButton: {
+    backgroundColor: colors.primary,
+  },
+  verificationProceedButtonText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });
 
 export default ListingDetailsScreen;
