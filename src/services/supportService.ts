@@ -1,6 +1,6 @@
 // src/services/supportService.ts
+import { Chat, FAQ, Ticket } from '../types';
 import { supabase } from '../utils/supabaseClient';
-import { Ticket, Chat, FAQ } from '../types';
 
 const EDGE_FUNCTION_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/support-bot';
 
@@ -24,7 +24,7 @@ export async function createTicket(userId: string): Promise<Ticket> {
     .from('tickets')
     .insert([{ user_id: userId, status: 'open', priority: 'normal' }])
     .select()
-    .single();
+    .maybesingle();
 
   if (error) throw error;
   return data as Ticket;

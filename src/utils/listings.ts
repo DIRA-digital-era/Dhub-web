@@ -268,7 +268,7 @@ export async function fetchListingDetails(
       .from('listings')
       .select(select)
       .eq('id', id)
-      .single();
+      .maybeSingle();
 
     if (error || !row) return null;
 
@@ -315,7 +315,7 @@ export async function fetchListingDetails(
         .from('users')
         .select('id, full_name, email, phone, profile_pic, created_at')
         .eq('id', row.landlord_id)
-        .single();
+        .maybeSingle();
 
       if (fallbackUser) {
         landlord = {
