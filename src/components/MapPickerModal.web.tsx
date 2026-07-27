@@ -1,14 +1,14 @@
 // src/components/MapPickerModal.web.tsx
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 import { LatLng, requestLocationPermission } from '../utils/location';
 import MapView, { Marker, Polyline } from './MapView.web';

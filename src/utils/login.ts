@@ -78,8 +78,7 @@ export const loginWithPhone = async (
     }
 
     const backendUrl =
-      process.env.EXPO_PUBLIC_API_URL ||
-      'https://dhub-gxid.onrender.com';
+      process.env.EXPO_PUBLIC_API_URL ;
 
     console.log(`[${STEP}] [${requestId}] Backend URL:`, backendUrl);
     authLogger.log(STEP, `[${requestId}] Backend URL`, {

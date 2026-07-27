@@ -24,8 +24,9 @@ interface MapPickerModalProps {
 }
 
 const GOOGLE_API_KEY = Platform.OS === 'ios'
-  ? 'AIzaSyCsoZGBWKi6YE1EDkkz2G3suRA2orqhGQA'
-  : 'AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8';
+   ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS
+  : process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
+if (!GOOGLE_API_KEY) throw new Error('Missing Google Maps API key');
 
 const MapPickerModal: React.FC<MapPickerModalProps> = ({
   visible,
