@@ -23,6 +23,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { DiraBranding } from '../../components/DiraBranding';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
+import { usePaymentSuccessNotifier } from '../../hooks/usePaymentSuccessNotifier';
 import { supabase } from '../../utils/supabaseClient';
 
 import ListingCard from '../../components/ListingCard';
@@ -37,6 +38,10 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
   const { t } = useTranslation();
   const { user } = useAuth();
   const { colors, isDark } = useTheme();
+
+  // ── Pop an in-app Alert the instant a booking payment is confirmed ──────
+  usePaymentSuccessNotifier(navigation);
+
   /* ---------------- STATE ---------------- */
   const [search, setSearch] = useState('');
   const [listings, setListings] = useState<ListingSummary[]>([]);
@@ -513,9 +518,21 @@ const FilterRow = ({ label, options, value, onSelect, t, colors }: any) => (
 /* ---------------- STYLES ---------------- */
 const styles = StyleSheet.create({
   safeArea: { flex: 1, backgroundColor: '#fff' },
-  header: { padding: 24, flexDirection: 'row', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
-  headerSubtitle: { fontSize: 16, color: '#666', marginTop: 6 },
+  header: { 
+    padding: Platform.OS === 'web' ? 12 : 24, 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  headerTitle: { 
+    fontSize: Platform.OS === 'web' ? 22 : 28, 
+    fontWeight: '700', 
+    color: '#1a1a1a' 
+  },
+  headerSubtitle: { 
+    fontSize: Platform.OS === 'web' ? 14 : 16, 
+    color: '#666', 
+    marginTop: 6 
+  },
   notificationBtn: { padding: 4, position: 'relative' },
   badge: {
     position: 'absolute',

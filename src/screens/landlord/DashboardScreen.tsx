@@ -11,6 +11,7 @@ import {
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
+import { usePaymentSuccessNotifier } from '../../hooks/usePaymentSuccessNotifier';
 
 import DashboardStats from '../../components/landlord/DashboardStats';
 import QuickActions from '../../components/landlord/QuickActions';
@@ -21,10 +22,13 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
 
 const DashboardScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { colors } = useTheme();
   const [landlordProfile, setLandlordProfile] = useState<any>(null);
+
+  // ── Pop an in-app Alert the instant a payment is confirmed ─────────────
+  usePaymentSuccessNotifier(navigation);
 
   const KYC_CACHE_KEY = `kyc_status_${user?.id}`;
 

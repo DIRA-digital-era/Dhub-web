@@ -183,14 +183,21 @@ const ListingDetailsScreen: React.FC = () => {
       .single();
     
     if (!studentData || !studentData.age || !studentData.profession || !studentData.contact_number) {
-      Alert.alert(
-        "Profile Verification Required",
-        "Landlords require your age, profession/level, and Momo number before accepting bookings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Update Profile", onPress: () => navigation.navigate('StudentTabs', { screen: 'Profile' }) }
-        ]
-      );
+      if (Platform.OS === 'web') {
+        const wantsToUpdate = window.confirm("Profile Verification Required\n\nLandlords require your age, profession/level, and Momo number before accepting bookings.\n\nClick OK to Update Profile.");
+        if (wantsToUpdate) {
+          navigation.navigate('StudentTabs', { screen: 'Profile' });
+        }
+      } else {
+        Alert.alert(
+          "Profile Verification Required",
+          "Landlords require your age, profession/level, and Momo number before accepting bookings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Update Profile", onPress: () => navigation.navigate('StudentTabs', { screen: 'Profile' }) }
+          ]
+        );
+      }
       return;
     }
 

@@ -188,6 +188,9 @@ const SignInScreen: React.FC = () => {
     }
   };
 
+  const Wrapper = (Platform.OS === 'web' ? View : TouchableWithoutFeedback) as React.ElementType;
+  const wrapperProps = Platform.OS === 'web' ? { style: { flex: 1 } } : { onPress: Keyboard.dismiss };
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.header}>
@@ -200,7 +203,7 @@ const SignInScreen: React.FC = () => {
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+        <Wrapper {...wrapperProps}>
           <ScrollView
             contentContainerStyle={styles.container}
             showsVerticalScrollIndicator={false}
@@ -319,7 +322,7 @@ const SignInScreen: React.FC = () => {
               </View>
             </View>
           </ScrollView>
-        </TouchableWithoutFeedback>
+        </Wrapper>
       </KeyboardAvoidingView>
 
       <View style={styles.footer}>

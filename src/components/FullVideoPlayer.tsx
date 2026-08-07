@@ -86,6 +86,28 @@ const FullVideoPlayer: React.FC<FullVideoPlayerProps> = ({ url, onClose, process
     setPlayerKey(k => k + 1);
   };
 
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={onClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="close" size={32} color="#fff" />
+        </TouchableOpacity>
+        {/* @ts-ignore - native HTML5 video element for web */}
+        <video
+          src={url}
+          controls
+          autoPlay
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <TouchableOpacity

@@ -8,20 +8,22 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Linking,
-    Modal,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Linking,
+  Modal,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
 } from "react-native";
 import MapView from 'react-native-maps';
+import MapPickerModal from '../../components/MapPickerModal';
 import { SafeAreaView } from "react-native-safe-area-context";
 import FullVideoPlayer from "../../components/FullVideoPlayer";
 import { useTheme } from "../../context/ThemeContext";
@@ -30,7 +32,7 @@ import { triggerPushNotifications } from '../../hooks/usePushNotifications';
 import { LocationService } from '../../services/LocationService';
 import { StudentStackParamList } from "../../types";
 import { supabase } from '../../utils/supabaseClient';
-import { uploadListingMedia } from '../../utils/upload.native';
+import { uploadListingMedia } from '../../utils/upload';
 
 const { width } = Dimensions.get("window");
 
@@ -135,8 +137,14 @@ export default function BookingDetails() {
   const [cancellationReason, setCancellationReason] = useState<string | null>(null);
   const [cancellationDetails, setCancellationDetails] = useState('');
   const [updating, setUpdating] = useState(false);
+  const [showWhyModal, setShowWhyModal] = useState(false);
+  const [mapModalVisible, setMapModalVisible] = useState(false);
 
-  const handleUploadMedia = async (type: 'entry' | 'exit') => {
+  // Dispute States
+  const [disputeText, setDisputeText] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
+  const handleUploadMedia = async (type: 'entry' | 'exit' | 'dispute') => {
     try {
       const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
       const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -148,7 +156,7 @@ export default function BookingDetails() {
 
       const result = await ImagePicker.launchCameraAsync({
         quality: 0.8,
-        allowsEditing: true,
+        allowsEditing: false,
       });
 
       if (!result.canceled && result.assets && result.assets.length > 0) {
@@ -167,18 +175,28 @@ export default function BookingDetails() {
           asset.mimeType || 'image/jpeg'
         );
 
-        const currentMediaArray = ((booking as any)[`${type}_media`] as any[]) || [];
+        const currentMediaArray = ((booking as any)[type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`] as any[]) || [];
+
+        // Ensure max 3 photos for disputes
+        if (type === 'dispute' && currentMediaArray.length >= 3) {
+          Alert.alert('Limit Reached', 'You can only upload up to 3 photos for evidence.');
+          setUploadingMedia(false);
+          return;
+        }
+
         const newMediaObj = { url: uploadedMedia.url, timestamp: new Date().toISOString() };
         const updatedArray = [...currentMediaArray, newMediaObj];
 
         const { error: dbError } = await supabase
           .from('bookings')
-          .update({ [`${type}_media`]: updatedArray })
+          .update({ [type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`]: updatedArray } as any)
           .eq('id', bookingId);
 
         if (dbError) throw dbError;
 
-        Alert.alert('Success', `${type === 'entry' ? 'Entry' : 'Exit'} picture captured successfully.`);
+        setBooking((prev: any) => ({ ...prev, [type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`]: updatedArray }));
+
+        Alert.alert('Success', `${type === 'entry' ? 'Entry' : (type === 'exit' ? 'Exit' : 'Evidence')} picture captured successfully.`);
         fetchBookingDetails(true);
       }
     } catch (err: any) {
@@ -375,7 +393,7 @@ export default function BookingDetails() {
 
   // Time remaining calculation
   let rentTimeRemaining = '';
-  if (booking?.status === 'confirmed') {
+  if (booking?.status === 'confirmed' && (booking as any).student_confirmation && (booking as any).landlord_confirmation) {
     const msLeft = new Date(booking.end_date).getTime() - Date.now();
     if (msLeft > 0) {
       const daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
@@ -392,6 +410,11 @@ export default function BookingDetails() {
   const handlePayNow = () => {
     if (!booking) return;
 
+    if (Platform.OS === 'web') {
+      navigation.navigate('DownloadAppScreen' as never);
+      return;
+    }
+
     navigation.navigate('Payments', {
       listingId: booking.listing_id,
       bookingId: booking.id,
@@ -407,6 +430,11 @@ export default function BookingDetails() {
 
   const handleCompleteRent = () => {
     if (!booking) return;
+
+    if (Platform.OS === 'web') {
+      navigation.navigate('DownloadAppScreen' as never);
+      return;
+    }
     const caution = booking.caution_fee ?? 0;
     const rentBalance = Number(booking.total_amount ?? booking.amount) - caution;
 
@@ -435,6 +463,10 @@ export default function BookingDetails() {
         {
           text: 'Proceed to Payment',
           onPress: () => {
+            if (Platform.OS === 'web') {
+              navigation.navigate('DownloadAppScreen' as never);
+              return;
+            }
             navigation.navigate('Payments', {
               listingId: booking.listing_id,
               bookingId: booking.id,
@@ -466,9 +498,8 @@ export default function BookingDetails() {
           onPress: async () => {
             setUpdating(true);
             try {
-              const { error } = await supabase.rpc('confirm_handshake_side', {
-                p_booking_id: bookingId,
-                p_role: 'student'
+              const { error } = await supabase.rpc('request_checkout', {
+                p_booking_id: bookingId
               });
               if (error) throw error;
               Alert.alert('Move-Out Requested', 'The landlord has been notified. Your caution refund is pending their confirmation.');
@@ -492,6 +523,29 @@ export default function BookingDetails() {
     }
   };
 
+  const handleSubmitDisputeEvidence = async () => {
+    if (!disputeText.trim()) {
+      Alert.alert('Missing Info', 'Please provide a description of the issue.');
+      return;
+    }
+    
+    setIsSubmittingDispute(true);
+    try {
+      const { error } = await supabase.from('bookings').update({
+        dispute_tenant_text: disputeText
+      }).eq('id', bookingId);
+      
+      if (error) throw error;
+      
+      Alert.alert('Evidence Submitted', 'Your evidence has been submitted to DHUB for review.');
+      fetchBookingDetails(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit evidence.');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
   const confirmMoveIn = () => {
     Alert.alert(
       "Confirm Move-In",
@@ -508,6 +562,10 @@ export default function BookingDetails() {
                 p_role: 'student'
               });
               if (error) throw error;
+              
+              // Optimistically update UI so the button vanishes instantly
+              setBooking((prev: any) => prev ? { ...prev, student_confirmation: true } : prev);
+              
               fetchBookingDetails();
               Alert.alert('Confirmed', 'Enjoy your stay!');
             } catch (err) {
@@ -627,12 +685,12 @@ export default function BookingDetails() {
           <View style={styles.errorIconContainer}>
             <Ionicons name="alert-circle-outline" size={64} color={COLORS.danger} />
           </View>
-          <Text style={styles.errorTitle}>Unable to Load Booking</Text>
+          <Text style={styles.errorTitle}>{t('bookings.unable_to_load')}</Text>
           <Text style={styles.errorText}>{error}</Text>
           <View style={styles.errorActions}>
             <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
               <Ionicons name="refresh" size={20} color={COLORS.white} />
-              <Text style={styles.retryButtonText}>Try Again</Text>
+              <Text style={styles.retryButtonText}>{t('bookings.try_again')}</Text>
             </TouchableOpacity>
             <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
               <Ionicons name="arrow-back" size={20} color={COLORS.gold} />
@@ -725,7 +783,7 @@ export default function BookingDetails() {
                         ) : (
                           <View style={[styles.listingImage, styles.videoFallback]}>
                             <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
-                            <Text style={styles.videoFallbackText}>Video</Text>
+                            <Text style={styles.videoFallbackText}>{t('listing.video')}</Text>
                           </View>
                         )}
                         <View style={styles.playButton}>
@@ -784,8 +842,8 @@ export default function BookingDetails() {
               : `📅 Lease Ends in ${daysToEnd} Day${daysToEnd !== 1 ? 's' : ''}`;
 
             const subtitle = isGrace
-              ? `Pay the XAF 5,000 Rent Processing Fee to renew, or confirm your move-out now. Auto-termination in ${14 - daysOver} day${14 - daysOver !== 1 ? 's' : ''}.`
-              : 'Your lease is ending soon. Choose to extend your stay or plan your move-out.';
+              ? t('bookings.renew_grace_subtitle', { days: 14 - daysOver })
+              : t('bookings.renew_lease_subtitle');
 
             const canExtend = !booking.is_renewal_active && booking.contract_status !== 'terminated';
 
@@ -820,7 +878,7 @@ export default function BookingDetails() {
                       }}
                     >
                       <Ionicons name="refresh-circle" size={18} color={isGrace ? '#C0392B' : COLORS.gold} />
-                      <Text style={{ color: isGrace ? '#C0392B' : COLORS.gold, fontWeight: '700', fontSize: 14 }}>Extend Stay</Text>
+                      <Text style={{ color: isGrace ? '#C0392B' : COLORS.gold, fontWeight: '700', fontSize: 14 }}>{t('bookings.extend_stay')}</Text>
                     </TouchableOpacity>
                   )}
                   <TouchableOpacity
@@ -834,7 +892,7 @@ export default function BookingDetails() {
                     }}
                   >
                     <Ionicons name="exit-outline" size={18} color={bannerText} />
-                    <Text style={{ color: bannerText, fontWeight: '600', fontSize: 14 }}>Confirm Checkout</Text>
+                    <Text style={{ color: bannerText, fontWeight: '600', fontSize: 14 }}>{t('bookings.confirm_checkout')}</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -843,7 +901,7 @@ export default function BookingDetails() {
 
           <View style={styles.titleSection}>
             <View style={styles.titleRow}>
-              <Text style={styles.title}>{listing?.title ?? "Unknown Property"}</Text>
+              <Text style={styles.title}>{listing?.title ?? t('bookings.unknown_property')}</Text>
               <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
                 <Ionicons name={getStatusIcon(booking.status)} size={12} color={COLORS.white} />
                 <Text style={styles.statusBadgeText}>{t(`bookings.${booking.status}`)}</Text>
@@ -940,36 +998,45 @@ export default function BookingDetails() {
             <View style={styles.detailsGrid}>
               <View style={styles.detailItem}>
                 <Ionicons name="resize-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Size</Text>
-                <Text style={styles.detailValue}>Not specified</Text>
+                <Text style={styles.detailLabel}>{t('bookings.size')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.not_specified')}</Text>
               </View>
               <View style={styles.detailItem}>
                 <Ionicons name="water-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Utilities</Text>
-                <Text style={styles.detailValue}>Included</Text>
+                <Text style={styles.detailLabel}>{t('bookings.utilities')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.included')}</Text>
               </View>
               <View style={styles.detailItem}>
                 <Ionicons name="car-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Parking</Text>
-                <Text style={styles.detailValue}>Available</Text>
+                <Text style={styles.detailLabel}>{t('bookings.parking')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.available')}</Text>
               </View>
             </View>
             <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Duration:</Text>
+              <Text style={styles.detailLabel}>{t('bookings.duration_label')}</Text>
               <Text style={styles.detailValue}>
                 {booking.duration_type === 'daily'
-                  ? `${Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24))} Days`
+                  ? t('bookings.days_count', { count: Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24)) })
                   : booking.duration_type === 'yearly'
-                    ? '1 Year'
-                    : 'Unknown'}
+                    ? t('bookings.one_year')
+                    : booking.duration_type === 'monthly'
+                      ? t('bookings.monthly')
+                      : t('bookings.unknown')}
               </Text>
             </View>
             {rentTimeRemaining ? (
               <View style={[styles.detailItem, { backgroundColor: COLORS.gold + '15', padding: 8, borderRadius: 8, marginTop: 10 }]}>
-                <Text style={[styles.detailLabel, { color: COLORS.gold }]}>Time Remaining:</Text>
+                <Text style={[styles.detailLabel, { color: COLORS.gold }]}>{t('bookings.time_remaining_label')}</Text>
                 <Text style={[styles.detailValue, { color: COLORS.gold, fontWeight: 'bold' }]}>{rentTimeRemaining}</Text>
               </View>
-            ) : null}
+            ) : (
+              booking.status === 'confirmed' && (
+                <View style={[styles.detailItem, { backgroundColor: COLORS.gold + '15', padding: 8, borderRadius: 8, marginTop: 10 }]}>
+                  <Text style={[styles.detailLabel, { color: COLORS.gold }]}>{t('bookings.status_label')}</Text>
+                  <Text style={[styles.detailValue, { color: COLORS.gold, fontWeight: 'bold' }]}>{t('bookings.pending_move_in')}</Text>
+                </View>
+              )
+            )}
           </View>
 
           <View style={styles.card}>
@@ -990,28 +1057,43 @@ export default function BookingDetails() {
           <View style={styles.card}>
             <View style={styles.cardHeader}>
               <Ionicons name="map-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.cardTitle}>Location & Landlord</Text>
+              <Text style={styles.cardTitle}>{t('bookings.location_and_landlord')}</Text>
             </View>
 
             {booking.payment_status === 'completed' ? (
               <>
-                <View style={styles.mapContainer}>
-                  {listing.latitude && listing.longitude ? (
-                    <MapView
-                      style={StyleSheet.absoluteFillObject}
-                      region={{ latitude: listing.latitude, longitude: listing.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      pitchEnabled={false}
-                      rotateEnabled={false}
-                    />
-                  ) : (
-                    <View style={[styles.center, { backgroundColor: COLORS.greyLight }]}>
-                      <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
-                      <Text style={{ color: COLORS.greyMedium, marginTop: 8 }}>Location not available</Text>
-                    </View>
-                  )}
-                </View>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    if (listing.latitude && listing.longitude) {
+                      setMapModalVisible(true);
+                    }
+                  }}
+                >
+                  <View style={styles.mapContainer}>
+                    {listing.latitude && listing.longitude ? (
+                      <MapView
+                        style={StyleSheet.absoluteFillObject}
+                        region={{ latitude: listing.latitude, longitude: listing.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+                        scrollEnabled={false}
+                        zoomEnabled={false}
+                        pitchEnabled={false}
+                        rotateEnabled={false}
+                      />
+                    ) : (
+                      <View style={[styles.center, { backgroundColor: COLORS.greyLight }]}>
+                        <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
+                        <Text style={{ color: COLORS.greyMedium, marginTop: 8 }}>{t('bookings.location_not_available')}</Text>
+                      </View>
+                    )}
+                    {listing.latitude && listing.longitude && (
+                      <View style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="open-outline" size={12} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 11 }}>{t('bookings.tap_to_open_maps')}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
 
                 {listing.landlord && (
                   <View style={styles.landlordCard}>
@@ -1041,6 +1123,81 @@ export default function BookingDetails() {
             )}
           </View>
 
+          {/* Dispute Resolution Card */}
+          {booking.caution_status === 'disputed' && (
+            <View style={[styles.card, { borderColor: COLORS.danger, borderWidth: 1 }]}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="warning-outline" size={20} color={COLORS.danger} />
+                <Text style={[styles.cardTitle, { color: COLORS.danger }]}>{t('bookings.dispute_resolution')}</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: COLORS.greyDark, marginBottom: 12 }}>
+                {t('bookings.dispute_resolution_desc')}
+              </Text>
+              
+              {(booking as any).dispute_tenant_text ? (
+                <View style={{ backgroundColor: COLORS.greyLight, padding: 12, borderRadius: 8 }}>
+                  <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.your_evidence_submitted')}</Text>
+                  <Text style={{ color: COLORS.greyDark }}>{(booking as any).dispute_tenant_text}</Text>
+                  
+                  {((booking as any).dispute_tenant_photos?.length > 0) && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.photos_count', { count: ((booking as any).dispute_tenant_photos).length })}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {((booking as any).dispute_tenant_photos).map((p: any, i: number) => (
+                          <Image key={i} source={{ uri: p.url }} style={{ width: 60, height: 60, borderRadius: 4 }} />
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                    <Text style={{ color: COLORS.success, marginLeft: 4, fontWeight: '600' }}>Under Review by DHUB</Text>
+                  </View>
+                </View>
+              ) : (
+                <View>
+                  <TextInput
+                    style={{
+                      borderWidth: 1, borderColor: COLORS.greyMedium, borderRadius: 8, padding: 12,
+                      height: 100, textAlignVertical: 'top', backgroundColor: COLORS.white, marginBottom: 12
+                    }}
+                    placeholder="Explain what happened..."
+                    value={disputeText}
+                    onChangeText={setDisputeText}
+                    multiline
+                  />
+                  
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    {((booking as any).dispute_tenant_photos || []).map((p: any, i: number) => (
+                      <Image key={i} source={{ uri: p.url }} style={{ width: 60, height: 60, borderRadius: 4 }} />
+                    ))}
+                    {((booking as any).dispute_tenant_photos || []).length < 3 && (
+                      <TouchableOpacity
+                        style={{
+                          width: 60, height: 60, borderRadius: 4, borderWidth: 1, borderColor: COLORS.gold,
+                          borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center'
+                        }}
+                        onPress={() => handleUploadMedia('dispute')}
+                        disabled={uploadingMedia}
+                      >
+                        {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={24} color={COLORS.gold} />}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[styles.payButton, { width: '100%' }]}
+                    onPress={handleSubmitDisputeEvidence}
+                    disabled={isSubmittingDispute}
+                  >
+                    {isSubmittingDispute ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.payButtonText}>Submit Evidence</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
           {(booking.status === "confirmed" || booking.status === "pending" || booking.status === "completed") && (
             <View style={styles.card}>
               <View style={styles.cardHeader}>
@@ -1059,7 +1216,7 @@ export default function BookingDetails() {
                 </TouchableOpacity>
               )}
 
-              {booking.payment_status === 'completed' && !booking.tenant_confirmation && (
+              {booking.payment_status === 'completed' && booking.rent_payment_status === 'completed' && !booking.tenant_confirmation && (
                 <TouchableOpacity
                   style={[styles.actionButton, { backgroundColor: COLORS.success, borderColor: COLORS.success }]}
                   onPress={handleConfirmMoveIn}
@@ -1171,7 +1328,7 @@ export default function BookingDetails() {
       {booking.approval_status === 'approved' && booking.payment_status === 'pending' && (
         <View style={styles.footer}>
           <View style={styles.footerInfo}>
-            <Text style={styles.footerLabel}>Initial Deposit (Caution + 5000 XAF processing fee)</Text>
+            <Text style={styles.footerLabel}>{t('bookings.initial_deposit_label')}</Text>
             <Text style={styles.footerAmount}>
               FCFA {((booking.caution_fee ?? 0) + 5000).toLocaleString()}
             </Text>
@@ -1185,6 +1342,14 @@ export default function BookingDetails() {
             <Text style={styles.payButtonText}>{t('bookings.pay_now')}</Text>
             <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.whyLink}
+            onPress={() => setShowWhyModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="information-circle-outline" size={15} color={COLORS.gold} />
+            <Text style={styles.whyLinkText}>{t('bookings.why_am_i_paying')}</Text>
+          </TouchableOpacity>
         </View>
       )}
 
@@ -1195,12 +1360,12 @@ export default function BookingDetails() {
             style={[styles.payButton, { width: '100%', backgroundColor: '#27AE60' }]}
             onPress={confirmMoveIn}
           >
-            <Text style={styles.payButtonText}>I Have Moved In ✓</Text>
+            <Text style={styles.payButtonText}>{t('bookings.i_have_moved_in')}</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {booking.payment_status === 'completed' && booking.status === 'confirmed' && (booking as any).rent_payment_status !== 'completed' && !['refund_pending', 'refund_queued', 'refund_paused'].includes(booking.caution_status as string) && (
+      {booking.payment_status === 'completed' && booking.status === 'confirmed' && (booking as any).rent_payment_status !== 'completed' && !['refund_pending', 'refund_queued', 'refund_paused', 'disputed'].includes(booking.caution_status as string) && (
         <View style={[styles.footer, { flexDirection: 'column', gap: 12 }]}>
           <TouchableOpacity
             style={[styles.payButton, { width: '100%' }]}
@@ -1208,7 +1373,7 @@ export default function BookingDetails() {
             activeOpacity={0.8}
           >
             <Ionicons name="card-outline" size={20} color={COLORS.white} />
-            <Text style={styles.payButtonText}>Complete Rent Payment</Text>
+            <Text style={styles.payButtonText}>{t('bookings.complete_rent_payment')}</Text>
             <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
           </TouchableOpacity>
           <TouchableOpacity
@@ -1216,7 +1381,7 @@ export default function BookingDetails() {
             onPress={() => setShowSurveyModal(true)}
             activeOpacity={0.8}
           >
-            <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>Cancel Booking & Refund Caution</Text>
+            <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>{t('bookings.cancel_booking_refund_caution')}</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -1225,10 +1390,9 @@ export default function BookingDetails() {
       {booking.caution_status === 'refund_queued' && (
         <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
           <Ionicons name="time-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>Refund Processing</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>{t('bookings.refund_processing')}</Text>
           <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
-            For security reasons and to protect our landlords, DHUB takes up to 72 hours to verify and process caution refunds.
-            Your money (minus 3% platform fee) will be sent to your Mobile Money account soon.
+            {t('bookings.refund_processing_desc')}
           </Text>
         </View>
       )}
@@ -1237,12 +1401,43 @@ export default function BookingDetails() {
       {booking.caution_status === 'refund_paused' && (
         <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: '#FADBD8' }]}>
           <Ionicons name="alert-circle-outline" size={24} color="#C0392B" style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: "#C0392B", textAlign: 'center' }}>Refund Paused</Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: "#C0392B", textAlign: 'center' }}>{t('bookings.refund_paused')}</Text>
           <Text style={{ fontSize: 13, color: "#C0392B", textAlign: 'center', marginTop: 4 }}>
-            Your caution refund has been placed on hold by DHUB for manual review. Please contact support at support@dhubcmr.com for assistance.
+            {t('bookings.refund_paused_desc')}
           </Text>
         </View>
       )}
+
+      {/* Why Am I Paying Modal */}
+      <Modal visible={showWhyModal} transparent animationType="fade" onRequestClose={() => setShowWhyModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowWhyModal(false)} />
+          <View style={[styles.modalContent, { padding: 24, borderRadius: 20 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 }}>
+              <Ionicons name="information-circle-outline" size={28} color={COLORS.gold} />
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_title')}</Text>
+            </View>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_caution')}</Text>{t('bookings.why_payment_caution_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_fee')}</Text>{t('bookings.why_payment_fee_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_unlocks')}</Text>{t('bookings.why_payment_unlocks_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 24, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_refund')}</Text>{t('bookings.why_payment_refund_desc')}
+            </Text>
+            <TouchableOpacity
+              style={[styles.payButton, { width: '100%', marginTop: 0 }]}
+              onPress={() => setShowWhyModal(false)}
+            >
+              <Text style={styles.payButtonText}>{t('bookings.i_understand')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Fullscreen Media Modal */}
       <Modal
@@ -1328,6 +1523,18 @@ export default function BookingDetails() {
           </View>
         </View>
       </Modal>
+
+      <MapPickerModal
+        visible={mapModalVisible}
+        onClose={() => setMapModalVisible(false)}
+        onLocationSelected={() => {}}
+        initialLocation={
+          listing?.latitude && listing?.longitude
+            ? { latitude: listing.latitude, longitude: listing.longitude }
+            : undefined
+        }
+        readOnly
+      />
     </SafeAreaView>
   );
 }
@@ -1491,38 +1698,45 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     fontSize: 16,
   },
   footer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     backgroundColor: COLORS.white,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
+    flexDirection: 'column',
+    alignItems: 'stretch',
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.08,
     shadowRadius: 10,
     elevation: 20,
   },
   footerInfo: {
-    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
   },
   footerLabel: {
     fontSize: 12,
     color: COLORS.greyMedium,
+    flex: 1,
+    marginRight: 8,
   },
   footerAmount: {
-    fontSize: 18,
-    fontWeight: "700",
+    fontSize: 17,
+    fontWeight: '700',
     color: COLORS.gold,
+    flexShrink: 0,
   },
   payButton: {
     backgroundColor: COLORS.gold,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 12,
     gap: 8,
     shadowColor: COLORS.gold,
     shadowOffset: { width: 0, height: 4 },
@@ -1533,7 +1747,21 @@ const getStyles = (COLORS: any) => StyleSheet.create({
   payButtonText: {
     color: COLORS.white,
     fontSize: 16,
-    fontWeight: "600",
+    fontWeight: '600',
+  },
+  whyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 2,
+  },
+  whyLinkText: {
+    fontSize: 11,
+    color: COLORS.gold,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
   },
   content: {
     padding: 20,
@@ -1904,5 +2132,20 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     marginTop: 6,
     fontSize: 14,
     lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: COLORS.white,
+    padding: 20,
+    borderRadius: 16,
   },
 });
