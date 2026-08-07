@@ -14,6 +14,7 @@ import {
   Image,
   Linking,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,

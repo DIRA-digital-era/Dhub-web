@@ -3,7 +3,7 @@
 import { supabase } from "../utils/supabaseClient";
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL ;
+  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL || "https://dhub.diracmr.com";
 
 export interface Payment {
   id: string;
@@ -78,6 +78,8 @@ export interface InitiateCollectionArgs {
     payer_id: string;
 
     listing_id: string;
+
+    plan_id?: string | null;
 
     idempotency_key: string;
   };
@@ -290,9 +292,21 @@ export const paymentService = {
 
       amount: parseFloat(row.amount),
 
-      sender: row.payer_id,
+      sender: row.payer_id === userId ? "You" : row.payer_id,
 
-      receiver: row.payee_id,
+      receiver: (() => {
+        // For rent_completion: show landlord name + phone if available
+        if (row.payment_kind === 'rent_completion') {
+          const name = row.receiver_name;
+          const phone = row.receiver_phone;
+          if (name && phone) return `${name} (${phone})`;
+          if (name) return name;
+          if (phone) return phone;
+          return 'Landlord';
+        }
+        // For initial booking / verification: money goes to Dhub
+        return 'Dhub';
+      })(),
 
       status: row.status as any,
 

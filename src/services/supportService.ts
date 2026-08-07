@@ -24,7 +24,7 @@ export async function createTicket(userId: string): Promise<Ticket> {
     .from('tickets')
     .insert([{ user_id: userId, status: 'open', priority: 'normal' }])
     .select()
-    .maybesingle();
+    .maybeSingle();
 
   if (error) throw error;
   return data as Ticket;

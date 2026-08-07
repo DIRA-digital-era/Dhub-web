@@ -92,19 +92,19 @@ const PaymentsScreen: React.FC = () => {
   }, [user?.id]);
 
   // Prefill if coming from BoostScreen or ListingDetailsScreen (verification)
-useEffect(() => {
-  if (routeParams && 'reason' in routeParams) {
-    setActiveTab('send');
-    setAmount(String(routeParams.amount));
-    setDescription(routeParams.description);
-    return;
-  }
-  if (boostParams) {
-    setActiveTab('send');
-    setAmount(boostParams.price.toString());
-    setDescription(`Boost Listing: ${boostParams.listingId}`);
-  }
-}, [boostParams, routeParams]);
+  useEffect(() => {
+    if (routeParams && 'reason' in routeParams) {
+      setActiveTab('send');
+      setAmount(String(routeParams.amount));
+      setDescription(routeParams.description);
+      return;
+    }
+    if (boostParams) {
+      setActiveTab('send');
+      setAmount(boostParams.price.toString());
+      setDescription(`Boost Listing: ${boostParams.listingId}`);
+    }
+  }, [boostParams, routeParams]);
 
   // Success → reset form, switch to history
   useEffect(() => {
@@ -115,8 +115,10 @@ useEffect(() => {
     setActiveTab('history');
     dispatch(clearInitiateState());
     Alert.alert(
-      'Payment Initiated ',
-      `${formatCurrency(numAmount)} sent to ${RECEIVER_NAME}.\nApprove the MoMo prompt on your phone to complete.`,
+      'Payment Initiated ✅',
+      boostParams
+        ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
+        : `${formatCurrency(numAmount)} payment initiated.\nApprove the MoMo prompt on your phone to complete.`,
     );
   }, [initiateData]);
 
@@ -188,6 +190,7 @@ useEffect(() => {
         id: `col-${Date.now()}`,
         payer_id: user.id,
         listing_id: boostParams?.listingId ?? '',
+        plan_id: boostParams?.planId ?? null,   // ← needed by webhook to activate boost
         idempotency_key: `dhub-col-${Date.now()}`,
       },
     }));
