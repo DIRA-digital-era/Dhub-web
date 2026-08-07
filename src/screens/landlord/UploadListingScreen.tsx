@@ -35,17 +35,19 @@ const { width } = Dimensions.get('window');
 // ─── Web‑safe alert helper ───────────────────────────────────────────────
 const showAlert = (title: string, message?: string, buttons?: any[]) => {
   if (Platform.OS === 'web') {
-    // On web, fallback to native alert if React Native Alert fails
     const msg = message ? `${title}\n${message}` : title;
     window.alert(msg);
-    // Buttons are ignored on web; we handle via simple alert
+    // On web, execute the first button's onPress handler automatically since window.alert is blocking
+    if (buttons && buttons.length > 0 && buttons[0].onPress) {
+      buttons[0].onPress();
+    }
     return;
   }
   Alert.alert(title, message, buttons);
 };
 
 const UploadListingScreen: React.FC = () => {
-  const navigation = useNavigation();
+  const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { t } = useTranslation();
   const scrollViewRef = useRef<ScrollView>(null);
@@ -293,7 +295,7 @@ const UploadListingScreen: React.FC = () => {
       setLoading(false);
 
       showAlert('Success!', 'Your property listing has been created successfully.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
+        { text: 'OK', onPress: () => navigation.navigate('ListingDetails', { listingId }) },
       ]);
     } catch (err: any) {
       console.error('Error creating listing:', err);
