@@ -6,14 +6,12 @@ import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Keyboard,
-  KeyboardAvoidingView,
   Platform,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  TouchableWithoutFeedback, // ✅ Fixed: added missing import
   View
 } from 'react-native';
 import { useDispatch, useSelector } from 'react-redux';
@@ -120,12 +118,12 @@ const SignInScreen: React.FC = () => {
     try {
       await loginWithGoogle();
     } catch (err: any) {
-       console.error('[SignInScreen] Google Sign-in error:', err.message);
-       if (err.message === 'ACCOUNT_NOT_FOUND') {
-         setErrorMessage('Account not found. Please use the Sign Up screen first.');
-       } else {
-         setErrorMessage(err.message || 'Could not complete Google sign-in.');
-       }
+      console.error('[SignInScreen] Google Sign-in error:', err.message);
+      if (err.message === 'ACCOUNT_NOT_FOUND') {
+        setErrorMessage('Account not found. Please use the Sign Up screen first.');
+      } else {
+        setErrorMessage(err.message || 'Could not complete Google sign-in.');
+      }
     } finally {
       setLoading(false);
     }
@@ -139,10 +137,10 @@ const SignInScreen: React.FC = () => {
     setLoading(true);
     setErrorMessage('');
     try {
-      const redirectUrl = Platform.OS === 'web' 
+      const redirectUrl = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
         : Linking.createURL('auth/callback');
-      
+
       const { error } = await supabase.auth.signInWithOtp({
         email: identifier.trim(),
         options: {
@@ -151,10 +149,10 @@ const SignInScreen: React.FC = () => {
         },
       });
       if (error) throw error;
-      
-      navigation.navigate('EmailVerification', { 
-        email: identifier.trim(), 
-        mode: 'signup' 
+
+      navigation.navigate('EmailVerification', {
+        email: identifier.trim(),
+        mode: 'signup'
       });
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not send Magic Link.');
@@ -168,18 +166,18 @@ const SignInScreen: React.FC = () => {
       setErrorMessage('Please enter your email to reset your password.');
       return;
     }
-    
+
     setLoading(true);
     setErrorMessage('');
     try {
-      const resetRedirectUrl = Platform.OS === 'web' 
+      const resetRedirectUrl = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
-        : Linking.createURL('auth/callback');      
+        : Linking.createURL('auth/callback');
       const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), {
         redirectTo: resetRedirectUrl,
       });
       if (error) throw error;
-      
+
       navigation.navigate('EmailVerification', { email: identifier.trim(), mode: 'recovery' });
     } catch (err: any) {
       setErrorMessage(err.message || 'Could not send reset link.');
@@ -188,9 +186,6 @@ const SignInScreen: React.FC = () => {
     }
   };
 
-  const Wrapper = (Platform.OS === 'web' ? View : TouchableWithoutFeedback) as React.ElementType;
-  const wrapperProps = Platform.OS === 'web' ? { style: { flex: 1 } } : { onPress: Keyboard.dismiss };
-
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.header}>
@@ -198,133 +193,127 @@ const SignInScreen: React.FC = () => {
         <Text style={styles.subtitle}>Sign in to your account</Text>
       </View>
 
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+      {/* Main content – simple ScrollView, no native wrappers */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
       >
-        <Wrapper {...wrapperProps}>
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+        <View style={styles.methodToggleContainer}>
+          <TouchableOpacity
+            style={[styles.methodToggleBtn, loginMethod === 'phone' && styles.methodToggleBtnActive]}
+            onPress={() => { setLoginMethod('phone'); setIdentifier(''); setErrorMessage(''); }}
           >
-            <View style={styles.methodToggleContainer}>
-              <TouchableOpacity 
-                style={[styles.methodToggleBtn, loginMethod === 'phone' && styles.methodToggleBtnActive]}
-                onPress={() => { setLoginMethod('phone'); setIdentifier(''); setErrorMessage(''); }}
-              >
-                <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>Phone</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.methodToggleBtn, loginMethod === 'email' && styles.methodToggleBtnActive]}
-                onPress={() => { setLoginMethod('email'); setIdentifier(''); setErrorMessage(''); }}
-              >
-                <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>Email</Text>
-              </TouchableOpacity>
-            </View>
+            <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>Phone</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.methodToggleBtn, loginMethod === 'email' && styles.methodToggleBtnActive]}
+            onPress={() => { setLoginMethod('email'); setIdentifier(''); setErrorMessage(''); }}
+          >
+            <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>Email</Text>
+          </TouchableOpacity>
+        </View>
 
-            <View style={styles.formContainer}>
-              {loginMethod === 'phone' ? (
-                <View style={styles.phoneInputContainer}>
-                  <View style={styles.phonePrefix}><Text style={styles.phonePrefixText}>+237</Text></View>
-                  <TextInput
-                    placeholder="Phone Number (e.g. 6xxxxxxxx)"
-                    style={styles.phoneInput}
-                    placeholderTextColor={colors.textSecondary}
-                    value={identifier}
-                    onChangeText={handleIdentifierChange}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="tel"
-                    editable={!loading}
-                    maxLength={9}
-                  />
-                </View>
-              ) : (
-                <View style={styles.phoneInputContainer}>
-                  <TextInput
-                    placeholder="Email Address"
-                    style={styles.phoneInput}
-                    placeholderTextColor={colors.textSecondary}
-                    value={identifier}
-                    onChangeText={handleIdentifierChange}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="email"
-                    editable={!loading}
-                  />
-                </View>
-              )}
-
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  placeholder="Password"
-                  style={styles.passwordInput}
-                  placeholderTextColor={colors.textSecondary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoComplete="password"
-                  textContentType="password"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              <ButtonPrimary
-                title={loading ? 'Signing In...' : 'Sign In'}
-                onPress={handleSignIn}
-                disabled={loading}
+        <View style={styles.formContainer}>
+          {loginMethod === 'phone' ? (
+            <View style={styles.phoneInputContainer}>
+              <View style={styles.phonePrefix}><Text style={styles.phonePrefixText}>+237</Text></View>
+              <TextInput
+                placeholder="Phone Number (e.g. 6xxxxxxxx)"
+                style={styles.phoneInput}
+                placeholderTextColor={colors.textSecondary}
+                value={identifier}
+                onChangeText={handleIdentifierChange}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="tel"
+                editable={!loading}
+                maxLength={9}
               />
-
-              {loginMethod === 'email' && (
-                <TouchableOpacity 
-                  onPress={handleMagicLink} 
-                  disabled={loading}
-                  style={styles.magicLinkBtn}
-                >
-                  <Text style={styles.magicLinkBtnText}>Or send me a Magic Link (No password)</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.divider} />
-              </View>
-
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleSignIn}
-                disabled={loading}
-              >
-                <Ionicons name="logo-google" size={20} color={colors.text} />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
-
-              {loading && <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />}
-
-              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-              <View style={styles.linksContainer}>
-                <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
-                  <Text style={styles.linkText}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </ScrollView>
-        </Wrapper>
-      </KeyboardAvoidingView>
+          ) : (
+            <View style={styles.phoneInputContainer}>
+              <TextInput
+                placeholder="Email Address"
+                style={styles.phoneInput}
+                placeholderTextColor={colors.textSecondary}
+                value={identifier}
+                onChangeText={handleIdentifierChange}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                editable={!loading}
+              />
+            </View>
+          )}
 
+          <View style={styles.passwordContainer}>
+            <TextInput
+              placeholder="Password"
+              style={styles.passwordInput}
+              placeholderTextColor={colors.textSecondary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="password"
+              textContentType="password"
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              disabled={loading}
+              style={styles.eyeButton}
+            >
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ButtonPrimary
+            title={loading ? 'Signing In...' : 'Sign In'}
+            onPress={handleSignIn}
+            disabled={loading}
+          />
+
+          {loginMethod === 'email' && (
+            <TouchableOpacity
+              onPress={handleMagicLink}
+              disabled={loading}
+              style={styles.magicLinkBtn}
+            >
+              <Text style={styles.magicLinkBtnText}>Or send me a Magic Link (No password)</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
+            <Ionicons name="logo-google" size={20} color={colors.text} />
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          {loading && <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />}
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          <View style={styles.linksContainer}>
+            <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.linkText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Footer */}
       <View style={styles.footer}>
         <View style={styles.brandingWrapper}>
           <DiraBranding />
@@ -333,7 +322,7 @@ const SignInScreen: React.FC = () => {
         <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUp')}>
           <Text style={styles.switchText}>Don't have an account? <Text style={styles.link}>Sign Up</Text></Text>
         </TouchableOpacity>
-        
+
         <View style={styles.languageWrapper}>
           <LanguageSelector />
         </View>
@@ -381,14 +370,14 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   signUpLink: { marginBottom: 2, alignItems: 'center' },
   switchText: { textAlign: 'center', fontSize: 13, color: colors.textSecondary },
   link: { color: colors.primary, fontWeight: '600' },
-  errorText: { 
-    color: '#fff', 
+  errorText: {
+    color: '#fff',
     backgroundColor: colors.error,
     padding: 12,
     borderRadius: 8,
-    textAlign: 'center', 
-    marginTop: 16, 
-    fontSize: 14, 
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 14,
     fontWeight: '600',
     overflow: 'hidden'
   },

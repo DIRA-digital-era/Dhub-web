@@ -3,7 +3,7 @@
 import { supabase } from "../utils/supabaseClient";
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL || "https://dhub.diracmr.com";
+  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL;
 
 export interface Payment {
   id: string;

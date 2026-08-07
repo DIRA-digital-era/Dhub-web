@@ -1,4 +1,4 @@
-  // src/screens/student/ListingDetailsScreen.tsx
+// src/screens/student/ListingDetailsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import {
   useFocusEffect,
@@ -90,7 +90,7 @@ const ListingDetailsScreen: React.FC = () => {
   const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
   const [hasPaidBooking, setHasPaidBooking] = useState(false);
   const [existingBookingId, setExistingBookingId] = useState<string | null>(null);
-  
+
   const flatListRef = React.useRef<FlatList>(null);
 
   // Close fullscreen media when screen loses focus
@@ -174,14 +174,14 @@ const ListingDetailsScreen: React.FC = () => {
       Alert.alert(t('common.error'), 'Please sign in to book.');
       return;
     }
-    
+
     // Check Profile Gate
     const { data: studentData } = await supabase
       .from('student_profiles')
       .select('age, profession, contact_number')
       .eq('user_id', userId)
       .single();
-    
+
     if (!studentData || !studentData.age || !studentData.profession || !studentData.contact_number) {
       if (Platform.OS === 'web') {
         const wantsToUpdate = window.confirm("Profile Verification Required\n\nLandlords require your age, profession/level, and Momo number before accepting bookings.\n\nClick OK to Update Profile.");
@@ -216,36 +216,44 @@ const ListingDetailsScreen: React.FC = () => {
 
 
 
-const handleShare = async () => {
-  try {
-    const url = Platform.OS === 'web'
-      ? `https://dhubweb.diracmr.com/listing/${listingId}`  // Branded web URL
-      : `dhub://listing/${listingId}`;                      // Deep link for native
-
-    await Share.share({
-      message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
-      url: url,
-      title: listing?.title,
-    });
-  } catch (error: any) {
-    console.log('Error sharing:', error.message);
-  }
-};
-
-
-
-
-
-
-
-
-
-
+  const handleShare = async () => {
+    // Web: share the edge function URL so WhatsApp/Telegram bots crawl
+    //      proper OG meta tags and show a rich preview card.
+    // Mobile (native): share the dhub:// deep link so the app opens
+    //      directly if installed; bots don't matter here as users tap
+    //      from their phone where the app is already present.
+    const shareUrl = Platform.OS === 'web'
+      ? `https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=${listingId}`
+      : `dhub://listing/${listingId}`;
+    const location = listing?.city || listing?.city || '';
+    const messageText = location
+      ? `Check out this listing for ${listing?.title} at ${location} on DHUB\n${shareUrl}`
+      : `Check out this listing for ${listing?.title} on DHUB\n${shareUrl}`;
+    try {
+      await Share.share({
+        message: messageText,
+        url: shareUrl,
+        title: listing?.title,
+      });
+    } catch (error: any) {
+      console.log('Error sharing:', error.message);
+    }
+  };
 
 
 
 
-    const handleChat = async () => {
+
+
+
+
+
+
+
+
+
+
+  const handleChat = async () => {
     const otherUserId = listing?.landlord?.id ?? listing?.landlord_id;
     if (!otherUserId || !userId) return;
     try {
@@ -322,7 +330,7 @@ const handleShare = async () => {
                 <Text style={styles.videoFallbackText}>Video</Text>
               </View>
             )}
-            
+
             {item.processing_status === 'processing' ? (
               <View style={styles.processingOverlay}>
                 <ActivityIndicator size="small" color={COLORS.white} />
@@ -379,7 +387,7 @@ const handleShare = async () => {
   const coords: LatLng | null = hasCoords
     ? { latitude: listing.latitude!, longitude: listing.longitude! }
     : null;
-    
+
   const isBoosted = listing.boost_until && new Date(listing.boost_until) > new Date();
   const canViewFullMap = hasCoords && (hasPaidBooking || isBoosted);
 
@@ -396,7 +404,7 @@ const handleShare = async () => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
           <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
         </TouchableOpacity>
-        
+
         <View style={styles.headerTitleContainer}>
           <Text style={styles.headerTitle} numberOfLines={1}>{listing.title}</Text>
           {listing.is_verified && (
@@ -442,10 +450,10 @@ const handleShare = async () => {
             {allMedia.length > 1 && (
               <>
                 <TouchableOpacity style={styles.navArrowLeft} onPress={handlePrevImage} disabled={activeImageIndex === 0}>
-                   <Ionicons name="chevron-back" size={30} color={activeImageIndex === 0 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
+                  <Ionicons name="chevron-back" size={30} color={activeImageIndex === 0 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.navArrowRight} onPress={handleNextImage} disabled={activeImageIndex === allMedia.length - 1}>
-                   <Ionicons name="chevron-forward" size={30} color={activeImageIndex === allMedia.length - 1 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
+                  <Ionicons name="chevron-forward" size={30} color={activeImageIndex === allMedia.length - 1 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
                 </TouchableOpacity>
               </>
             )}
@@ -523,12 +531,12 @@ const handleShare = async () => {
             </TouchableOpacity>
           </View>
           {/* Premium Fat Share Button */}
-          <TouchableOpacity 
-            style={[styles.quickActionBtn, { 
-              width: '100%', 
-              marginTop: -12, 
-              marginBottom: 24, 
-              backgroundColor: COLORS.gold, 
+          <TouchableOpacity
+            style={[styles.quickActionBtn, {
+              width: '100%',
+              marginTop: -12,
+              marginBottom: 24,
+              backgroundColor: COLORS.gold,
               borderColor: COLORS.gold,
               paddingVertical: 14,
               shadowColor: COLORS.gold,
@@ -544,16 +552,16 @@ const handleShare = async () => {
             <Text style={[styles.quickActionText, { color: COLORS.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
           </TouchableOpacity>
 
-        {/* Description */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
-            <Text style={styles.sectionTitle}>{t('listing.description')}</Text>
+          {/* Description */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.sectionTitle}>{t('listing.description')}</Text>
+            </View>
+            <Text style={styles.description}>
+              {listing.description || t('listing.no_description')}
+            </Text>
           </View>
-          <Text style={styles.description}>
-            {listing.description || t('listing.no_description')}
-          </Text>
-        </View>
 
           {/* Key Details */}
           <View style={styles.section}>
@@ -688,8 +696,8 @@ const handleShare = async () => {
       <View style={styles.bookContainer}>
         {existingBookingId ? (
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity 
-              style={[styles.bookButton, { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border }]} 
+            <TouchableOpacity
+              style={[styles.bookButton, { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border }]}
               onPress={() => navigation.navigate('BookingDetails', { bookingId: existingBookingId })}
             >
               <Ionicons name="eye-outline" size={20} color={COLORS.greyDark} />
