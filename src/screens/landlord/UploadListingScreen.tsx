@@ -290,6 +290,8 @@ const UploadListingScreen: React.FC = () => {
         throw new Error("Media upload succeeded, but failed to link to property: " + updateError.message);
       }
 
+      setLoading(false);
+
       showAlert('Success!', 'Your property listing has been created successfully.', [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
