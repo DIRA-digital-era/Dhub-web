@@ -19,6 +19,8 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import UpdateRequiredScreen from "./src/screens/common/UpdateRequiredScreen";
 import store, { RootState } from "./src/store/store";
 
+import { getStateFromPath } from '@react-navigation/native';
+
 const linking = {
   prefixes: [
     'https://dhubweb.diracmr.com',
@@ -29,6 +31,14 @@ const linking = {
     screens: {
       ListingDetails: 'app/listing/:listingId',
     },
+  },
+  getStateFromPath(path: string, options: any) {
+    if (path.includes('auth/callback')) {
+      // Ignore auth/callback in navigation state to prevent crashing.
+      // AuthListener will handle the URL manually.
+      return undefined;
+    }
+    return getStateFromPath(path, options);
   },
 };
 

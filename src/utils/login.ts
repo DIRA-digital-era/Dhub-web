@@ -384,6 +384,7 @@ export const createSessionFromUrl = async (url: string) => {
       // ✅ CLEAN THE URL AFTER SUCCESSFUL EXCHANGE (Web only)
       const cleanUrl = new URL(window.location.href);
       if (cleanUrl.pathname === '/auth/callback') {
+        cleanUrl.pathname = '/';
         cleanUrl.search = ''; // removes all query parameters
         window.history.replaceState({}, document.title, cleanUrl.toString());
       }
