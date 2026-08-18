@@ -23,6 +23,7 @@ import { supabase } from '../utils/supabaseClient';
 const AuthListener: React.FC = () => {
   const dispatch = useDispatch<AppDispatch>();
   const appState = useRef(AppState.currentState);
+  const lastProcessedUrl = useRef<string | null>(null);
 
   useEffect(() => {
     let isMounted = true;
@@ -186,8 +187,13 @@ const AuthListener: React.FC = () => {
     const handleUrl = async (url: string | null) => {
       if (!url || !isMounted) return;
 
+      if (lastProcessedUrl.current === url) {
+        return; // Guard against multiple executions for the same URL
+      }
+
       if (url.includes('auth/callback') || url.includes('#access_token') || url.includes('error=')) {
         authLogger.log(STEP, 'Auth Deep Link detected. Processing URL...');
+        lastProcessedUrl.current = url;
         try {
           await createSessionFromUrl(url);
         } catch (err: any) {
