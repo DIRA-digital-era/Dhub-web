@@ -2,7 +2,8 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import { showAlert } from '../../utils/alert';
+import { generateVideoThumbnail } from '../../utils/videoThumbnail';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
@@ -18,19 +19,7 @@ import { uploadListingMedia } from '../../utils/upload';
 
 const { width } = Dimensions.get('window');
 
-// ─── Web‑safe alert helper ───────────────────────────────────────────────
-const showAlert = (title: string, message?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
-    const msg = message ? `${title}\n${message}` : title;
-    window.alert(msg);
-    // On web, execute the first button's onPress handler automatically since window.alert is blocking
-    if (buttons && buttons.length > 0 && buttons[0].onPress) {
-      buttons[0].onPress();
-    }
-    return;
-  }
-  showAlert(title, message, buttons);
-};
+
 
 const UploadListingScreen: React.FC = () => {
   const navigation = useNavigation<any>();
@@ -136,8 +125,7 @@ const UploadListingScreen: React.FC = () => {
 
         if (asset.type === 'video') {
           try {
-            const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 1000 });
-            thumbUrl = uri;
+            thumbUrl = await generateVideoThumbnail(asset.uri, 1000);
           } catch (err) {
             console.warn('Failed to generate video thumbnail:', err);
           }

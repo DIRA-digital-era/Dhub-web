@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
+import { generateVideoThumbnail } from '../../utils/videoThumbnail';
 import React, { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, Image, Modal, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import FullVideoPlayer from '../../components/FullVideoPlayer';
@@ -118,8 +118,7 @@ const EditListingScreen: React.FC = () => {
         let thumbUrl = asset.uri;
         if (asset.type === 'video') {
           try {
-            const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 1000 });
-            thumbUrl = uri;
+            thumbUrl = await generateVideoThumbnail(asset.uri, 1000);
           } catch (err) {
             console.warn('Failed to generate video thumbnail:', err);
           }
