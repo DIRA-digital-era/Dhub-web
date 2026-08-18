@@ -1,17 +1,14 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
-const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const mediaBase = Deno.env.get('MEDIA_BASE_URL') || 'https://listings.frunjimbong.workers.dev';
-
-// NOTE: Update APP_STORE_URL when DHUB is live on App Store
+// ── Constants ──────────────────────────────────────────────────────────────
 const APP_STORE_URL = 'https://apps.apple.com/app/dhub/id000000000';
 const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diracmr.dhub';
 const WEB_BASE_URL = 'https://dhubweb.diracmr.com';
 const SUPABASE_PROJECT_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co';
+const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
 
-/** XSS-safe HTML attribute/text escaping */
+// ── XSS-safe HTML escaping ────────────────────────────────────────────────
 function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;')
@@ -21,7 +18,7 @@ function esc(s: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// ── Professional inline SVG icons ──────────────────────────────────────────
+// ── Inline SVG icons ──────────────────────────────────────────────────────
 const ICON_LOCATION = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`;
 
 const ICON_ANDROID = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341 14.67 9.2l2.855-5.223a.5.5 0 0 0-.88-.48L13.82 8.66a8.28 8.28 0 0 0-3.64 0L7.355 3.497a.5.5 0 0 0-.88.48L9.33 9.2 6.477 15.34A3 3 0 0 0 6 17a6 6 0 0 0 12 0 3 3 0 0 0-.477-1.659zM9.5 19a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm5 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>`;
@@ -32,51 +29,136 @@ const ICON_GLOBE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" 
 
 const ICON_HOME = `<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
 
+// ── Helper: Error page with a "Go to DHUB" button ────────────────────────
+function errorPage(title: string, message: string): string {
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)} - DHUB</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+<style>
+* { margin:0; padding:0; box-sizing:border-box; }
+body {
+  font-family: 'Inter', system-ui, sans-serif;
+  background: #09090f;
+  color: #f0f0f5;
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.card {
+  max-width: 480px;
+  width: 100%;
+  background: #13131a;
+  border-radius: 16px;
+  padding: 40px 32px;
+  text-align: center;
+  box-shadow: 0 24px 80px rgba(0,0,0,0.65), 0 0 0 1px rgba(255,255,255,0.055);
+}
+h1 { font-size: 28px; font-weight: 800; margin-bottom: 12px; color: #D4AF37; }
+p { font-size: 16px; color: #888899; line-height: 1.6; margin-bottom: 28px; }
+.btn {
+  display: inline-block;
+  background: #D4AF37;
+  color: #000;
+  font-weight: 700;
+  padding: 14px 32px;
+  border-radius: 12px;
+  text-decoration: none;
+  font-size: 16px;
+  transition: background 0.2s;
+}
+.btn:hover { background: #b8962e; }
+</style>
+</head>
+<body>
+<div class="card">
+  <h1>${esc(title)}</h1>
+  <p>${esc(message)}</p>
+  <a class="btn" href="${WEB_BASE_URL}">Go to DHUB</a>
+</div>
+</body>
+</html>`;
+}
+
+// ── Main handler ──────────────────────────────────────────────────────────
 serve(async (req) => {
-  const url = new URL(req.url);
-  const listingId = url.searchParams.get('id');
-  if (!listingId) return new Response('Missing listing ID', { status: 400 });
-
-  const supabase = createClient(supabaseUrl, supabaseKey);
-  const { data: listing, error } = await supabase
-    .from('listings')
-    .select('title, price, city, media, description, price_unit, location')
-    .eq('id', listingId)
-    .single();
-
-  if (error || !listing) return new Response('Listing not found', { status: 404 });
-
-  // ── Image URL ────────────────────────────────────────────────────────────
-  let imageUrl = '';
-  if (listing.media && Array.isArray(listing.media)) {
-    const firstImage = listing.media.find((m: any) => m.type === 'image');
-    if (firstImage) {
-      const imgUrl = firstImage.thumbUrl || firstImage.url;
-      imageUrl = imgUrl?.startsWith('/media/') ? mediaBase + imgUrl : imgUrl || '';
+  try {
+    const url = new URL(req.url);
+    const listingId = url.searchParams.get('id');
+    if (!listingId) {
+      const html = errorPage('Missing Listing ID', 'The link you followed is incomplete. Please visit our homepage.');
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 400,
+      });
     }
-  }
-  const fallbackImage = WEB_BASE_URL + '/icon.png';
-  if (!imageUrl) imageUrl = fallbackImage;
 
-  const title = listing.title || 'DHUB Listing';
-  const priceUnit = listing.price_unit === 'per_night' ? 'night' : 'month';
-  const priceDisplay = listing.price
-    ? listing.price.toLocaleString('en-US') + ' FCFA/' + priceUnit
-    : 'Price on request';
-  const city = listing.city || listing.location || '';
-  const ogDescription = city ? city + ' \u2022 ' + priceDisplay : priceDisplay;
-  const shortDesc = listing.description
-    ? listing.description.substring(0, 180) + '...'
-    : 'Find your perfect home on DHUB.';
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
 
-  const deepLink = 'dhub://listing/' + listingId;
-  const webLink = WEB_BASE_URL + '/listing/' + listingId;
-  // This edge function URL IS the canonical share URL — bots always crawl it and get OG tags
-  const canonicalUrl = SUPABASE_PROJECT_URL + '/functions/v1/listing-og?id=' + listingId;
+    if (!supabaseUrl || !supabaseKey) {
+      console.error('Missing env: SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
+      const html = errorPage('Configuration Error', 'We’re having trouble loading the listing. Please try again later.');
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 500,
+      });
+    }
 
-  const hasHeroImage = imageUrl && imageUrl !== fallbackImage;
+    const supabase = createClient(supabaseUrl, supabaseKey);
 
-  const html = `<!DOCTYPE html>
+    const { data: listing, error } = await supabase
+      .from('listings')
+      .select('title, price, city, media, description, price_unit')
+      .eq('id', listingId)
+      .single();
+
+    if (error || !listing) {
+      console.error(`Listing not found: ${listingId}`, error);
+      const html = errorPage('Listing Not Found', 'The listing you’re looking for may have been removed or doesn’t exist.');
+      return new Response(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' },
+        status: 404,
+      });
+    }
+
+    // ── Extract image URL ────────────────────────────────────────────────
+    let imageUrl = '';
+    if (listing.media && Array.isArray(listing.media)) {
+      const firstImage = listing.media.find((m: any) => m.type === 'image');
+      if (firstImage) {
+        const imgUrl = firstImage.thumbUrl || firstImage.url;
+        imageUrl = imgUrl?.startsWith('/media/') ? MEDIA_BASE_URL + imgUrl : imgUrl || '';
+      }
+    }
+    if (!imageUrl) imageUrl = WEB_BASE_URL + '/icon.png';
+
+    // ── Build display fields ─────────────────────────────────────────────
+    const title = listing.title || 'DHUB Listing';
+    const priceUnit = listing.price_unit === 'per_night' ? 'night' : 'month';
+    const priceDisplay = listing.price
+      ? listing.price.toLocaleString('en-US') + ' FCFA/' + priceUnit
+      : 'Price on request';
+    const city = listing.city || '';
+    const ogDescription = city ? city + ' \u2022 ' + priceDisplay : priceDisplay;
+    const shortDesc = listing.description
+      ? listing.description.substring(0, 180) + '...'
+      : 'Find your perfect home on DHUB.';
+
+    const deepLink = 'dhub://listing/' + listingId;
+    const webLink = WEB_BASE_URL + '/listing/' + listingId;
+    const canonicalUrl = SUPABASE_PROJECT_URL + '/functions/v1/listing-og?id=' + listingId;
+
+    const hasHeroImage = imageUrl && imageUrl !== WEB_BASE_URL + '/icon.png';
+
+    // ── Build HTML ──────────────────────────────────────────────────────
+    const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -112,7 +194,6 @@ serve(async (req) => {
   --gold-dark: #b8962e;
   --bg: #09090f;
   --surface: #13131a;
-  --surface2: #1c1c27;
   --text: #f0f0f5;
   --muted: #888899;
   --radius: 16px;
@@ -231,10 +312,19 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 </body>
 </html>`;
 
-  return new Response(html, {
-    headers: {
-      'Content-Type': 'text/html; charset=UTF-8',
-      'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
-    },
-  });
+    // ── Return with explicit headers ─────────────────────────────────────
+    const headers = new Headers();
+    headers.set('Content-Type', 'text/html; charset=utf-8');
+    headers.set('Cache-Control', 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800');
+
+    return new Response(html, { headers, status: 200 });
+
+  } catch (err) {
+    console.error('Edge function error:', err);
+    const html = errorPage('Internal Server Error', 'Something went wrong. Please try again later.');
+    return new Response(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 500,
+    });
+  }
 });

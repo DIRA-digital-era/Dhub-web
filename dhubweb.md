@@ -113,6 +113,7 @@ src/
   hooks/
     useAuth.ts
     useKeyboard.ts
+    usePaymentSuccessNotifier.ts
     usePushNotifications.ts
     useVersionCheck.ts
   i18n/
@@ -223,6 +224,8 @@ supabase/
       index.ts
     booking-approved-email/
       index.ts
+    listing-og/
+      index.ts
     new-listing-email/
       index.ts
     push-campaign/
@@ -246,7 +249,7 @@ supabase/
 app.config.js
 App.tsx
 babel.config.js
-context_output.txt
+deno.lock
 DHUB_build.yaml
 DHUB_DEVELOPMENT_BIBLE.md
 eas.json
@@ -254,8 +257,11 @@ eslint.config.js
 implementation_plan.md
 index.js
 metro.config.js
+mobile_diff.txt
+netlify.toml
 package.json
 payment_system_reference.md
+placeholder.txt
 README.md
 SplashScreen.tsx
 tsconfig.json
@@ -1575,449 +1581,6 @@ const styles = StyleSheet.create({
 });
 </file>
 
-<file path="src/components/FullVideoPlayer.tsx">
-// src/components/FullVideoPlayer.tsx
-//
-// Uses expo-video (the current, non-deprecated player).
-//
-// The previous AVFoundationErrorDomain -11850 error was NOT an expo-video bug —
-// it was caused by the Cloudflare Worker returning plain 200 responses with no
-// Range request support. Native players (AVPlayer/ExoPlayer) require 206 Partial
-// Content. The Worker is now fixed, so expo-video works correctly.
-
-import { Ionicons } from '@expo/vector-icons';
-import { useVideoPlayer, VideoView } from 'expo-video';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-const MAX_AUTO_RETRIES = 3;
-const BACKOFF = [1500, 3000, 6000]; // slightly longer for low-connectivity areas
-
-interface FullVideoPlayerProps {
-  url: string;
-  onClose: () => void;
-  processingStatus?: 'processing' | 'ready' | 'failed';
-}
-
-const FullVideoPlayer: React.FC<FullVideoPlayerProps> = ({ url, onClose, processingStatus }) => {
-  const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
-  const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [playerKey, setPlayerKey] = useState(0);
-
-  // Pass URL as plain string — expo-video v3 does NOT accept { uri: url }
-  const player = useVideoPlayer(url, (p) => {
-    p.loop = false;
-    p.staysActiveInBackground = false;
-    // Do NOT call play() here — player is not ready yet.
-    // play() is called inside the readyToPlay status event below.
-  });
-
-  useEffect(() => {
-    let sub: { remove: () => void } | null = null;
-    try {
-      sub = player.addListener('statusChange', ({ status }: { status: string }) => {
-        if (status === 'readyToPlay') {
-          retryCountRef.current = 0;
-          setPlayerStatus('playing');
-          try { player.play(); } catch (_) {}
-        } else if (status === 'loading' || status === 'buffering') {
-          setPlayerStatus('loading');
-        } else if (status === 'error') {
-          handleError();
-        }
-      });
-    } catch (_) {}
-
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      try { sub?.remove(); } catch (_) {}
-      try { player.pause(); } catch (_) {}
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [player]);
-
-  const handleError = () => {
-    if (retryCountRef.current < MAX_AUTO_RETRIES) {
-      const delay = BACKOFF[retryCountRef.current] ?? 6000;
-      retryCountRef.current += 1;
-      setPlayerStatus('loading');
-      retryTimerRef.current = setTimeout(() => setPlayerKey(k => k + 1), delay);
-    } else {
-      setPlayerStatus('error');
-    }
-  };
-
-  const handleManualRetry = () => {
-    retryCountRef.current = 0;
-    setPlayerStatus('loading');
-    setPlayerKey(k => k + 1);
-  };
-
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.closeBtn}
-        onPress={onClose}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons name="close" size={32} color="#fff" />
-      </TouchableOpacity>
-
-      <VideoView
-        key={playerKey}
-        style={styles.video}
-        player={player}
-        nativeControls
-        contentFit="contain"
-      />
-
-      {processingStatus === 'processing' && (
-        <View style={styles.processingBadge}>
-          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.processingBadgeText}>Optimizing for performance…</Text>
-        </View>
-      )}
-
-      {playerStatus === 'loading' && (
-        <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.overlayText}>
-            {retryCountRef.current > 0
-              ? `Retrying… (${retryCountRef.current}/${MAX_AUTO_RETRIES})`
-              : 'Loading video…'}
-          </Text>
-        </View>
-      )}
-
-      {playerStatus === 'error' && (
-        <View style={styles.overlay}>
-          <Ionicons name="wifi-outline" size={52} color="rgba(255,255,255,0.7)" />
-          <Text style={styles.errorTitle}>Could not load video</Text>
-          <Text style={styles.errorSubtitle}>Check your connection and try again</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={handleManualRetry}>
-            <Ionicons name="refresh" size={18} color="#fff" />
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 40,
-    right: 20,
-    zIndex: 30,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  video: {
-    width: screenWidth,
-    height: screenHeight,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 20,
-  },
-  processingBadge: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
-    backgroundColor: 'rgba(212, 175, 55, 0.8)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    zIndex: 40,
-  },
-  processingBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  overlayText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 12,
-  },
-  errorTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  errorSubtitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  retryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
-export default FullVideoPlayer;
-</file>
-
-<file path="src/components/FullVideoPlayer.web.tsx">
-// src/components/FullVideoPlayer.web.tsx
-// Web-specific video player using native HTML5 video for maximum compatibility.
-import { Ionicons } from '@expo/vector-icons';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Dimensions,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
-
-const MAX_AUTO_RETRIES = 3;
-const BACKOFF = [1500, 3000, 6000];
-
-interface FullVideoPlayerProps {
-  url: string;
-  onClose: () => void;
-  processingStatus?: 'processing' | 'ready' | 'failed';
-}
-
-const FullVideoPlayer: React.FC<FullVideoPlayerProps> = ({ url, onClose, processingStatus }) => {
-  const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
-  const retryCountRef = useRef(0);
-  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-
-    const handleCanPlay = () => {
-      retryCountRef.current = 0;
-      setPlayerStatus('playing');
-      video.play().catch(() => {});
-    };
-
-    const handleWaiting = () => setPlayerStatus('loading');
-    const handlePlaying = () => setPlayerStatus('playing');
-    
-    const handleError = () => {
-      if (retryCountRef.current < MAX_AUTO_RETRIES) {
-        const delay = BACKOFF[retryCountRef.current] ?? 6000;
-        retryCountRef.current += 1;
-        setPlayerStatus('loading');
-        retryTimerRef.current = setTimeout(() => {
-          video.load();
-        }, delay);
-      } else {
-        setPlayerStatus('error');
-      }
-    };
-
-    video.addEventListener('canplay', handleCanPlay);
-    video.addEventListener('waiting', handleWaiting);
-    video.addEventListener('playing', handlePlaying);
-    video.addEventListener('error', handleError);
-
-    return () => {
-      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
-      video.removeEventListener('canplay', handleCanPlay);
-      video.removeEventListener('waiting', handleWaiting);
-      video.removeEventListener('playing', handlePlaying);
-      video.removeEventListener('error', handleError);
-    };
-  }, [url]);
-
-  const handleManualRetry = () => {
-    retryCountRef.current = 0;
-    setPlayerStatus('loading');
-    if (videoRef.current) {
-      videoRef.current.load();
-    }
-  };
-
-  return (
-    <View style={styles.container}>
-      <TouchableOpacity
-        style={styles.closeBtn}
-        onPress={onClose}
-        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-      >
-        <Ionicons name="close" size={32} color="#fff" />
-      </TouchableOpacity>
-
-      <video
-        ref={videoRef}
-        src={url}
-        style={{
-          width: screenWidth,
-          height: screenHeight,
-          backgroundColor: '#000',
-        }}
-        controls
-        playsInline
-      />
-
-      {processingStatus === 'processing' && (
-        <View style={styles.processingBadge}>
-          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
-          <Text style={styles.processingBadgeText}>Optimizing for performance…</Text>
-        </View>
-      )}
-
-      {playerStatus === 'loading' && (
-        <View style={styles.overlay}>
-          <ActivityIndicator size="large" color="#fff" />
-          <Text style={styles.overlayText}>
-            {retryCountRef.current > 0
-              ? `Retrying… (${retryCountRef.current}/${MAX_AUTO_RETRIES})`
-              : 'Loading video…'}
-          </Text>
-        </View>
-      )}
-
-      {playerStatus === 'error' && (
-        <View style={styles.overlay}>
-          <Ionicons name="wifi-outline" size={52} color="rgba(255,255,255,0.7)" />
-          <Text style={styles.errorTitle}>Could not load video</Text>
-          <Text style={styles.errorSubtitle}>Check your connection and try again</Text>
-          <TouchableOpacity style={styles.retryBtn} onPress={handleManualRetry}>
-            <Ionicons name="refresh" size={18} color="#fff" />
-            <Text style={styles.retryText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  closeBtn: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 56 : 40,
-    right: 20,
-    zIndex: 30,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.55)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 12,
-    zIndex: 20,
-  },
-  processingBadge: {
-    position: 'absolute',
-    bottom: Platform.OS === 'ios' ? 100 : 80,
-    backgroundColor: 'rgba(212, 175, 55, 0.8)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    zIndex: 40,
-  },
-  processingBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  overlayText: {
-    color: 'rgba(255,255,255,0.8)',
-    fontSize: 14,
-    marginTop: 12,
-  },
-  errorTitle: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: '700',
-    marginTop: 8,
-  },
-  errorSubtitle: {
-    color: 'rgba(255,255,255,0.6)',
-    fontSize: 13,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  retryBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 16,
-    paddingHorizontal: 28,
-    paddingVertical: 12,
-    borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.3)',
-  },
-  retryText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
-
-export default FullVideoPlayer;
-</file>
-
 <file path="src/components/GlobalNotification.tsx">
 // src/components/GlobalNotification.tsx
 import React, { useEffect, useRef } from 'react';
@@ -2777,447 +2340,6 @@ const MapComponent = () => {
 export default MapComponent;
 </file>
 
-<file path="src/components/MapPickerModal.tsx">
-// src/components/MapPickerModal.tsx
-import polyline from '@mapbox/polyline'; // decode Google Directions polyline
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import MapView, { MapType, Marker, Polyline, Region } from 'react-native-maps';
-import { LatLng, requestLocationPermission } from '../utils/location';
-
-interface MapPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onLocationSelected: (coords: LatLng) => void;
-  readOnly?: boolean;              // true for students
-  initialLocation?: LatLng;        // listing location
-  disableInteraction?: boolean;    // disables dragging/scrolling
-}
-
-const GOOGLE_API_KEY = Platform.OS === 'ios'
-  ? 'AIzaSyCsoZGBWKi6YE1EDkkz2G3suRA2orqhGQA'
-  : 'AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8';
-
-const MapPickerModal: React.FC<MapPickerModalProps> = ({
-  visible,
-  onClose,
-  onLocationSelected,
-  readOnly = false,
-  initialLocation,
-  disableInteraction = false,
-}) => {
-  const [region, setRegion] = useState<Region | null>(null);
-  const [markerCoords, setMarkerCoords] = useState<LatLng | null>(initialLocation ?? null);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [routeCoords, setRouteCoords] = useState<LatLng[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [mapType, setMapType] = useState<MapType>('standard');
-  const routeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  // Get user location
-  const loadUserLocation = useCallback(async () => {
-    setLoading(true);
-    const loc = await requestLocationPermission();
-    if (loc) {
-      setUserLocation(loc);
-      if (!initialLocation) setMarkerCoords(loc); // fallback for landlords
-      setRegion({
-        latitude: loc.latitude,
-        longitude: loc.longitude,
-        latitudeDelta: 0.01,
-        longitudeDelta: 0.01,
-      });
-    } else {
-      Alert.alert('Permission Denied', 'Cannot access location. Please enable GPS.');
-      onClose();
-    }
-    setLoading(false);
-  }, [onClose, initialLocation]);
-
-  useEffect(() => {
-    if (visible) loadUserLocation();
-  }, [visible, loadUserLocation]);
-
-  // Fetch Google Directions route
-  const fetchRoute = useCallback(async () => {
-    if (!userLocation || !markerCoords) return;
-    try {
-      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${userLocation.latitude},${userLocation.longitude}&destination=${markerCoords.latitude},${markerCoords.longitude}&key=${GOOGLE_API_KEY}&mode=driving`;
-      const response = await fetch(url);
-      const data = await response.json();
-      if (data.routes?.length) {
-        const points = polyline.decode(data.routes[0].overview_polyline.points);
-        const coords: LatLng[] = points.map(([lat, lng]) => ({ latitude: lat, longitude: lng }));
-        setRouteCoords(coords);
-      }
-    } catch (err) {
-      console.log('Route fetch error', err);
-    }
-  }, [userLocation, markerCoords]);
-
-  // Update route periodically for "live" effect
-    useEffect(() => {
-      if (visible && readOnly && userLocation && markerCoords) {
-        fetchRoute();
-        routeInterval.current = setInterval(fetchRoute, 15000);
-      }
-      return () => {
-        if (routeInterval.current !== null) {
-          clearInterval(routeInterval.current as unknown as number);
-        }
-      };
-    }, [visible, readOnly, userLocation, markerCoords, fetchRoute]);
-
-    // Drag marker (landlords only)
-  const handleDragEnd = (e: { nativeEvent: { coordinate: LatLng } }) => {
-    if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
-  };
-
-  // Done button for landlords
-  const handleDone = () => {
-    if (!markerCoords) {
-      Alert.alert('No location selected', 'Tap on the map.');
-      return;
-    }
-    onLocationSelected(markerCoords);
-  };
-
-  // Toggle map type
-  const toggleMapType = () => {
-    const types: MapType[] = ['standard', 'satellite', 'hybrid'];
-    setMapType(types[(types.indexOf(mapType) + 1) % types.length]);
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide">
-      <View style={styles.container}>
-        {loading || !region ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#D4AF37" />
-            <Text style={styles.loadingText}>Loading map...</Text>
-          </View>
-        ) : (
-          <>
-            <MapView
-              style={styles.map}
-              initialRegion={region}
-              region={region}
-              mapType={mapType}
-              showsUserLocation
-              showsMyLocationButton={false}
-              scrollEnabled={true}
-              zoomEnabled={true ? true : false}
-              rotateEnabled={!disableInteraction}
-              pitchEnabled={!disableInteraction}
-              onPress={(e: { nativeEvent: { coordinate: LatLng } }) => {
-                              if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
-                            }}
-            >
-              {markerCoords && (
-                <Marker
-                  coordinate={markerCoords}
-                  draggable={!readOnly && !disableInteraction}
-                  onDragEnd={handleDragEnd}
-                  title="Listing Location"
-                  pinColor={readOnly ? 'gold' : 'red'}
-                />
-              )}
-              {userLocation && readOnly && routeCoords.length > 0 && (
-                <Polyline
-                  coordinates={routeCoords}
-                  strokeColor="gold"
-                  strokeWidth={4}
-                />
-              )}
-            </MapView>
-
-            {/* Coordinates box */}
-            {markerCoords && (
-              <View style={styles.coordBox}>
-                <Text style={styles.coordText}>
-                  Lat: {markerCoords.latitude.toFixed(6)}, Lon: {markerCoords.longitude.toFixed(6)}
-                </Text>
-              </View>
-            )}
-
-            {/* Buttons */}
-            <View style={styles.buttons}>
-              <TouchableOpacity style={styles.button} onPress={onClose}>
-                <Text style={styles.buttonText}>Close</Text>
-              </TouchableOpacity>
-
-              {!readOnly && !disableInteraction && (
-                <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={handleDone}>
-                  <Text style={[styles.buttonText, { color: '#1A1A1A' }]}>Done</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity style={[styles.button, styles.mapTypeButton]} onPress={toggleMapType}>
-                <Text style={styles.buttonText}>{mapType.toUpperCase()}</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-    </Modal>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  map: { flex: 1 },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 16 },
-  coordBox: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    alignSelf: 'center',
-    backgroundColor: '#fff9e6',
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-  },
-  coordText: { color: '#1A1A1A', fontWeight: '600' },
-  buttons: {
-    position: 'absolute',
-    bottom: 20,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  button: {
-    backgroundColor: '#2A2A2A',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  confirmButton: { backgroundColor: '#D4AF37' },
-  mapTypeButton: { backgroundColor: '#0066cc' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-});
-
-export default MapPickerModal;
-</file>
-
-<file path="src/components/MapPickerModal.web.tsx">
-// src/components/MapPickerModal.web.tsx
-import React, { useEffect, useState } from 'react';
-import {
-    ActivityIndicator,
-    Alert,
-    Modal,
-    Platform,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from 'react-native';
-import { LatLng, requestLocationPermission } from '../utils/location';
-import MapView, { Marker, Polyline } from './MapView.web';
-
-interface MapPickerModalProps {
-  visible: boolean;
-  onClose: () => void;
-  onLocationSelected: (coords: LatLng) => void;
-  readOnly?: boolean;
-  initialLocation?: LatLng;
-  disableInteraction?: boolean;
-}
-
-const MapPickerModal: React.FC<MapPickerModalProps> = ({
-  visible,
-  onClose,
-  onLocationSelected,
-  readOnly = false,
-  initialLocation,
-  disableInteraction = false,
-}) => {
-  const [region, setRegion] = useState({
-    latitude: initialLocation?.latitude || 3.8480,
-    longitude: initialLocation?.longitude || 11.5021,
-    latitudeDelta: 0.01,
-    longitudeDelta: 0.01,
-  });
-  const [markerCoords, setMarkerCoords] = useState<LatLng | null>(initialLocation ?? null);
-  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
-  const [routeCoords] = useState<LatLng[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
-
-  useEffect(() => {
-    if (visible) {
-      setLoading(true);
-      requestLocationPermission().then(loc => {
-        if (loc) {
-          setUserLocation(loc);
-          if (!initialLocation) {
-            setMarkerCoords(loc);
-            setRegion({
-              latitude: loc.latitude,
-              longitude: loc.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
-          }
-        } else {
-          Alert.alert('Permission Denied', 'Cannot access location. Please enable GPS.');
-          onClose();
-        }
-        setLoading(false);
-      });
-    }
-  }, [visible]);
-
-  const handleDragEnd = (e: any) => {
-    if (!readOnly && !disableInteraction) {
-      const coord = e.nativeEvent.coordinate;
-      setMarkerCoords(coord);
-    }
-  };
-
-  const handleDone = () => {
-    if (!markerCoords) {
-      Alert.alert('No location selected', 'Tap on the map.');
-      return;
-    }
-    onLocationSelected(markerCoords);
-  };
-
-  const toggleMapType = () => {
-    const types: ('standard' | 'satellite' | 'hybrid')[] = ['standard', 'satellite', 'hybrid'];
-    const current = types.indexOf(mapType);
-    setMapType(types[(current + 1) % types.length]);
-  };
-
-  return (
-    <Modal visible={visible} animationType="slide">
-      <View style={styles.container}>
-        {loading || !region ? (
-          <View style={styles.loaderContainer}>
-            <ActivityIndicator size="large" color="#D4AF37" />
-            <Text style={styles.loadingText}>Loading map...</Text>
-          </View>
-        ) : (
-          <>
-            <MapView
-              style={styles.map}
-              region={region}
-              mapType={mapType}
-              showsUserLocation
-              scrollEnabled={!disableInteraction}
-              zoomEnabled={!disableInteraction}
-              rotateEnabled={!disableInteraction}
-              pitchEnabled={!disableInteraction}
-              onPress={(e: any) => {
-                if (!readOnly && !disableInteraction && e.nativeEvent?.coordinate) {
-                  setMarkerCoords(e.nativeEvent.coordinate);
-                }
-              }}
-              onRegionChangeComplete={(newRegion: any) => setRegion(newRegion)}
-            >
-              {markerCoords && (
-                <Marker
-                  coordinate={markerCoords}
-                  draggable={!readOnly && !disableInteraction}
-                  onDragEnd={handleDragEnd}
-                  title="Listing Location"
-                  pinColor={readOnly ? 'gold' : 'red'}
-                />
-              )}
-              {userLocation && readOnly && routeCoords.length > 0 && (
-                <Polyline
-                  coordinates={routeCoords}
-                  strokeColor="gold"
-                  strokeWidth={4}
-                />
-              )}
-            </MapView>
-
-            {markerCoords && (
-              <View style={styles.coordBox}>
-                <Text style={styles.coordText}>
-                  Lat: {markerCoords.latitude.toFixed(6)}, Lon: {markerCoords.longitude.toFixed(6)}
-                </Text>
-              </View>
-            )}
-
-            <View style={styles.buttons}>
-              <TouchableOpacity style={styles.button} onPress={onClose}>
-                <Text style={styles.buttonText}>Close</Text>
-              </TouchableOpacity>
-
-              {!readOnly && !disableInteraction && (
-                <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={handleDone}>
-                  <Text style={[styles.buttonText, { color: '#1A1A1A' }]}>Done</Text>
-                </TouchableOpacity>
-              )}
-
-              <TouchableOpacity style={[styles.button, styles.mapTypeButton]} onPress={toggleMapType}>
-                <Text style={styles.buttonText}>{mapType.toUpperCase()}</Text>
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-      </View>
-    </Modal>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1 },
-  map: { flex: 1 },
-  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 16 },
-  coordBox: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 40,
-    alignSelf: 'center',
-    backgroundColor: '#fff9e6',
-    padding: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#D4AF37',
-  },
-  coordText: { color: '#1A1A1A', fontWeight: '600' },
-  buttons: {
-    position: 'absolute',
-    bottom: 20,
-    left: 10,
-    right: 10,
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  button: {
-    backgroundColor: '#2A2A2A',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 8,
-    marginBottom: 4,
-  },
-  confirmButton: { backgroundColor: '#D4AF37' },
-  mapTypeButton: { backgroundColor: '#0066cc' },
-  buttonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-});
-
-export default MapPickerModal;
-</file>
-
 <file path="src/components/NetworkDisconnectedScreen.tsx">
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, ScrollView, RefreshControl } from 'react-native';
@@ -3957,6 +3079,104 @@ export const useKeyboard = () => {
 };
 </file>
 
+<file path="src/hooks/usePaymentSuccessNotifier.ts">
+/**
+ * usePaymentSuccessNotifier
+ *
+ * Mount this once in the landlord tab navigator (or Dashboard) to get
+ * instant in-app pop-ups whenever the backend confirms a payment.
+ *
+ * Flow:
+ *   Fapshi webhook → payment.service.ts handleWebhook
+ *     → inserts notifications row in Supabase
+ *       → Supabase Realtime pushes INSERT to this hook
+ *         → Alert.alert + optional navigation
+ *
+ * No Edge Function or server function is required.
+ * The payment backend writes directly to Supabase, and Supabase Realtime
+ * delivers it to this hook in real time.
+ */
+import { useEffect, useRef } from 'react';
+import { Alert } from 'react-native';
+import { supabase } from '../utils/supabaseClient';
+import { useAuth } from './useAuth';
+import { triggerPushNotifications } from './usePushNotifications';
+
+type NavigationRef = { navigate: (...args: any[]) => void } | null;
+
+export function usePaymentSuccessNotifier(navigationRef: NavigationRef) {
+  const { user } = useAuth();
+  // Keep a ref so the channel callback always has the latest nav reference
+  const navRef = useRef(navigationRef);
+  useEffect(() => { navRef.current = navigationRef; }, [navigationRef]);
+
+  useEffect(() => {
+    if (!user?.id) return;
+
+    const channel = supabase
+      .channel(`payment_notifs_${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications',
+          filter: `recipient_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const notif = payload.new as {
+            id: string;
+            type: string;
+            title: string;
+            body: string;
+            listing_id?: string | null;
+            booking_id?: string | null;
+          };
+
+          // Only pop for payment-related notifications
+          if (notif.type !== 'payment_success') return;
+
+          // Flush push notifications queue (marks as sent via edge function)
+          triggerPushNotifications().catch(() => {});
+
+          const nav = navRef.current;
+
+          Alert.alert(
+            notif.title,
+            notif.body,
+            [
+              { text: 'OK', style: 'cancel' },
+              {
+                text: 'View',
+                onPress: () => {
+                  if (!nav) return;
+
+                  if (notif.booking_id) {
+                    // Student booking payment → deep-link to BookingDetails
+                    nav.navigate('BookingDetails' as any, { bookingId: notif.booking_id });
+                  } else if (notif.listing_id) {
+                    // Boost or verification → go to manage listings
+                    nav.navigate('ManageListings' as never);
+                  } else {
+                    // Subscription or generic → open Payments tab
+                    nav.navigate('Tabs' as any, { screen: 'Payments' });
+                  }
+                },
+              },
+            ],
+            { cancelable: true }
+          );
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+}
+</file>
+
 <file path="src/hooks/usePushNotifications.ts">
 import { useEffect, useRef, useState } from 'react';
 import { AppState, AppStateStatus, Platform, Alert, Linking } from 'react-native';
@@ -4303,906 +3523,6 @@ export function useVersionCheck() {
     minSupported: config?.min_supported_version,
     forceUpdateAfter: config?.force_update_after 
   };
-}
-</file>
-
-<file path="src/i18n/locales/en.json">
-{
-  "common": {
-    "welcome": "Welcome",
-    "save": "Save Changes",
-    "logout": "Logout",
-    "language": "Language",
-    "notifications": "Notifications",
-    "loading": "Loading...",
-    "cancel": "Cancel",
-    "close": "Close",
-    "error": "Error",
-    "success": "Success",
-    "updating": "Updating...",
-    "back": "Back",
-    "all": "All",
-    "on": "on",
-    "generated_by": "Generated by",
-    "date_locale": "en-US",
-    "mins_ago": "{{count}}m ago",
-    "hours_ago": "{{count}}h ago",
-    "days_ago": "{{count}}d ago",
-    "new": "New"
-  },
-  "profile": {
-    "title": "My Profile",
-    "full_name": "Full Name",
-    "email": "Email",
-    "phone": "Phone",
-    "momo": "Momo Number",
-    "change_password": "Change Password",
-    "delete_account": "Delete Account",
-    "view_bookings": "View My Bookings",
-    "upload_listing": "Upload Listing",
-    "manage_listings": "Manage Listings",
-    "report_tenant": "Report a Tenant",
-    "report_landlord": "Report a Landlord",
-    "report_bug": "Report a Bug",
-    "terms": "Terms & Privacy Policy",
-    "new_password": "New Password",
-    "confirm_password": "Confirm Password",
-    "update_password": "Update Password",
-    "enter_new_password": "Enter new password",
-    "reenter_password": "Re-enter password",
-    "language_label": "Language",
-    "saved": "Profile updated successfully",
-    "verification_required": "Verification Required",
-    "verification_msg": "A confirmation link has been sent to your new email. Please verify it before logging in with this email.",
-    "open_gmail": "Open Gmail",
-    "delete_confirm_title": "Delete Account",
-    "delete_confirm_msg": "Are you sure you want to delete your account? This action cannot be fully undone.",
-    "delete": "Delete",
-    "session_missing": "Session missing",
-    "session_missing_msg": "Cannot update email. Please log out and log back in."
-  },
-  "listing": {
-    "available": "Available",
-    "rented": "Rented",
-    "fcfa": "FCFA",
-    "per_month": "/month",
-    "message": "Message",
-    "call": "Call",
-    "saved": "Saved",
-    "save": "Save",
-    "description": "Description",
-    "no_description": "No description provided.",
-    "key_details": "Key Details",
-    "city": "City",
-    "rooms": "Rooms",
-    "status": "Status",
-    "location": "Location",
-    "landlord": "Landlord",
-    "responds_within": "Usually responds within 1 hour",
-    "reviews": "Reviews",
-    "book_now": "Book This Property",
-    "no_media": "No media available",
-    "click_fullscreen": "Click for full screen",
-    "location_locked": "Location Locked",
-    "location_locked_msg": "The interactive map is only available after booking, unless this listing is boosted.",
-    "no_location": "No Location",
-    "no_coords_msg": "Landlord hasn't provided coordinates",
-    "boost_now": "BOOST NOW!",
-    "boosted": "Boosted",
-    "processing_video": "Processing Video...",
-    "untitled": "Untitled",
-    "no_description_card": "No description available.",
-    "spacious": "Spacious",
-    "available_now": "Available now",
-    "view_details": "View Details"
-  },
-  "home": {
-    "title": "DHUB",
-    "subtitle": "Finding you a better home",
-    "search_placeholder": "Search by city, title...",
-    "filter_title": "Filters",
-    "price_range": "Price Range",
-    "listing_type": "Property Type",
-    "stay_type": "Stay Type",
-    "distance": "Distance",
-    "apply_filters": "Apply Filters",
-    "reset": "Reset",
-    "near_me": "Near me",
-    "types": {
-      "room": "Room",
-      "studio": "Studio",
-      "apartment": "Apartment",
-      "house": "House",
-      "guest_house": "Guest House",
-      "hotel": "Hotel"
-    },
-    "stays": {
-      "short_term": "Short Term",
-      "long_term": "Long Term",
-      "both": "Both"
-    },
-    "no_listings": "No properties found matching your criteria",
-    "listings_available": "properties found"
-  },
-  "booking": {
-    "title": "Book Property",
-    "check_in": "Check-in Date",
-    "check_out": "Check-out Date",
-    "confirm": "Confirm Booking Request",
-    "terms_agree": "I have read and agree to the terms & conditions",
-    "select_dates": "Select Dates",
-    "total": "Total",
-    "loading": "Loading property details...",
-    "not_found": "Listing not found",
-    "base_price": "Base price / month",
-    "duration_type": "Duration Type",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-    "discount_note": "10% off",
-    "yearly_discount_applied": "Includes 10% yearly discount",
-    "move_in": "Move-in Date",
-    "move_out": "Move-out Date",
-    "fee_info_button": "Why is the fee {{amount}}?",
-    "fee_info_title": "Why is the fee {{amount}}?",
-    "fee_info_description": "{{landlordName}} listed this property on DHUB with a fee of {{rentAmount}} and a caution fee of {{cautionFee}}. Your caution fee is held safely in this app to ensure that you receive it when leaving the house without damaging the property. Note that if you do not complete the payment of rent via the app and use another method, you will lose your caution fee.",
-    "learn_more": "Learn more",
-    "landlord_placeholder": "The landlord",
-    "tap_to_change": "Tap to change",
-    "estimated_total": "Estimated Total",
-    "terms_title": "Terms & Conditions",
-    "no_terms": "No specific terms have been provided for this listing. Standard rental agreement terms apply.",
-    "download_pdf": "Download Booking Agreement",
-    "save_pdf_sub": "Save a copy of the terms as PDF",
-    "view_agreement": "View full agreement",
-    "contract_view_title": "Full Rental Agreement",
-    "contract_title": "Digital Booking Agreement",
-    "default_terms_template": "Standard Rental Agreement:\n\n1. Parties: The agreement is between the tenant (the student) and the landlord.\n\n2. Term: The tenancy begins on the move-in date and ends on the move-out date specified in the booking.\n\n3. Rent & Payment: Rent and any applicable fees are payable through DHUB as described in the booking. Failure to complete payment through the DHUB platform may result in forfeiture of the caution (security) fee.\n\n4. Security Deposit (Caution): The caution fee is held in escrow by DHUB and will be released subject to the property's condition at checkout and reconciliation of outstanding charges.\n\n5. Use & Conduct: The tenant agrees to use the property for lawful residential purposes only, to keep it in good condition, and to comply with any house rules added by the landlord below.\n\n6. Maintenance & Repairs: Tenants must promptly report maintenance issues. Landlords are responsible for repairs unless damage is caused by the tenant's negligence.\n\n7. Termination: Early termination and dispute procedures follow the listing's stated terms and applicable local law.\n\n8. Governing Law: This agreement is governed by applicable law for the property's jurisdiction.\n\n9. Electronic Signature: By electronically signing, the tenant consents that this digital agreement is legally binding once the booking is active and payment is completed.\n\n[Add any specific house rules or additional terms here]",
-    "student_placeholder": "The student",
-    "contract_intro": "This Booking Agreement is entered into between {{studentName}} and {{landlordName}} for the property \"{{listingTitle}}\".",
-    "contract_amount": "The total estimated amount is {{total}}. Rent charge: {{rentAmount}}. Caution (escrow): {{cautionFee}}.",
-    "contract_escrow": "The caution fee is held securely by DHUB in escrow to protect the property and will be released subject to the property's condition at checkout.",
-    "contract_enforceability": "This agreement is pending until payment is completed through DHUB. Once payment is completed and the booking is activated, this agreement becomes enforceable.",
-    "contract_terms_version": "Agreement Terms Version: {{version}}.",
-    "contract_expiration": "Booking period: from {{start}} to {{end}}.",
-    "contract_signature_clause": "By electronically signing below, the tenant confirms they have read and accepted these terms and that this electronic signature will be treated as a legally binding agreement once the booking is active.",
-    "sign_agreement": "Sign booking agreement",
-    "signature_prompt": "Sign electronically to make this booking legally binding.",
-    "signature_prompt_title": "Electronic Agreement",
-    "signature_description": "Type your full name to electronically sign the booking agreement. This agreement will be pending until payment is completed, and it becomes enforceable once the booking is active.",
-    "signature_placeholder": "Type your full name as legally binding consent",
-    "signature_error": "Please type your full name to sign the agreement.",
-    "sign_now": "Sign Now",
-    "signature_summary_title": "Agreement Signed",
-    "signature_summary_sub": "Signed on {{date}}. Complete payment to enforce the agreement.",
-    "signature_review_title": "Signed Agreement",
-    "signature_review_description": "This agreement has been signed. The QR code below can be used to verify the agreement ID later.",
-    "agreement_details": "Agreement Details",
-    "agreement_id_label": "Agreement ID",
-    "signed_at_label": "Signed At",
-    "signature_method_label": "Signature Method",
-    "signature_method_typed": "Typed name",
-    "signature_text_label": "Signature Text",
-    "agreement_hash_label": "Agreement Hash",
-    "contract_status_label": "Contract Status",
-    "contract_status_signed": "Signed (pending enforcement)",
-    "enforceable_note": "This booking agreement is enforceable once payment is completed and the booking becomes active.",
-    "qr_code_label": "Agreement QR Code",
-    "signed_by": "Signed by",
-    "signature_required_title": "Signature Required",
-    "signature_required_msg": "Please sign the booking agreement before creating the booking.",
-    "signature_required_hint": "You must sign the agreement before confirming the booking.",
-    "accept_to_continue": "Accept the terms above to continue",
-    "agreement_required": "Agreement Required",
-    "agreement_msg": "Please read and accept the terms & conditions first.",
-    "select_duration_msg": "Please choose a duration type (Monthly or Yearly).",
-    "invalid_dates_msg": "The end date must be after the start date.",
-    "failed": "Booking Failed",
-    "failed_msg": "Something went wrong. Please try again.",
-    "declined_title": "Booking Declined",
-    "declined_msg": "The landlord has declined your booking request.",
-    "not_approved_title": "Not Yet Approved",
-    "not_approved_msg": "The landlord has not approved this booking yet. Please wait.",
-    "pending_title": "Booking Request",
-    "hero_payment_complete": "Payment Complete!",
-    "hero_ready_to_pay": "Ready to Pay",
-    "hero_awaiting_approval": "Awaiting Approval",
-    "hero_payment_complete_sub": "Your booking has been confirmed. Welcome home!",
-    "hero_ready_to_pay_sub": "The landlord approved your request. Complete your payment to confirm.",
-    "hero_awaiting_approval_sub": "Your booking request has been sent. The landlord will review it shortly.",
-    "progress": "Progress",
-    "step_request_sent": "Request Sent",
-    "step_request_sent_sub": "Awaiting landlord review",
-    "step_approved": "Landlord Approved",
-    "step_approved_sub": "Ready to proceed to payment",
-    "step_confirmed": "Booking Confirmed",
-    "step_confirmed_sub": "Payment received & stay confirmed",
-    "property": "Property",
-    "amount_due": "Amount Due",
-    "booking_status": "Booking Status",
-    "approval": "Approval",
-    "key_details": "Key Details",
-    "expired_title": "Booking Expired",
-    "expired_msg": "Your booking request expired because payment was not completed within 24 hours. Please start a new request to secure this property.",
-    "proceed_to_payment": "Proceed to Payment",
-    "wait_notice": "We'll notify you as soon as the landlord responds. This usually takes a few hours.",
-    "success_notice": "Payment completed successfully. Your booking is now confirmed!"
-  },
-  "notifications": {
-    "title": "Notifications",
-    "clear_all": "Clear All",
-    "empty": "No notifications yet",
-    "clear_all_confirm_title": "Clear All",
-    "clear_all_confirm_msg": "Mark all notifications as read?",
-    "view_details": "View Details",
-    "reply_now": "Reply Now",
-    "dismiss": "Dismiss"
-  },
-  "payment": {
-    "title": "Payments",
-    "history_tab": "Payment History",
-    "send_tab": "Send Payment",
-    "recent_transactions": "Recent Transactions",
-    "refresh": "Refresh",
-    "refreshing": "Refreshing...",
-    "loading_history": "Loading history...",
-    "no_history": "No payment history yet.",
-    "retry": "Retry",
-    "momo_number_label": "Your MTN MoMo Number *",
-    "momo_placeholder": "06XX XXX XXX",
-    "amount_label": "Amount (XAF) *",
-    "amount_placeholder": "Enter amount",
-    "receiver_label": "Receiver *",
-    "description_label": "Description",
-    "description_placeholder": "Payment purpose (optional)",
-    "send_button": "Send Payment",
-    "receipt_title": "Payment Receipt",
-    "qr_verify": "Scan to verify transaction",
-    "transaction_details": "Transaction Details",
-    "amount_details": "Amount Details",
-    "parties_title": "Parties",
-    "transaction_id": "Transaction ID",
-    "date": "Date",
-    "status": "Status",
-    "amount": "Amount",
-    "fee": "Fee",
-    "net_amount": "Net Amount",
-    "from": "From",
-    "to": "To",
-    "download_pdf": "Download PDF",
-    "close": "Close",
-    "statuses": {
-      "completed": "Completed",
-      "pending": "Pending",
-      "failed": "Failed"
-    },
-    "initiate_success_title": "Payment Initiated 🎉",
-    "initiate_success_msg": "Your payment has been sent. Please approve the MoMo prompt on your phone to complete the transaction.",
-    "validation_error": "Validation Error",
-    "validation_msg": "Please fill in all required fields (Amount and Phone numbers)",
-    "amount_error": "Please enter a valid amount",
-    "session_error": "Session Error",
-    "session_msg": "User session not found. Please log in again.",
-    "payment_error": "Payment Error"
-  },
-  "chat": {
-    "placeholder": "Type a message...",
-    "loading": "Loading conversation...",
-    "online": "Online",
-    "unknown_user": "Unknown User",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "empty_title": "Start the conversation",
-    "empty_subtitle": "Say hello! Your messages are private between you and {{name}}.",
-    "other_user": "the other user"
-  },
-  "bookings": {
-    "title": "My Bookings",
-    "details_title": "Booking Details",
-    "total": "Total",
-    "confirmed": "Confirmed",
-    "paid": "Paid",
-    "pending": "Pending",
-    "cancelled": "Cancelled",
-    "active": "Active",
-    "upcoming": "Upcoming",
-    "from": "From",
-    "to": "To",
-    "days_left": "{{count}}d left",
-    "days_left_label": "Days Left",
-    "amount_label": "Amount (XAF)",
-    "rooms_label": "Rooms",
-    "info_title": "Booking Information",
-    "check_in": "Check-in",
-    "check_out": "Check-out",
-    "payment_status_label": "Payment Status",
-    "agreed_to_terms": "Agreed to Terms",
-    "property_details": "Property Details",
-    "actions": "Actions",
-    "rate_property": "Rate this property",
-    "report_issue": "Report an issue",
-    "help_title": "Need help with this booking?",
-    "call_support": "Call Support",
-    "email_support": "Email Support",
-    "pay_now": "Proceed to Payment",
-    "cancel_booking": "Cancel Booking",
-    "ended": "Ended",
-    "no_bookings": "No Bookings Yet",
-    "no_bookings_msg": "When you book a property, your bookings will appear here",
-    "explore": "Explore Properties",
-    "offline_mode": "Offline Mode",
-    "offline_msg": "You're viewing cached data. Some information may be outdated.",
-    "cache_notice": "Showing cached bookings"
-  }
-}
-</file>
-
-<file path="src/i18n/locales/fr.json">
-{
-  "common": {
-    "welcome": "Bienvenue",
-    "save": "Enregistrer",
-    "logout": "Déconnexion",
-    "language": "Langue",
-    "notifications": "Notifications",
-    "loading": "Chargement...",
-    "cancel": "Annuler",
-    "error": "Erreur",
-    "success": "Succès",
-    "updating": "Mise à jour...",
-    "back": "Retour",
-    "all": "Tous",
-    "new": "Nouveau",
-    "unknown": "Inconnu",
-    "guest": "Invité",
-    "on": "le",
-    "generated_by": "Généré par",
-    "date_locale": "fr-FR",
-    "mins_ago": "il y a {{count}}m",
-    "hours_ago": "il y a {{count}}h",
-    "days_ago": "il y a {{count}}j"
-  },
-  "profile": {
-    "title": "Mon Profil",
-    "full_name": "Nom Complet",
-    "email": "E-mail",
-    "phone": "Téléphone",
-    "momo": "Numéro Momo",
-    "change_password": "Modifier le mot de passe",
-    "delete_account": "Supprimer le compte",
-    "view_bookings": "Voir mes réservations",
-    "upload_listing": "Ajouter une annonce",
-    "manage_listings": "Gérer les annonces",
-    "report_tenant": "Signaler un locataire",
-    "report_landlord": "Signaler un propriétaire",
-    "report_bug": "Signaler un bug",
-    "terms": "Conditions & Politique de confidentialité",
-    "new_password": "Nouveau mot de passe",
-    "confirm_password": "Confirmer le mot de passe",
-    "update_password": "Mettre à jour",
-    "enter_new_password": "Entrez le nouveau mot de passe",
-    "reenter_password": "Confirmez le mot de passe",
-    "language_label": "Langue",
-    "saved": "Profil mis à jour avec succès",
-    "verification_required": "Vérification requise",
-    "verification_msg": "Un lien de confirmation a été envoyé à votre nouvelle adresse. Veuillez vérifier avant de vous connecter.",
-    "open_gmail": "Ouvrir Gmail",
-    "delete_confirm_title": "Supprimer le compte",
-    "delete_confirm_msg": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
-    "delete": "Supprimer",
-    "session_missing": "Session manquante",
-    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter."
-  },
-  "listing": {
-    "available": "Disponible",
-    "rented": "Loué",
-    "fcfa": "FCFA",
-    "per_month": "/mois",
-    "message": "Message",
-    "call": "Appeler",
-    "saved": "Enregistré",
-    "save": "Enregistrer",
-    "description": "Description",
-    "no_description": "Aucune description fournie.",
-    "key_details": "Détails clés",
-    "city": "Ville",
-    "rooms": "Pièces",
-    "status": "Statut",
-    "location": "Localisation",
-    "landlord": "Propriétaire",
-    "responds_within": "Répond généralement en 1 heure",
-    "reviews": "Avis",
-    "book_now": "Réserver cette propriété",
-    "no_media": "Aucun média disponible",
-    "click_fullscreen": "Cliquez pour plein écran",
-    "location_locked": "Localisation verrouillée",
-    "location_locked_msg": "La carte interactive n'est disponible qu'après la réservation, sauf si cette annonce est boostée.",
-    "no_location": "Pas de localisation",
-    "no_coords_msg": "Le propriétaire n'a pas fourni de coordonnées",
-    "boost_now": "BOOSTER MAINTENANT !",
-    "boosted": "Boosté",
-    "processing_video": "Traitement de la vidéo...",
-    "untitled": "Sans titre",
-    "no_description_card": "Aucune description disponible.",
-    "spacious": "Spacieux",
-    "available_now": "Disponible maintenant",
-    "view_details": "Voir les détails"
-  },
-  "home": {
-    "title": "DHUB",
-    "subtitle": "Trouvez un meilleur foyer",
-    "search_placeholder": "Rechercher par ville, titre...",
-    "filter_title": "Filtres",
-    "price_range": "Gamme de prix",
-    "listing_type": "Type de propriété",
-    "stay_type": "Type de séjour",
-    "distance": "Distance",
-    "apply_filters": "Appliquer les filtres",
-    "reset": "Réinitialiser",
-    "near_me": "Près de moi",
-    "types": {
-      "room": "Chambre",
-      "studio": "Studio",
-      "apartment": "Appartement",
-      "house": "Maison",
-      "guest_house": "Maison d'hôtes",
-      "hotel": "Hôtel"
-    },
-    "stays": {
-      "short_term": "Court Terme",
-      "long_term": "Long Terme",
-      "both": "Les deux"
-    },
-    "no_listings": "Aucune propriété trouvée correspondant à vos critères",
-    "listings_available": "propriétés trouvées"
-  },
-  "booking": {
-    "title": "Réserver la propriété",
-    "check_in": "Date d'arrivée",
-    "check_out": "Date de départ",
-    "confirm": "Confirmer la demande de réservation",
-    "terms_agree": "J'ai lu et j'accepte les conditions générales",
-    "select_dates": "Sélectionner les dates",
-    "total": "Total",
-    "loading": "Chargement des détails de la propriété...",
-    "not_found": "Annonce non trouvée",
-    "base_price": "Prix de base / mois",
-    "duration_type": "Type de durée",
-    "monthly": "Mensuel",
-    "yearly": "Annuel",
-    "discount_note": "-10%",
-    "yearly_discount_applied": "Remise annuelle de 10% incluse",
-    "move_in": "Date d'entrée",
-    "move_out": "Date de sortie",
-    "tap_to_change": "Appuyez pour modifier",
-    "estimated_total": "Total estimé",
-    "terms_title": "Conditions générales",
-    "no_terms": "Aucune condition spécifique n'a été fournie pour cette annonce. Les conditions de location standard s'appliquent.",
-    "download_pdf": "Télécharger le contrat",
-    "save_pdf_sub": "Enregistrer une copie en PDF",
-    "accept_to_continue": "Acceptez les conditions pour continuer",
-    "agreement_required": "Accord requis",
-    "agreement_msg": "Veuillez lire et accepter les conditions générales d'abord.",
-    "select_duration_msg": "Veuillez choisir un type de durée (Mensuel ou Annuel).",
-    "invalid_dates_msg": "La date de fin doit être postérieure à la date de début.",
-    "failed": "Échec de la réservation",
-    "failed_msg": "Un problème est survenu. Veuillez réessayer.",
-    "declined_title": "Réservation déclinée",
-    "declined_msg": "Le propriétaire a décliné votre demande de réservation.",
-    "not_approved_title": "Pas encore approuvé",
-    "not_approved_msg": "Le propriétaire n'a pas encore approuvé cette réservation. Veuillez patienter.",
-    "pending_title": "Demande de réservation",
-    "hero_payment_complete": "Paiement terminé !",
-    "hero_ready_to_pay": "Prêt à payer",
-    "hero_awaiting_approval": "En attente d'approbation",
-    "hero_payment_complete_sub": "Votre réservation a été confirmée. Bienvenue chez vous !",
-    "hero_ready_to_pay_sub": "Le propriétaire a approuvé votre demande. Effectuez votre paiement pour confirmer.",
-    "hero_awaiting_approval_sub": "Votre demande de réservation a été envoyée. Le propriétaire l'examinera sous peu.",
-    "progress": "Progrès",
-    "step_request_sent": "Demande envoyée",
-    "step_request_sent_sub": "En attente de l'examen du propriétaire",
-    "step_approved": "Approuvé par le propriétaire",
-    "step_approved_sub": "Prêt à passer au paiement",
-    "step_confirmed": "Réservation confirmée",
-    "step_confirmed_sub": "Paiement reçu et séjour confirmé",
-    "property": "Propriété",
-    "amount_due": "Montant dû",
-    "booking_status": "Statut de la réservation",
-    "approval": "Approbation",
-    "proceed_to_payment": "Passer au paiement",
-    "wait_notice": "Nous vous informerons dès que le propriétaire répondra. Cela prend généralement quelques heures.",
-    "success_notice": "Paiement effectué avec succès. Votre réservation est maintenant confirmée!"
-  },
-  "notifications": {
-    "title": "Notifications",
-    "clear_all": "Tout effacer",
-    "empty": "Pas encore de notifications",
-    "clear_all_confirm_title": "Tout effacer",
-    "clear_all_confirm_msg": "Marquer toutes les notifications comme lues ?",
-    "view_details": "Voir les détails",
-    "reply_now": "Répondre maintenant",
-    "dismiss": "Ignorer"
-  },
-  "payment": {
-    "title": "Paiements",
-    "history_tab": "Historique",
-    "send_tab": "Envoyer",
-    "recent_transactions": "Transactions récentes",
-    "refresh": "Actualiser",
-    "refreshing": "Actualisation...",
-    "loading_history": "Chargement de l'historique...",
-    "no_history": "Aucun historique de paiement.",
-    "retry": "Réessayer",
-    "momo_number_label": "Votre numéro MTN MoMo *",
-    "momo_placeholder": "6XX XXX XXX",
-    "amount_label": "Montant (XAF) *",
-    "amount_placeholder": "Entrez le montant",
-    "receiver_label": "Destinataire *",
-    "description_label": "Description",
-    "description_placeholder": "Motif du paiement (optionnel)",
-    "send_button": "Envoyer le paiement",
-    "receipt_title": "Reçu de paiement",
-    "qr_verify": "Scanner pour vérifier la transaction",
-    "transaction_details": "Détails de la transaction",
-    "amount_details": "Détails du montant",
-    "parties_title": "Parties",
-    "transaction_id": "ID Transaction",
-    "date": "Date",
-    "status": "Statut",
-    "amount": "Montant",
-    "fee": "Frais",
-    "net_amount": "Montant net",
-    "from": "De",
-    "to": "À",
-    "download_pdf": "Télécharger PDF",
-    "close": "Fermer",
-    "statuses": {
-      "completed": "Terminé",
-      "pending": "En attente",
-      "failed": "Échoué"
-    },
-    "initiate_success_title": "Paiement initié 🎉",
-    "initiate_success_msg": "Votre paiement a été envoyé. Veuillez valider la demande MoMo sur votre téléphone pour terminer la transaction.",
-    "validation_error": "Erreur de validation",
-    "validation_msg": "Veuillez remplir tous les champs obligatoires (Montant et numéros de téléphone)",
-    "amount_error": "Veuillez entrer un montant valide",
-    "session_error": "Erreur de session",
-    "session_msg": "Session utilisateur non trouvée. Veuillez vous reconnecter.",
-    "payment_error": "Erreur de paiement"
-  },
-  "chat": {
-    "placeholder": "Écrivez un message...",
-    "loading": "Chargement de la conversation...",
-    "online": "En ligne",
-    "unknown_user": "Utilisateur inconnu",
-    "today": "Aujourd'hui",
-    "yesterday": "Hier",
-    "empty_title": "Démarrer la conversation",
-    "empty_subtitle": "Dites bonjour ! Vos messages sont privés entre vous et {{name}}.",
-    "other_user": "l'autre utilisateur"
-  },
-  "bookings": {
-    "title": "Mes Réservations",
-    "details_title": "Détails de la réservation",
-    "total": "Total",
-    "confirmed": "Confirmé",
-    "paid": "Payé",
-    "pending": "En attente",
-    "cancelled": "Annulé",
-    "active": "Actif",
-    "upcoming": "À venir",
-    "from": "Du",
-    "to": "Au",
-    "days_left": "{{count}}j restants",
-    "days_left_label": "Jours restants",
-    "amount_label": "Montant (XAF)",
-    "rooms_label": "Pièces",
-    "info_title": "Informations de réservation",
-    "check_in": "Arrivée",
-    "check_out": "Départ",
-    "payment_status_label": "Statut du paiement",
-    "agreed_to_terms": "Conditions acceptées",
-    "property_details": "Détails de la propriété",
-    "actions": "Actions",
-    "rate_property": "Noter cette propriété",
-    "report_issue": "Signaler un problème",
-    "help_title": "Besoin d'aide ?",
-    "call_support": "Appeler le support",
-    "email_support": "Email support",
-    "pay_now": "Procéder au paiement",
-    "cancel_booking": "Annuler la réservation",
-    "ended": "Terminé",
-    "no_bookings": "Aucune réservation",
-    "no_bookings_msg": "Lorsque vous réservez une propriété, vos réservations apparaîtront ici",
-    "explore": "Explorer les propriétés",
-    "offline_mode": "Mode hors ligne",
-    "offline_msg": "Vous consultez des données mises en cache. Certaines informations peuvent être obsolètes.",
-    "cache_notice": "Affichage des réservations en cache"
-  }
-}
-</file>
-
-<file path="src/i18n/locales/pcm.json">
-{
-  "common": {
-    "welcome": "Welcome",
-    "save": "Save Am",
-    "logout": "Log Out",
-    "language": "Language",
-    "notifications": "Notifications",
-    "loading": "E dey load...",
-    "cancel": "Cancel",
-    "error": "Error",
-    "success": "E don work",
-    "updating": "E dey update...",
-    "back": "Go Back",
-    "all": "All",
-    "new": "New",
-    "unknown": "E no know",
-    "guest": "Visitor",
-    "on": "for",
-    "generated_by": "Make by",
-    "date_locale": "en-GB",
-    "mins_ago": "{{count}}m ago",
-    "hours_ago": "{{count}}h ago",
-    "days_ago": "{{count}}d ago"
-  },
-  "profile": {
-    "title": "My Profile",
-    "full_name": "Your Full Name",
-    "email": "Email",
-    "phone": "Phone Number",
-    "momo": "Momo Number",
-    "change_password": "Change Password",
-    "delete_account": "Delete Account",
-    "view_bookings": "See My Bookings",
-    "upload_listing": "Upload House",
-    "manage_listings": "Manage Houses",
-    "report_tenant": "Report Tenant",
-    "report_landlord": "Report Landlord",
-    "report_bug": "Report Bug",
-    "terms": "Terms & Privacy",
-    "new_password": "New Password",
-    "confirm_password": "Confirm Password",
-    "update_password": "Update Password",
-    "enter_new_password": "Enter new password",
-    "reenter_password": "Enter password again",
-    "language_label": "Language",
-    "saved": "Profile don update",
-    "verification_required": "You need to verify",
-    "verification_msg": "We don send confirm link go your new email. Check am before you login.",
-    "open_gmail": "Open Gmail",
-    "delete_confirm_title": "Delete Account",
-    "delete_confirm_msg": "You sure say you want delete your account? E no fit undo.",
-    "delete": "Delete",
-    "session_missing": "Session no dey",
-    "session_missing_msg": "You no fit update email. Logout and login again."
-  },
-  "listing": {
-    "available": "E dey available",
-    "rented": "People don rent am",
-    "fcfa": "FCFA",
-    "message": "Message",
-    "call": "Call Am",
-    "saved": "Saved",
-    "save": "Save",
-    "description": "Description",
-    "no_description": "No description for here.",
-    "key_details": "Important Info",
-    "city": "City",
-    "rooms": "Rooms",
-    "status": "Status",
-    "location": "Location",
-    "landlord": "Landlord",
-    "responds_within": "E dey reply sharp sharp",
-    "reviews": "What people talk",
-    "book_now": "Book This House",
-    "no_media": "No pictures/video",
-    "click_fullscreen": "Click to see big",
-    "location_locked": "Location lock",
-    "location_locked_msg": "You must book before you see map, or if the house get boost.",
-    "no_location": "No map",
-    "no_coords_msg": "Landlord no put map location",
-    "per_month": "/month",
-    "boost_now": "MAKE E POP!",
-    "boosted": "E dey pop",
-    "processing_video": "Video de load...",
-    "untitled": "No name",
-    "no_description_card": "No description here.",
-    "spacious": "Big space",
-    "available_now": "E dey ready",
-    "view_details": "See more"
-  },
-  "home": {
-    "title": "DHUB",
-    "subtitle": "Find better house for your head",
-    "search_placeholder": "Search city or house name...",
-    "filter_title": "Filters",
-    "price_range": "How much you want pay",
-    "listing_type": "Which kind house",
-    "stay_type": "How long you go stay",
-    "distance": "How far e dey",
-    "apply_filters": "Check am",
-    "reset": "Clean am",
-    "near_me": "Near me",
-    "types": {
-      "room": "Room",
-      "studio": "Studio",
-      "apartment": "Apartment",
-      "house": "House",
-      "guest_house": "Guest House",
-      "hotel": "Hotel"
-    },
-    "stays": {
-      "short_term": "Small time",
-      "long_term": "Long time",
-      "both": "Any one"
-    },
-    "no_listings": "No house dey for your head",
-    "listings_available": "house dem dey"
-  },
-  "booking": {
-    "title": "Book This House",
-    "check_in": "When you dey come",
-    "check_out": "When you dey go",
-    "confirm": "Confirm Booking Request",
-    "terms_agree": "I don read and I gree for the terms",
-    "select_dates": "Pick Dates",
-    "total": "Total",
-    "loading": "We dey load house info...",
-    "not_found": "House no dey",
-    "base_price": "Base price / month",
-    "duration_type": "Duration Type",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-    "discount_note": "10% off",
-    "yearly_discount_applied": "10% off since na for year",
-    "move_in": "When you go enter",
-    "move_out": "When you go commot",
-    "tap_to_change": "Touch am to change",
-    "estimated_total": "Estimated Total",
-    "terms_title": "Terms & Conditions",
-    "no_terms": "No specific terms for here. Standard rental terms apply.",
-    "download_pdf": "Download Booking Agreement",
-    "save_pdf_sub": "Save copy as PDF",
-    "accept_to_continue": "Gree for terms before you continue",
-    "agreement_required": "You must gree",
-    "agreement_msg": "Abeg read and gree for the terms first.",
-    "select_duration_msg": "Pick how long you go stay (Month or Year).",
-    "invalid_dates_msg": "Date you dey commot must be after date you enter.",
-    "failed": "Booking Failed",
-    "failed_msg": "Something go wrong. Abeg try again.",
-    "declined_title": "Dem decline am",
-    "declined_msg": "Landlord don decline your booking.",
-    "not_approved_title": "E neva ready",
-    "not_approved_msg": "Landlord neva approve this booking yet. Wait small.",
-    "pending_title": "Booking Request",
-    "hero_payment_complete": "Money don enter!",
-    "hero_ready_to_pay": "Ready for pay",
-    "hero_awaiting_approval": "We dey wait landlord",
-    "hero_payment_complete_sub": "Your booking don set. Welcome home!",
-    "hero_ready_to_pay_sub": "Landlord don approve. Pay money now make e confirm.",
-    "hero_awaiting_approval_sub": "We don send your request. Landlord go check am soon.",
-    "progress": "How e dey go",
-    "step_request_sent": "Request don go",
-    "step_request_sent_sub": "Wait make landlord check am",
-    "step_approved": "Landlord don gree",
-    "step_approved_sub": "Pay money now",
-    "step_confirmed": "Booking don set",
-    "step_confirmed_sub": "Money don enter & house don set",
-    "property": "House",
-    "amount_due": "Money for pay",
-    "booking_status": "Status",
-    "approval": "Approval",
-    "proceed_to_payment": "Go pay money",
-    "wait_notice": "We go tell you when landlord answer. E no go long.",
-    "success_notice": "Money don enter sharp sharp. Your booking don confirm!"
-  },
-  "notifications": {
-    "title": "Notifications",
-    "clear_all": "Clear All",
-    "empty": "No message yet",
-    "clear_all_confirm_title": "Clear All",
-    "clear_all_confirm_msg": "Read all the messages?",
-    "view_details": "See more",
-    "reply_now": "Answer now",
-    "dismiss": "Comot am"
-  },
-  "payment": {
-    "title": "Pay Money",
-    "history_tab": "Payment History",
-    "send_tab": "Send Money",
-    "recent_transactions": "Recent Transactions",
-    "refresh": "Refresh",
-    "refreshing": "E dey refresh...",
-    "loading_history": "We dey load history...",
-    "no_history": "No payment history yet.",
-    "retry": "Try again",
-    "momo_number_label": "Your MTN MoMo Number *",
-    "momo_placeholder": "6XX XXX XXX",
-    "amount_label": "Money (XAF) *",
-    "amount_placeholder": "Enter how much",
-    "receiver_label": "Who you dey send am to *",
-    "description_label": "Description",
-    "description_placeholder": "Why you dey pay (if you like)",
-    "send_button": "Send Money",
-    "receipt_title": "Payment Receipt",
-    "qr_verify": "Scan to check transaction",
-    "transaction_details": "Transaction Details",
-    "amount_details": "Money Details",
-    "parties_title": "People wey follow for talk",
-    "transaction_id": "Transaction ID",
-    "date": "Date",
-    "status": "Status",
-    "amount": "Amount",
-    "fee": "Fee",
-    "net_amount": "Total Money",
-    "from": "From",
-    "to": "To",
-    "download_pdf": "Download PDF",
-    "close": "Close",
-    "statuses": {
-      "completed": "E don finish",
-      "pending": "E dey wait",
-      "failed": "E no work"
-    },
-    "initiate_success_title": "Money don go! 🎉",
-    "initiate_success_msg": "Your payment don start. Abeg check your phone for MoMo prompt to finish am.",
-    "validation_error": "Error for what you write",
-    "validation_msg": "Abeg put everything (Money and Phone numbers)",
-    "amount_error": "Abeg put correct money",
-    "session_error": "Session error",
-    "session_msg": "We no see you. Abeg login again.",
-    "payment_error": "Payment error"
-  },
-  "chat": {
-    "placeholder": "Write something...",
-    "loading": "We dey load chat...",
-    "online": "Online",
-    "unknown_user": "Unknown Person",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "empty_title": "Start to talk",
-    "empty_subtitle": "Say hello! Your messages dey private between you and {{name}}.",
-    "other_user": "the other person"
-  },
-  "bookings": {
-    "title": "My Bookings",
-    "details_title": "Booking Details",
-    "total": "Total",
-    "confirmed": "Confirmed",
-    "paid": "Paid",
-    "pending": "E dey wait",
-    "cancelled": "E don cancel",
-    "active": "Active",
-    "upcoming": "E dey come",
-    "from": "From",
-    "to": "To",
-    "days_left": "{{count}} days remain",
-    "days_left_label": "Days Remain",
-    "amount_label": "Money (XAF)",
-    "rooms_label": "Rooms",
-    "info_title": "Booking Info",
-    "check_in": "Check-in",
-    "check_out": "Check-out",
-    "payment_status_label": "Payment Status",
-    "agreed_to_terms": "I gree for terms",
-    "property_details": "House Details",
-    "actions": "Actions",
-    "rate_property": "Rate this house",
-    "report_issue": "Report problem",
-    "help_title": "You need help?",
-    "call_support": "Call Support",
-    "email_support": "Email Support",
-    "pay_now": "Pay Now",
-    "cancel_booking": "Cancel Booking",
-    "ended": "E don finish",
-    "no_bookings": "No Bookings Yet",
-    "no_bookings_msg": "When you book house, everything go show for here",
-    "explore": "Look for house",
-    "offline_mode": "Offline Mode",
-    "offline_msg": "This one na old data. Some things fit don change.",
-    "cache_notice": "Show bookings wey we save"
-  }
 }
 </file>
 
@@ -7335,352 +5655,6 @@ const getStyles = (COLORS: typeof LIGHT_COLORS, isDark: boolean) => StyleSheet.c
 });
 
 export default ChatScreen;
-</file>
-
-<file path="src/screens/common/ChatWrapper.tsx">
-// src/screens/common/ChatWrapper.tsx
-import React, { useEffect, useState, useRef } from 'react';
-import {
-  View,
-  Text,
-  FlatList,
-  TouchableOpacity,
-  ActivityIndicator,
-  StyleSheet,
-  SafeAreaView,
-  StatusBar,
-  Animated,
-} from 'react-native';
-import { useSelector } from 'react-redux';
-import { RootState } from '../../store/store';
-import ChatScreen from './ChatScreen';
-import { fetchUserThreads, fetchThreadUnreadCount, subscribeToThreads } from '../../services/chatService';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { StudentStackParamList } from '../../types';
-import { useTheme } from '../../context/ThemeContext';
-
-type ThreadItemProcessed = {
-  threadId: string;
-  displayName: string;
-  lastMessage: string | null;
-  lastMessageTime: string | null;
-  unreadCount: number;
-  participantId: string;
-};
-
-const STATIC_COLORS = {
-  success: '#34C759',
-} as const;
-
-type ChatWrapperNavProp = NativeStackNavigationProp<StudentStackParamList>;
-
-const ChatWrapper: React.FC = () => {
-  const navigation = useNavigation<ChatWrapperNavProp>();
-  const route = useRoute<RouteProp<{ Chat: { threadId?: string } }, 'Chat'>>();
-  const currentUser = useSelector((state: RootState) => state.auth.user);
-  const [threads, setThreads] = useState<ThreadItemProcessed[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
-  const floatingButtonAnim = useRef(new Animated.Value(1)).current;
-
-  const { colors: themeColors, isDark } = useTheme();
-  const COLORS = React.useMemo(() => ({
-    primary: themeColors.primary,
-    primaryDark: themeColors.primary,
-    primaryLight: isDark ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.1)',
-    background: themeColors.background,
-    textPrimary: themeColors.text,
-    textSecondary: themeColors.textSecondary,
-    textTertiary: isDark ? '#666666' : '#999999',
-    bubbleOther: themeColors.card,
-    border: themeColors.border,
-    ...STATIC_COLORS,
-  }), [themeColors, isDark]);
-  const styles = React.useMemo(() => getStyles(COLORS, isDark), [COLORS, isDark]);
-
-  useEffect(() => {
-    if (route.params?.threadId) {
-      setSelectedThreadId(route.params.threadId);
-    }
-  }, [route.params?.threadId]);
-
-  const loadThreads = async () => {
-    if (!currentUser?.id) return;
-    setLoading(true);
-    try {
-      const raw = await fetchUserThreads(currentUser.id, 50);
-      const processed: ThreadItemProcessed[] = [];
-
-      for (const t of raw) {
-        const others = t.participants.filter(p => p.id !== currentUser.id);
-        const displayName = others.length === 1 ? others[0].fullName : 'Unknown';
-
-        processed.push({
-          threadId: t.threadId,
-          displayName,
-          lastMessage: t.lastMessage,
-          lastMessageTime: t.lastMessageTime,
-          unreadCount: t.unreadCount, 
-          participantId: others[0]?.id || '',
-        });
-      }
-
-      setThreads(processed);
-    } catch (err) {
-      console.error('load threads failed:', err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    loadThreads();
-    
-    // Animate floating button
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(floatingButtonAnim, {
-          toValue: 1.1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(floatingButtonAnim, {
-          toValue: 1,
-          duration: 1000,
-          useNativeDriver: true,
-        }),
-      ])
-    );
-    
-    animation.start();
-    
-    return () => {
-      animation.stop();
-    };
-  }, [floatingButtonAnim, currentUser?.id]); 
-
-  useEffect(() => {
-    if (currentUser?.id) {
-      // Subscribe to real-time changes
-      const unsubscribe = subscribeToThreads(currentUser.id, () => {
-        console.log('[ChatWrapper] Thread list refresh triggered via realtime');
-        loadThreads();
-      });
-      
-      return () => unsubscribe();
-    }
-  }, [currentUser?.id]);
-
-  const handleThreadSelect = (threadId: string) => {
-    setSelectedThreadId(threadId);
-  };
-
-  const formatTime = (timestamp: string | null) => {
-    if (!timestamp) return '';
-    let dateStr = timestamp.replace(' ', 'T');
-    if (!dateStr.includes('Z') && !dateStr.includes('+')) {
-      dateStr += 'Z'; // Assume UTC from database
-    }
-    const date = new Date(dateStr);
-    const now = new Date();
-    const diffHours = (now.getTime() - date.getTime()) / 1000 / 60 / 60;
-    
-    if (diffHours < 24) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else if (diffHours < 48) {
-      return 'Yesterday';
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-    }
-  };
-
-  const handleSupportPress = () => {
-    navigation.navigate('Support', { currentUserId: currentUser?.id || '' });
-  };
-
-  if (!currentUser) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text>Loading user...</Text>
-      </View>
-    );
-  }
-
-  if (selectedThreadId) {
-    return (
-      <ChatScreen
-        threadId={selectedThreadId}
-        currentUserId={currentUser.id}
-        onBack={() => setSelectedThreadId(null)}
-      />
-    );
-  }
-
-  const renderThreadItem = ({ item }: { item: ThreadItemProcessed }) => {
-    const initials = item.displayName
-      .split(' ')
-      .map(s => s[0])
-      .join('')
-      .slice(0, 2)
-      .toUpperCase();
-
-    return (
-      <TouchableOpacity
-        style={styles.threadCard}
-        onPress={() => handleThreadSelect(item.threadId)}
-        activeOpacity={0.7}
-      >
-        <LinearGradient
-          colors={[COLORS.primary, COLORS.primaryDark]}
-          style={styles.avatar}
-        >
-          <Text style={styles.avatarText}>{initials}</Text>
-        </LinearGradient>
-
-        <View style={styles.threadContent}>
-          <View style={styles.threadHeader}>
-            <Text style={styles.threadName} numberOfLines={1}>
-              {item.displayName}
-            </Text>
-            <Text style={styles.threadTime}>
-              {formatTime(item.lastMessageTime)}
-            </Text>
-          </View>
-          
-          <View style={styles.threadMessageContainer}>
-            <Text style={[
-              styles.threadMessage,
-              item.unreadCount > 0 && styles.unreadThreadMessage
-            ]} numberOfLines={1}>
-              {item.lastMessage || 'No messages yet'}
-            </Text>
-            {item.unreadCount > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadText}>{item.unreadCount}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.background} />
-      
-      {/* Header */}
-      <SafeAreaView style={styles.headerSafeArea}>
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Chats</Text>
-          <TouchableOpacity style={styles.newChatButton}>
-            <Ionicons name="create-outline" size={24} color={COLORS.primary} />
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
-        </View>
-      ) : threads.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <MaterialCommunityIcons
-            name="chat-outline"
-            size={64}
-            color={COLORS.textTertiary}
-          />
-          <Text style={styles.emptyTitle}>No conversations yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Start a new conversation to chat with others
-          </Text>
-        </View>
-      ) : (
-        <FlatList
-          data={threads}
-          keyExtractor={item => item.threadId}
-          contentContainerStyle={styles.listContainer}
-          renderItem={renderThreadItem}
-          showsVerticalScrollIndicator={false}
-          initialNumToRender={10}
-          maxToRenderPerBatch={10}
-          windowSize={5}
-          removeClippedSubviews={false}
-        />
-      )}
-
-      {/* Floating Support Button */}
-      <Animated.View style={[
-        styles.floatingButton,
-        {
-          transform: [{ scale: floatingButtonAnim }],
-        }
-      ]}>
-        <TouchableOpacity
-          onPress={handleSupportPress}
-          style={styles.floatingButtonInner}
-          activeOpacity={0.8}
-        >
-          <LinearGradient
-            colors={[COLORS.primary, COLORS.primaryDark]}
-            style={styles.floatingButtonGradient}
-          >
-            <Ionicons name="headset" size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
-    </View>
-  );
-};
-
-const getStyles = (COLORS: any, isDark: boolean) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  headerSafeArea: { backgroundColor: COLORS.background },
-  header: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 16,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-    backgroundColor: COLORS.background,
-  },
-  headerTitle: { fontSize: 32, fontWeight: '700', color: COLORS.textPrimary },
-  newChatButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  loadingText: { marginTop: 12, fontSize: 16, color: COLORS.textSecondary },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 20, fontWeight: '600', color: COLORS.textSecondary, marginTop: 16 },
-  emptySubtitle: { fontSize: 14, color: COLORS.textTertiary, marginTop: 8, textAlign: 'center' },
-  listContainer: { paddingVertical: 8 },
-  threadCard: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 20, paddingVertical: 14,
-    backgroundColor: COLORS.background,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  avatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
-  avatarText: { color: '#fff', fontWeight: '600', fontSize: 20 },
-  threadContent: { flex: 1, marginLeft: 16 },
-  threadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
-  threadName: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, flex: 1 },
-  threadTime: { fontSize: 12, color: COLORS.textTertiary, marginLeft: 8 },
-  threadMessageContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  threadMessage: { fontSize: 14, color: COLORS.textSecondary, flex: 1, marginRight: 8 },
-  unreadThreadMessage: { color: COLORS.textPrimary, fontWeight: '500' },
-  unreadBadge: { backgroundColor: COLORS.primary, borderRadius: 12, minWidth: 24, height: 24, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
-  unreadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
-  floatingButton: { position: 'absolute', bottom: 24, right: 20, zIndex: 100 },
-  floatingButtonInner: {
-    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
-  },
-  floatingButtonGradient: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
-});
-
-export default ChatWrapper;
 </file>
 
 <file path="src/screens/common/DownloadAppScreen.tsx">
@@ -10523,205 +8497,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 export default BookingsScreen;
 </file>
 
-<file path="src/screens/landlord/DashboardScreen.tsx">
-// src/screens/landlord/DashboardScreen.tsx
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { supabase } from '../../utils/supabaseClient';
-import { useAuth } from '../../hooks/useAuth';
-
-import DashboardStats from '../../components/landlord/DashboardStats';
-import QuickActions from '../../components/landlord/QuickActions';
-import RecentActivity from '../../components/landlord/RecentActivity';
-import ListingsPreview from '../../components/landlord/ListingsPreview';
-import { Ionicons } from '@expo/vector-icons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../../context/ThemeContext';
-
-const DashboardScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const { user } = useAuth();
-  const { colors } = useTheme();
-  const [landlordProfile, setLandlordProfile] = useState<any>(null);
-
-  const KYC_CACHE_KEY = `kyc_status_${user?.id}`;
-
-  useEffect(() => {
-    if (user) {
-      fetchLandlordData();
-    }
-  }, [user]);
-
-  const fetchLandlordData = async () => {
-    if (!user) return;
-
-    try {
-      // 1️⃣ Load approved KYC from AsyncStorage first
-      const cached = await AsyncStorage.getItem(KYC_CACHE_KEY);
-      if (cached) {
-        const parsed = JSON.parse(cached);
-        setLandlordProfile(parsed);
-      }
-
-      // 2️⃣ Fetch fresh profile from Supabase
-      const { data: profile, error: profileError } = await supabase
-        .from('landlord_profiles')
-        .select('address, city, kyc_status')
-        .eq('user_id', user.id)
-        .single();
-
-      if (profileError && profileError.code !== 'PGRST116') throw profileError;
-
-      if (profile) {
-        setLandlordProfile(profile);
-
-        // Persist only if approved
-        if (profile.kyc_status === 'approved') {
-          await AsyncStorage.setItem(KYC_CACHE_KEY, JSON.stringify(profile));
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching landlord data:', error);
-    }
-  };
-
-  const handleCreateListing = () => {
-    if (landlordProfile?.kyc_status !== 'approved') {
-      Alert.alert(
-        'KYC Required',
-        'Please complete your KYC verification before creating listings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Verify Now',
-            onPress: () => navigation.navigate('KYCVerification' as never),
-          },
-        ]
-      );
-      return;
-    }
-    navigation.navigate('UploadListing' as never);
-  };
-
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={[styles.header, { backgroundColor: colors.card }]}>
-        <View>
-          <Text style={[styles.welcome, { color: colors.primary }]}>Welcome back</Text>
-          <Text style={[styles.name, { color: colors.text }]}>{user?.fullName || 'Landlord'}</Text>
-        </View>
-        <TouchableOpacity
-          style={[styles.notificationBtn, { backgroundColor: colors.border }]}
-          onPress={() => navigation.navigate('Notifications' as never)}
-        >
-          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
-      </View>
-
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* KYC Status Banner */}
-        {landlordProfile?.kyc_status !== 'approved' && (
-          <TouchableOpacity
-            style={[styles.kycBanner, { backgroundColor: colors.error }]}
-            onPress={() => navigation.navigate('KYCVerification' as never)}
-          >
-            <Ionicons
-              name={
-                landlordProfile?.kyc_status === 'pending'
-                  ? 'time-outline'
-                  : 'alert-circle-outline'
-              }
-              size={20}
-              color="#FFF"
-            />
-            <Text style={styles.kycText}>
-              {landlordProfile?.kyc_status === 'pending'
-                ? 'KYC Verification Pending'
-                : 'Complete KYC Verification to start listing properties'}
-            </Text>
-            <Ionicons name="chevron-forward" size={16} color="#FFF" />
-          </TouchableOpacity>
-        )}
-
-        {/* Dashboard Stats */}
-        {user && <DashboardStats landlordId={user.id} />}
-
-        {/* Quick Actions */}
-        <QuickActions
-          onAddListing={handleCreateListing}
-          onManageListings={() => navigation.navigate('ManageListings' as never)}
-          onViewBookings={() => navigation.navigate('Bookings' as never)}
-          onViewPayments={() => navigation.navigate('Payments' as never)}
-        />
-
-        {/* Recent Listings Preview */}
-        {user && <ListingsPreview landlordId={user.id} />}
-
-        {/* Recent Activity */}
-        {user && <RecentActivity landlordId={user.id} />}
-      </ScrollView>
-    </View>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#1A1A1A',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: '#2A2A2A',
-  },
-  welcome: {
-    color: '#D4AF37',
-    fontSize: 16,
-    fontWeight: '500',
-  },
-  name: {
-    color: '#FFFFFF',
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginTop: 4,
-  },
-  notificationBtn: {
-    padding: 8,
-    borderRadius: 20,
-    backgroundColor: '#333333',
-  },
-  kycBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#D4AF37',
-    margin: 20,
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
-  },
-  kycText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-  },
-});
-
-export default DashboardScreen;
-</file>
-
 <file path="src/screens/landlord/KYCVerificationScreen.tsx">
 import React, { useState, useEffect } from 'react';
 import {
@@ -11733,568 +9508,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 export default ManageListings;
 </file>
 
-<file path="src/screens/landlord/PaymentScreen.tsx">
-// src/screens/landlord/PaymentsScreen.tsx
-import { useRoute } from '@react-navigation/native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Payment } from '../../services/paymentService';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { clearInitiateState, fetchPayments, initiateCollection, initiateVerificationPayment, upsertPayment } from '../../store/paymentsSlice';
-import type { RootState } from '../../store/store';
-import { LandlordTabRouteProp } from '../../types';
-import { supabase } from '../../utils/supabaseClient';
-
-const RECEIVER_NAME = 'DHUB';
-
-const PaymentsScreen: React.FC = () => {
-  const dispatch = useAppDispatch();
-
-  // Redux state
-  const user = useAppSelector((state: RootState) => state.auth.user);
-  const payments = useAppSelector((state: RootState) => state.payments.history);
-  const { initiating, initiateError, initiateData, fetchingHistory, fetchError } = useAppSelector(
-    (state: RootState) => state.payments
-  );
-
-  const route = useRoute<LandlordTabRouteProp<'Payments'>>();
-  const routeParams = route.params;
-  const isVerificationFlow = routeParams && 'reason' in routeParams && routeParams.reason === 'verification';
-  const boostParams = !isVerificationFlow && routeParams && 'planId' in routeParams ? routeParams : undefined;
-  const verificationParams = isVerificationFlow ? routeParams : undefined;
-
-  const [activeTab, setActiveTab] = useState<'history' | 'send'>('history');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  // Clear stale thunk state on mount
-  useEffect(() => { dispatch(clearInitiateState()); }, []);
-
-  // FETCH HISTORY & REAL-TIME SYNC
-  useEffect(() => {
-    if (!user?.id) return;
-
-    dispatch(fetchPayments(user.id));
-
-    const channel = supabase
-      .channel(`landlord-payments-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "payments",
-          filter: `payer_id=eq.${user.id}`,
-        },
-        (payload: any) => {
-          const row = payload.new as any;
-          if (row) {
-            const mapped: Payment = {
-              id: row.id,
-              transactionId: row.transaction_ref || row.id,
-              amount: parseFloat(row.amount),
-              sender: row.payer_id,
-              receiver: row.payee_id,
-              status: row.status as any,
-              date: row.created_at,
-              description: row.currency ? `${row.currency} Payment` : "Payment",
-            };
-            dispatch(upsertPayment(mapped));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
-
-  // Prefill if coming from BoostScreen or ListingDetailsScreen (verification)
-useEffect(() => {
-  if (routeParams && 'reason' in routeParams) {
-    setActiveTab('send');
-    setAmount(String(routeParams.amount));
-    setDescription(routeParams.description);
-    return;
-  }
-  if (boostParams) {
-    setActiveTab('send');
-    setAmount(boostParams.price.toString());
-    setDescription(`Boost Listing: ${boostParams.listingId}`);
-  }
-}, [boostParams, routeParams]);
-
-  // Success → reset form, switch to history
-  useEffect(() => {
-    if (!initiateData) return;
-    const numAmount = parseFloat(amount);
-    setAmount('');
-    setDescription('');
-    setActiveTab('history');
-    dispatch(clearInitiateState());
-    Alert.alert(
-      'Payment Initiated ',
-      `${formatCurrency(numAmount)} sent to ${RECEIVER_NAME}.\nApprove the MoMo prompt on your phone to complete.`,
-    );
-  }, [initiateData]);
-
-  // Failure → show alert
-  useEffect(() => {
-    if (!initiateError) return;
-    Alert.alert('Payment Failed', initiateError);
-    dispatch(clearInitiateState());
-  }, [initiateError]);
-
-  // ---------- Payment Handler ----------
-  const handleSendPayment = async () => {
-    if (!amount) {
-      Alert.alert('Validation Error', 'Please enter an amount');
-      return;
-    }
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert('Validation Error', 'Enter a valid amount');
-      return;
-    }
-
-    if (!user?.id) {
-      Alert.alert('Error', 'User account details missing. Please sign in again.');
-      return;
-    }
-
-    if (verificationParams) {
-      let payerPhone = user.momo || user.phone;
-      if (!payerPhone) {
-        const { data } = await supabase
-          .from('users')
-          .select('momo, phone')
-          .eq('id', user.id)
-          .maybeSingle();
-        payerPhone = data?.momo || data?.phone || '';
-      }
-
-      if (!payerPhone) {
-        Alert.alert('Error', 'Add a mobile-money number to your profile before paying.');
-        return;
-      }
-
-      dispatch(initiateVerificationPayment({
-        payerPhone,
-        listingId: verificationParams.listingId,
-        payerId: user.id,
-      }));
-      return;
-    }
-
-    if (!user.phone) {
-      Alert.alert('Error', 'User account details missing. Please sign in again.');
-      return;
-    }
-
-    const reason = boostParams ? 'boosting' : 'landlord_subscription';
-    const planId = boostParams?.planId;
-    const tierId = reason === 'landlord_subscription' ? 'tier_monthly' : undefined;
-
-    dispatch(initiateCollection({
-      payerPhone: user.phone,
-      amount: String(numAmount),
-      reason,
-      planId,
-      tierId,
-      client: {
-        name: 'Dhub',
-        id: `col-${Date.now()}`,
-        payer_id: user.id,
-        listing_id: boostParams?.listingId ?? '',
-        idempotency_key: `dhub-col-${Date.now()}`,
-      },
-    }));
-  };
-  const handleViewReceipt = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setShowReceiptModal(true);
-  };
-
-  // ---------- Helpers ----------
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'XAF' }).format(value);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return '#27AE60';
-      case 'pending': return '#F39C12';
-      case 'failed': return '#E74C3C';
-      default: return '#7F8C8D';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return 'Completed';
-      case 'pending': return 'Pending';
-      case 'failed': return 'Failed';
-      default: return status;
-    }
-  };
-
-  const generateQRData = (payment: Payment) =>
-    JSON.stringify({
-      transactionId: payment.transactionId,
-      amount: payment.amount,
-      sender: payment.sender,
-      receiver: payment.receiver,
-      date: payment.date,
-      status: payment.status,
-      description: payment.description,
-    });
-
-  const generatePDF = async (payment: Payment) => {
-    setPdfLoading(true);
-    try {
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-        <title>Receipt - ${payment.transactionId}</title>
-        <style>
-          body{font-family:Arial,sans-serif;margin:40px;color:#2C3E50}
-          .header{text-align:center;color:#D4AF37;border-bottom:2px solid #D4AF37;padding-bottom:20px;margin-bottom:30px}
-          .section{margin-bottom:25px}
-          .section-title{color:#D4AF37;font-size:18px;font-weight:bold;margin-bottom:15px;border-bottom:1px solid #EAECEF;padding-bottom:5px}
-          .row{display:flex;justify-content:space-between;margin-bottom:8px;padding:5px 0}
-          .label{color:#7F8C8D;font-weight:500}
-          .value{color:#2C3E50;font-weight:600;text-align:right}
-          .total-row{border-top:2px solid #EAECEF;padding-top:10px;margin-top:10px;font-weight:bold}
-          .footer{text-align:center;margin-top:40px;color:#7F8C8D;font-size:12px;border-top:1px solid #EAECEF;padding-top:20px}
-        </style></head><body>
-        <div class="header"><h1>DHUB Payment Receipt</h1><p>Transaction ID: ${payment.transactionId}</p></div>
-        <div class="section">
-          <div class="section-title">Transaction Details</div>
-          <div class="row"><span class="label">Transaction ID:</span><span class="value">${payment.transactionId}</span></div>
-          <div class="row"><span class="label">Description:</span><span class="value">${payment.description}</span></div>
-          <div class="row"><span class="label">Date:</span><span class="value">${formatDate(payment.date)}</span></div>
-          <div class="row"><span class="label">Status:</span><span class="value">${getStatusText(payment.status)}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">Amount Details</div>
-          <div class="row"><span class="label">Amount:</span><span class="value">${formatCurrency(payment.amount)}</span></div>
-          <div class="row"><span class="label">Fee:</span><span class="value">${formatCurrency(payment.fee || 0)}</span></div>
-          <div class="row total-row"><span class="label">Net Amount:</span><span class="value">${formatCurrency(payment.netAmount || 0)}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">Parties</div>
-          <div class="row"><span class="label">From:</span><span class="value">${payment.sender}</span></div>
-          <div class="row"><span class="label">To:</span><span class="value">${RECEIVER_NAME} (${payment.receiver})</span></div>
-        </div>
-        <div class="footer"><p>Generated by DHUB App on ${new Date().toLocaleDateString()}</p></div>
-        </body></html>`;
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Receipt' });
-      } else {
-        Alert.alert('Saved', `PDF saved to: ${uri}`);
-      }
-    } catch {
-      Alert.alert('Error', 'Failed to generate PDF');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  // ---------- Render ----------
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>Payments</Text>
-      </View>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
-            Payment History
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'send' && styles.activeTab]}
-          onPress={() => setActiveTab('send')}
-        >
-          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>
-            Send Payment
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeTab === 'history' ? (
-        <ScrollView style={styles.historyContainer}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.sectionTitle}>Recent Transactions</Text>
-            <TouchableOpacity
-              onPress={() => user?.id && dispatch(fetchPayments(user.id))}
-              disabled={fetchingHistory}
-            >
-              <Text style={[styles.refreshText, fetchingHistory && styles.disabledText]}>
-                {fetchingHistory ? "Refreshing..." : "Refresh"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {fetchingHistory ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#D4AF37" />
-              <Text style={styles.loadingText}>Loading history...</Text>
-            </View>
-          ) : fetchError ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{fetchError}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => user?.id && dispatch(fetchPayments(user.id))}
-              >
-                <Text style={styles.retryButtonText}>Retry</Text>
-              </TouchableOpacity>
-            </View>
-          ) : payments.length === 0 ? (
-            <Text style={styles.emptyText}>No payment history yet.</Text>
-          ) : (
-            payments.map((payment: any) => (
-              <TouchableOpacity
-                key={payment.id}
-                style={styles.paymentCard}
-                onPress={() => handleViewReceipt(payment)}
-              >
-                <View style={styles.paymentHeader}>
-                  <Text style={styles.paymentDescription}>{payment.description}</Text>
-                  <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
-                </View>
-                <View style={styles.paymentDetails}>
-                  <Text style={styles.paymentDate}>{formatDate(payment.date)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
-                    <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
-                  </View>
-                </View>
-                <View style={styles.paymentFooter}>
-                  <Text style={styles.transactionId}>ID: {payment.transactionId}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.sendContainer}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Amount (XAF) *</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-              editable={!initiating && !verificationParams}
-              placeholder="Enter amount"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Receiver</Text>
-            <TextInput style={[styles.input, styles.disabledInput]} value={RECEIVER_NAME} editable={false} />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, (boostParams || verificationParams) && styles.disabledInput]}
-              value={boostParams ? 'Boost Listing' : description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={3}
-              editable={!boostParams && !verificationParams && !initiating}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.sendButton, initiating && styles.buttonDisabled]}
-            onPress={handleSendPayment}
-            disabled={initiating}
-          >
-            {initiating
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.sendButtonText}>Send Payment</Text>
-            }
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      {/* Receipt Modal */}
-      <Modal visible={showReceiptModal} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Payment Receipt</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
-              <Text style={styles.closeButtonText}>×</Text>
-            </TouchableOpacity>
-          </View>
-
-          {selectedPayment && (
-            <ScrollView style={styles.receiptContent}>
-              <View style={styles.qrContainer}>
-                <QRCode value={generateQRData(selectedPayment)} size={200} color="#000" backgroundColor="#fff" />
-                <Text style={styles.qrHelpText}>Scan to verify transaction</Text>
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Transaction Details</Text>
-                {[
-                  ['Transaction ID', selectedPayment.transactionId],
-                  ['Description', selectedPayment.description],
-                  ['Date', formatDate(selectedPayment.date)],
-                  ['Status', getStatusText(selectedPayment.status)],
-                ].map(([label, value]) => (
-                  <View key={label} style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>{label}:</Text>
-                    <Text style={styles.receiptValue}>{value}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Amount Details</Text>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>Amount:</Text>
-                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.amount)}</Text>
-                </View>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>Fee:</Text>
-                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.fee || 0)}</Text>
-                </View>
-                <View style={[styles.receiptRow, styles.totalRow]}>
-                  <Text style={styles.totalLabel}>Net Amount:</Text>
-                  <Text style={styles.totalValue}>{formatCurrency(selectedPayment.netAmount || 0)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Parties</Text>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>From:</Text>
-                  <Text style={styles.receiptValue}>{selectedPayment.sender}</Text>
-                </View>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>To:</Text>
-                  <Text style={styles.receiptValue}>{RECEIVER_NAME}</Text>
-                </View>
-              </View>
-
-              <View style={styles.receiptActions}>
-                <TouchableOpacity
-                  style={[styles.downloadButton, pdfLoading && styles.buttonDisabled]}
-                  onPress={() => generatePDF(selectedPayment)}
-                  disabled={pdfLoading}
-                >
-                  {pdfLoading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.downloadButtonText}>Download PDF</Text>
-                  }
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.closeReceiptButton} onPress={() => setShowReceiptModal(false)}>
-                  <Text style={styles.closeReceiptText}>Close</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#D4AF37', textAlign: 'center' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: '#D4AF37' },
-  tabText: { fontSize: 16, fontWeight: '600', color: '#7F8C8D' },
-  activeTabText: { color: '#D4AF37' },
-  historyContainer: { flex: 1, padding: 20 },
-  sendContainer: { flex: 1, padding: 20 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 20 },
-  emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 40, fontSize: 16 },
-  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  refreshText: { color: '#D4AF37', fontWeight: '600', fontSize: 14 },
-  disabledText: { color: '#BDC3C7' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#7F8C8D' },
-  errorContainer: { backgroundColor: '#FDEDED', padding: 16, borderRadius: 8, marginTop: 20, borderLeftWidth: 4, borderLeftColor: '#E74C3C' },
-  errorText: { color: '#C0392B', fontSize: 14 },
-  retryButton: { marginTop: 16, backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, alignSelf: 'center' },
-  retryButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
-  inputGroup: { marginBottom: 16 },
-  disabledInput: { backgroundColor: '#e0e0e0', color: '#7f7f7f' },
-  label: { fontSize: 16, fontWeight: '600', color: '#2C3E50', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCDFE4', borderRadius: 8, padding: 12, fontSize: 16, color: '#2C3E50' },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  sendButton: { backgroundColor: '#D4AF37', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  buttonDisabled: { opacity: 0.6 },
-  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  paymentCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  paymentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  paymentDescription: { fontSize: 16, fontWeight: '600', color: '#2C3E50', flex: 1, marginRight: 10 },
-  paymentAmount: { fontSize: 18, fontWeight: 'bold', color: '#D4AF37' },
-  paymentDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  paymentDate: { fontSize: 14, color: '#7F8C8D' },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
-  paymentFooter: { borderTopWidth: 1, borderTopColor: '#EAECEF', paddingTop: 8 },
-  transactionId: { fontSize: 12, color: '#95A5A6', fontFamily: 'monospace' },
-  modalContainer: { flex: 1, backgroundColor: '#F8F9FA' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50' },
-  closeButton: { padding: 4 },
-  closeButtonText: { fontSize: 24, color: '#7F8C8D', fontWeight: 'bold' },
-  receiptContent: { flex: 1, padding: 20 },
-  qrContainer: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 12 },
-  qrHelpText: { marginTop: 10, fontSize: 14, color: '#7F8C8D', textAlign: 'center' },
-  receiptSection: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 16 },
-  receiptSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EAECEF', paddingBottom: 8 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
-  receiptLabel: { fontSize: 14, color: '#7F8C8D', fontWeight: '500' },
-  receiptValue: { fontSize: 14, color: '#2C3E50', fontWeight: '600', flex: 1, textAlign: 'right' },
-  totalRow: { borderTopWidth: 2, borderTopColor: '#EAECEF', paddingTop: 10, marginTop: 4 },
-  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
-  totalValue: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37' },
-  receiptActions: { flexDirection: 'row', gap: 12, marginBottom: 30 },
-  downloadButton: { flex: 1, backgroundColor: '#D4AF37', padding: 14, borderRadius: 8, alignItems: 'center' },
-  downloadButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  closeReceiptButton: { flex: 1, backgroundColor: '#FFFFFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#DCDFE4' },
-  closeReceiptText: { color: '#2C3E50', fontSize: 14, fontWeight: 'bold' },
-});
-
-export default PaymentsScreen;
-</file>
-
 <file path="src/screens/landlord/ProfileScreen.tsx">
 //src/screens/landlord/ProfileScreen.tsx
 import { Ionicons } from "@expo/vector-icons";
@@ -13195,987 +10408,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 });
 
 export default FavoritesScreen;
-</file>
-
-<file path="src/screens/student/ListingDetailsScreen.tsx">
-// src/screens/student/ListingDetailsScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
-import {
-  useFocusEffect,
-  useNavigation,
-  useRoute,
-} from '@react-navigation/native';
-import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-
-import MapView from 'react-native-maps';
-import FullVideoPlayer from '../../components/FullVideoPlayer';
-import ListingReviews from '../../components/ListingReviews';
-import MapPickerModal from '../../components/MapPickerModal';
-import RatingsList from '../../components/RatingsList';
-import NetworkStatusBanner from '../../screens/common/NetworkStatusBanner';
-
-import { useAuth } from '../../hooks/useAuth';
-import { getOrCreateThread } from '../../services/chatService';
-import FavoritesManager from '../../storage/favouritesManager';
-import { fetchListingDetails } from '../../utils/listings';
-import { supabase } from '../../utils/supabaseClient';
-
-import { useTranslation } from 'react-i18next';
-
-import { RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import {
-  ListingDetails,
-  MediaItem,
-  StudentStackParamList,
-} from '../../types';
-import { LatLng } from '../../utils/location';
-
-type RouteProps = RouteProp<StudentStackParamList, 'ListingDetails'>;
-type NavProps = NativeStackNavigationProp<StudentStackParamList, 'ListingDetails'>;
-
-const { width: screenWidth } = Dimensions.get('window');
-
-import { useTheme } from '../../context/ThemeContext';
-
-const ListingDetailsScreen: React.FC = () => {
-  const { t } = useTranslation();
-  const route = useRoute<RouteProps>();
-  const navigation = useNavigation<NavProps>();
-  const listingId = route.params.listingId;
-
-  const { colors, isDark } = useTheme();
-  const COLORS = React.useMemo(() => ({
-    gold: colors.primary,
-    goldLight: isDark ? '#3d300e' : '#F5E7C8',
-    goldDark: colors.primary,
-    white: colors.background,
-    offWhite: colors.card,
-    greyDark: colors.text,
-    greyMedium: colors.textSecondary,
-    greyLight: isDark ? '#333' : '#ECF0F1',
-    border: colors.border,
-    shadow: '#000000',
-  }), [colors, isDark]);
-
-  const styles = React.useMemo(() => getStyles(COLORS), [COLORS]);
-
-  const { user } = useAuth();
-  const userId = user?.id ?? null;
-
-  const [listing, setListing] = useState<ListingDetails | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  const [isFavorite, setIsFavorite] = useState(false);
-  const [mapVisible, setMapVisible] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
-  const [hasPaidBooking, setHasPaidBooking] = useState(false);
-  const [existingBookingId, setExistingBookingId] = useState<string | null>(null);
-  
-  const flatListRef = React.useRef<FlatList>(null);
-
-  // Close fullscreen media when screen loses focus
-  useFocusEffect(
-    useCallback(() => {
-      return () => setFullscreenMedia(null);
-    }, [])
-  );
-
-  /* ─── Fetch ─── */
-  useEffect(() => {
-    let mounted = true;
-    const load = async () => {
-      setLoading(true);
-      const data = await fetchListingDetails(listingId);
-      if (mounted) {
-        setListing(data);
-        setLoading(false);
-      }
-
-      // Check for paid booking map unlock & existing booking
-      if (userId && listingId) {
-        const { data: bookingData } = await supabase
-          .from('bookings')
-          .select('id, status, payment_status')
-          .eq('listing_id', listingId)
-          .eq('student_id', userId)
-          .not('status', 'eq', 'cancelled')
-          .not('status', 'eq', 'completed')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (mounted && bookingData && bookingData.length > 0) {
-          if (bookingData[0].payment_status === 'completed') {
-            setHasPaidBooking(true);
-          }
-          setExistingBookingId(bookingData[0].id);
-        }
-      }
-    };
-    load();
-    return () => { mounted = false; };
-  }, [listingId, userId]);
-
-  /* ─── Favorites ─── */
-  useEffect(() => {
-    if (!userId || !listingId) return;
-    FavoritesManager.isFavorite(listingId, userId)
-      .then(setIsFavorite)
-      .catch(() => setIsFavorite(false));
-  }, [userId, listingId]);
-
-  // console.log("listing detailed data loaded");
-
-  const toggleFavorite = async () => {
-    if (!userId || !listing) {
-      Alert.alert(t('common.error'), 'Please sign in to save favorites.');
-      return;
-    }
-    try {
-      if (isFavorite) {
-        await FavoritesManager.removeFavorite(listing.id, userId);
-        setIsFavorite(false);
-      } else {
-        const favListing: any = {
-          ...listing,
-          image_url: listing.media?.[0]?.url || '',
-          images: listing.media || []
-        };
-        await FavoritesManager.addFavorite(listing.id, userId, favListing);
-        setIsFavorite(true);
-      }
-    } catch {
-      Alert.alert(t('common.error'), 'Failed to update favorites. Please try again.');
-    }
-  };
-
-  /* ─── Actions ─── */
-  const handleBooking = async () => {
-    if (!userId) {
-      Alert.alert(t('common.error'), 'Please sign in to book.');
-      return;
-    }
-    
-    // Check Profile Gate
-    const { data: studentData } = await supabase
-      .from('student_profiles')
-      .select('age, profession, contact_number')
-      .eq('user_id', userId)
-      .single();
-    
-    if (!studentData || !studentData.age || !studentData.profession || !studentData.contact_number) {
-      Alert.alert(
-        "Profile Verification Required",
-        "Landlords require your age, profession/level, and Momo number before accepting bookings.",
-        [
-          { text: "Cancel", style: "cancel" },
-          { text: "Update Profile", onPress: () => navigation.navigate('StudentTabs', { screen: 'Profile' }) }
-        ]
-      );
-      return;
-    }
-
-    navigation.navigate('BookingScreen', {
-      listingId,
-    });
-  };
-
-
-
-
-
-
-
-
-
-
-
-    const handleShare = async () => {
-    try {
-      // Use absolute URL for web (navigator.share requires it), deep link for native
-      const url = Platform.OS === 'web' 
-        ? `${window.location.origin}/listing/${listingId}` 
-        : `dhub://listing/${listingId}`;
-      
-      await Share.share({
-        message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
-        url: url, // iOS will use this for the link
-        title: listing?.title,
-      });
-    } catch (error: any) {
-      console.log('Error sharing:', error.message);
-    }
-  };
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-    const handleChat = async () => {
-    const otherUserId = listing?.landlord?.id ?? listing?.landlord_id;
-    if (!otherUserId || !userId) return;
-    try {
-      const threadId = await getOrCreateThread(userId, otherUserId);
-      navigation.navigate('StudentTabs', {
-        screen: 'Chat',
-        params: { threadId },
-      });
-    } catch (err) {
-      Alert.alert(t('common.error'), 'Could not initiate chat. Please try again later.');
-    }
-  };
-
-  const handleCall = () => {
-    // Lock communications to DHUB to avoid bypassing
-    Linking.openURL(`tel:+237682366472`);
-  };
-
-  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
-    if (viewableItems.length > 0) {
-      setActiveImageIndex(viewableItems[0].index);
-    }
-  }, []);
-
-
-
-
-
-
-
-
-  /* ─── Media helpers ─── */
-  const images = listing?.media.filter(m => m.type === 'image') ?? [];
-  const videos = listing?.media.filter(m => m.type === 'video') ?? [];
-  const allMedia = [...images, ...videos];
-
-  const handleNextImage = () => {
-    if (activeImageIndex < allMedia.length - 1) {
-      flatListRef.current?.scrollToIndex({ index: activeImageIndex + 1, animated: true });
-    }
-  };
-
-  const handlePrevImage = () => {
-    if (activeImageIndex > 0) {
-      flatListRef.current?.scrollToIndex({ index: activeImageIndex - 1, animated: true });
-    }
-  };
-
-  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => {
-    if (!listing) return null;
-    // thumbUrl is a real image only when it differs from the video URL.
-    // Old DB records have thumbUrl === url (both .mp4) — show a styled placeholder.
-    const hasRealThumb =
-      item.type === 'video' &&
-      item.thumbUrl &&
-      item.thumbUrl !== item.url &&
-      !item.thumbUrl.endsWith('.mp4');
-
-    return (
-      <TouchableOpacity
-        onPress={() => setFullscreenMedia(item)}
-        activeOpacity={0.9}
-        style={styles.mediaItemContainer}
-      >
-        {item.type === 'image' ? (
-          <Image source={{ uri: item.url }} style={styles.mediaItem} />
-        ) : (
-          <View style={styles.videoContainer}>
-            {hasRealThumb ? (
-              <Image source={{ uri: item.thumbUrl }} style={styles.mediaItem} />
-            ) : (
-              <View style={[styles.mediaItem, styles.videoFallback]}>
-                <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
-                <Text style={styles.videoFallbackText}>Video</Text>
-              </View>
-            )}
-            
-            {item.processing_status === 'processing' ? (
-              <View style={styles.processingOverlay}>
-                <ActivityIndicator size="small" color={COLORS.white} />
-                <Text style={styles.processingText}>{t('common.loading')}</Text>
-              </View>
-            ) : item.processing_status === 'failed' ? (
-              <View style={styles.processingOverlay}>
-                <Ionicons name="close-circle-outline" size={32} color={COLORS.white} />
-                <Text style={styles.processingText}>{t('common.error')}</Text>
-              </View>
-            ) : (
-              <View style={styles.playButton}>
-                <Ionicons name="play-circle" size={48} color={COLORS.white} />
-              </View>
-            )}
-          </View>
-        )}
-        <View style={styles.mediaCounter}>
-          <Text style={styles.mediaCounterText}>{index + 1} / {allMedia.length}</Text>
-        </View>
-      </TouchableOpacity>
-    );
-  };
-
-  /* ─── Loading / error states ─── */
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <NetworkStatusBanner />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.gold} />
-          <Text style={styles.loadingText}>{t('common.loading')}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!listing) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <NetworkStatusBanner />
-        <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
-          <Text style={styles.errorText}>{t('common.error')}</Text>
-          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.errorButtonText}>{t('common.back')}</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const hasCoords = listing.latitude != null && listing.longitude != null;
-  const coords: LatLng | null = hasCoords
-    ? { latitude: listing.latitude!, longitude: listing.longitude! }
-    : null;
-    
-  const isBoosted = listing.boost_until && new Date(listing.boost_until) > new Date();
-  const canViewFullMap = hasCoords && (hasPaidBooking || isBoosted);
-
-  /* ─── Render ─── */
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
-
-      {/* Network status banner — slides in automatically on poor/no connection */}
-      <NetworkStatusBanner />
-
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
-        </TouchableOpacity>
-        
-        <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{listing.title}</Text>
-          {listing.is_verified && (
-            <View style={styles.verifiedBadge}>
-              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
-            </View>
-          )}
-        </View>
-
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <TouchableOpacity onPress={handleShare} style={styles.headerBtn}>
-            <Ionicons name="share-outline" size={24} color={COLORS.greyDark} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={toggleFavorite} style={styles.headerBtn}>
-            <Ionicons
-              name={isFavorite ? 'heart' : 'heart-outline'}
-              size={24}
-              color={isFavorite ? COLORS.gold : COLORS.greyDark}
-            />
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
-        {/* MEDIA GALLERY */}
-        {allMedia.length > 0 ? (
-          <View style={styles.gallerySection}>
-            <FlatList
-              ref={flatListRef}
-              data={allMedia}
-              renderItem={renderMediaItem}
-              keyExtractor={(item, idx) => `${item.url}-${idx}`}
-              horizontal
-              pagingEnabled
-              showsHorizontalScrollIndicator={false}
-              onViewableItemsChanged={onViewableItemsChanged}
-              viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-            />
-            {/* Gallery Navigation Arrows */}
-            {allMedia.length > 1 && (
-              <>
-                <TouchableOpacity style={styles.navArrowLeft} onPress={handlePrevImage} disabled={activeImageIndex === 0}>
-                   <Ionicons name="chevron-back" size={30} color={activeImageIndex === 0 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.navArrowRight} onPress={handleNextImage} disabled={activeImageIndex === allMedia.length - 1}>
-                   <Ionicons name="chevron-forward" size={30} color={activeImageIndex === allMedia.length - 1 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
-                </TouchableOpacity>
-              </>
-            )}
-            {allMedia.length > 1 && (
-              <View style={styles.paginationDots}>
-                {allMedia.map((_, index) => (
-                  <View
-                    key={index}
-                    style={[
-                      styles.paginationDot,
-                      index === activeImageIndex && styles.paginationDotActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-          </View>
-        ) : (
-          <View style={styles.noMediaContainer}>
-            <Ionicons name="images-outline" size={48} color={COLORS.greyLight} />
-            <Text style={styles.noMediaText}>{t('listing.no_media')}</Text>
-          </View>
-        )}
-
-        {/* CONTENT */}
-        <View style={styles.content}>
-
-          {/* Title & Price */}
-          <View style={styles.titleSection}>
-            <View style={styles.titleRow}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
-                <Text style={[styles.title, { flexShrink: 1 }]} numberOfLines={2}>{listing.title}</Text>
-                {listing.is_verified && (
-                  <View style={[styles.verifiedBadge, { marginLeft: 8, width: 24, height: 24, borderRadius: 12 }]}>
-                    <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
-                  </View>
-                )}
-              </View>
-              <View style={[
-                styles.availabilityBadge,
-                listing.available ? styles.availableBadge : styles.unavailableBadge,
-              ]}>
-                <Text style={styles.availabilityText}>
-                  {listing.available ? t('listing.available') : t('listing.rented')}
-                </Text>
-              </View>
-            </View>
-            <Text style={styles.price}>
-              {t('listing.fcfa')} {listing.price.toLocaleString()}
-              <Text style={styles.perMonth}> {t('listing.per_month')}</Text>
-            </Text>
-          </View>
-
-          {/* QUICK ACTIONS */}
-          <View style={styles.quickActions}>
-            <TouchableOpacity style={styles.quickActionBtn} onPress={handleChat}>
-              <Ionicons name="chatbubble-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.quickActionText}>{t('listing.message')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.quickActionBtn} onPress={handleCall}>
-              <Ionicons name="call-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.quickActionText}>{t('listing.call')}</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.quickActionBtn} onPress={toggleFavorite}>
-              <Ionicons
-                name={isFavorite ? 'heart' : 'heart-outline'}
-                size={20}
-                color={COLORS.gold}
-              />
-              <Text style={styles.quickActionText}>
-                {isFavorite ? t('listing.saved') : t('listing.save')}
-              </Text>
-            </TouchableOpacity>
-          </View>
-          {/* Premium Fat Share Button */}
-          <TouchableOpacity 
-            style={[styles.quickActionBtn, { 
-              width: '100%', 
-              marginTop: -12, 
-              marginBottom: 24, 
-              backgroundColor: COLORS.gold, 
-              borderColor: COLORS.gold,
-              paddingVertical: 14,
-              shadowColor: COLORS.gold,
-              shadowOffset: { width: 0, height: 4 },
-              shadowOpacity: 0.3,
-              shadowRadius: 8,
-              elevation: 6
-            }]}
-            onPress={handleShare}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="arrow-redo" size={24} color={COLORS.white} />
-            <Text style={[styles.quickActionText, { color: COLORS.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
-          </TouchableOpacity>
-
-        {/* Description */}
-        <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
-            <Text style={styles.sectionTitle}>{t('listing.description')}</Text>
-          </View>
-          <Text style={styles.description}>
-            {listing.description || t('listing.no_description')}
-          </Text>
-        </View>
-
-          {/* Key Details */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="information-circle-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.sectionTitle}>{t('listing.key_details')}</Text>
-            </View>
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailCard}>
-                <Ionicons name="location-outline" size={24} color={COLORS.gold} />
-                <Text style={styles.detailCardLabel}>{t('listing.city')}</Text>
-                <Text style={styles.detailCardValue}>{listing.city || 'N/A'}</Text>
-              </View>
-              <View style={styles.detailCard}>
-                <Ionicons name="bed-outline" size={24} color={COLORS.gold} />
-                <Text style={styles.detailCardLabel}>{t('listing.rooms')}</Text>
-                <Text style={styles.detailCardValue}>{listing.rooms || '—'}</Text>
-              </View>
-              <View style={styles.detailCard}>
-                <Ionicons
-                  name={listing.available ? 'checkmark-circle' : 'close-circle'}
-                  size={24}
-                  color={listing.available ? COLORS.gold : COLORS.greyMedium}
-                />
-                <Text style={styles.detailCardLabel}>{t('listing.status')}</Text>
-                <Text style={styles.detailCardValue}>
-                  {listing.available ? t('listing.available') : t('listing.rented')}
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* Location Map */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="map-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.sectionTitle}>{t('listing.location')}</Text>
-            </View>
-            <TouchableOpacity
-              style={styles.mapContainer}
-              onPress={() => {
-                if (canViewFullMap) {
-                  setMapVisible(true);
-                } else {
-                  Alert.alert(
-                    t('listing.location_locked'),
-                    t('listing.location_locked_msg'),
-                    [
-                      { text: t('common.cancel'), style: 'cancel' },
-                      { text: t('listing.book_now'), onPress: handleBooking }
-                    ]
-                  );
-                }
-              }}
-              activeOpacity={0.9}
-            >
-              {hasCoords ? (
-                <View style={styles.mapPlaceholder}>
-                  <MapView
-                    style={StyleSheet.absoluteFillObject}
-                    region={{ latitude: coords!.latitude, longitude: coords!.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-                    scrollEnabled={false}
-                    zoomEnabled={false}
-                    pitchEnabled={false}
-                    rotateEnabled={false}
-                    showsUserLocation={false}
-                    showsMyLocationButton={false}
-                    showsCompass={false}
-                  />
-                  <View style={styles.processingOverlay}>
-                    <Ionicons name="expand-outline" size={32} color={COLORS.white} />
-                    <Text style={styles.processingText}>{t('listing.click_fullscreen')}</Text>
-                  </View>
-                </View>
-              ) : (
-                <View style={[styles.mapPlaceholder, styles.lockedMap]}>
-                  <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
-                  <Text style={styles.lockedMapText}>{t('listing.no_location')}</Text>
-                  <Text style={styles.lockedMapSubtext}>{t('listing.no_coords_msg')}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-
-          {/* Landlord Info */}
-          {listing.landlord && (
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="person-outline" size={20} color={COLORS.gold} />
-                <Text style={styles.sectionTitle}>{t('listing.landlord')}</Text>
-              </View>
-              <View style={styles.landlordCard}>
-                <View style={styles.landlordAvatar}>
-                  {listing.landlord.profile_pic ? (
-                    <Image
-                      source={{ uri: listing.landlord.profile_pic }}
-                      style={styles.landlordAvatarImage}
-                    />
-                  ) : (
-                    <Text style={styles.landlordInitials}>
-                      {listing.landlord.full_name
-                        ?.split(' ')
-                        .map(n => n[0])
-                        .join('')
-                        .toUpperCase() || 'L'}
-                    </Text>
-                  )}
-                </View>
-                <View style={styles.landlordInfo}>
-                  <Text style={styles.landlordName}>{listing.landlord.full_name}</Text>
-                  <Text style={styles.landlordResponse}>{t('listing.responds_within')}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-
-          {/* Reviews */}
-          <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Ionicons name="star-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.sectionTitle}>{t('listing.reviews')}</Text>
-            </View>
-            <RatingsList ratings={listing.ratings} />
-            <ListingReviews listingId={listing.id} />
-          </View>
-
-          <View style={styles.bottomPadding} />
-        </View>
-      </ScrollView>
-
-      {/* Book Button */}
-      <View style={styles.bookContainer}>
-        {existingBookingId ? (
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <TouchableOpacity 
-              style={[styles.bookButton, { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border }]} 
-              onPress={() => navigation.navigate('BookingDetails', { bookingId: existingBookingId })}
-            >
-              <Ionicons name="eye-outline" size={20} color={COLORS.greyDark} />
-              <Text style={[styles.bookButtonText, { color: COLORS.greyDark, fontSize: 15 }]}>View Booking</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <TouchableOpacity style={styles.bookButton} onPress={handleBooking}>
-            <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
-            <Text style={styles.bookButtonText}>{t('listing.book_now')}</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Map Modal */}
-      {canViewFullMap && (
-        <MapPickerModal
-          visible={mapVisible}
-          readOnly
-          disableInteraction
-          initialLocation={coords || undefined}
-          onClose={() => setMapVisible(false)}
-          onLocationSelected={() => { }}
-        />
-      )}
-
-      {/* Fullscreen Media Modal */}
-      <Modal visible={!!fullscreenMedia} transparent animationType="fade">
-        {fullscreenMedia?.type === 'video' ? (
-          <FullVideoPlayer
-            url={fullscreenMedia.url}
-            processingStatus={fullscreenMedia.processing_status}
-            onClose={() => setFullscreenMedia(null)}
-          />
-        ) : fullscreenMedia?.type === 'image' ? (
-          <View style={styles.fullscreenContainer}>
-            <TouchableOpacity
-              style={styles.fullscreenClose}
-              onPress={() => setFullscreenMedia(null)}
-            >
-              <Ionicons name="close" size={32} color={COLORS.white} />
-            </TouchableOpacity>
-            <Image
-              source={{ uri: fullscreenMedia.url }}
-              style={styles.fullscreenMedia}
-              resizeMode="contain"
-            />
-          </View>
-        ) : (
-          <View />
-        )}
-      </Modal>
-    </SafeAreaView>
-  );
-};
-
-const getStyles = (COLORS: any) => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.white },
-  centered: {
-    flex: 1, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: COLORS.white, padding: 20,
-  },
-  loadingText: { marginTop: 12, fontSize: 16, color: COLORS.greyMedium },
-  errorText: {
-    fontSize: 18, fontWeight: '600', color: COLORS.greyDark,
-    marginTop: 16, marginBottom: 24,
-  },
-  errorButton: {
-    paddingHorizontal: 24, paddingVertical: 12,
-    backgroundColor: COLORS.gold, borderRadius: 12,
-  },
-  errorButtonText: { color: COLORS.white, fontSize: 16, fontWeight: '600' },
-  scrollContent: { paddingBottom: 100 },
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  headerTitleContainer: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 12, gap: 4
-  },
-  headerTitle: {
-    fontSize: 18, fontWeight: '600', color: COLORS.greyDark, textAlign: 'center', flexShrink: 1
-  },
-  verifiedBadge: {
-    backgroundColor: COLORS.gold,
-    borderRadius: 12,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: COLORS.white,
-  },
-  headerBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.offWhite, justifyContent: 'center', alignItems: 'center',
-  },
-  gallerySection: { position: 'relative' },
-  mediaItemContainer: { position: 'relative', width: screenWidth, height: 300 },
-  mediaItem: { width: screenWidth, height: 300, resizeMode: 'cover' },
-  videoContainer: { position: 'relative' },
-  videoFallback: { backgroundColor: COLORS.greyLight, justifyContent: 'center', alignItems: 'center', gap: 6 },
-  videoFallbackText: { fontSize: 13, color: COLORS.greyMedium, fontWeight: '500' },
-  playButton: {
-    position: 'absolute', top: '50%', left: '50%',
-    transform: [{ translateX: -24 }, { translateY: -24 }],
-    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 40,
-  },
-  mediaCounter: {
-    position: 'absolute', bottom: 16, right: 16,
-    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6,
-    borderRadius: 20, borderWidth: 1, borderColor: COLORS.gold,
-  },
-  mediaCounterText: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
-  paginationDots: {
-    flexDirection: 'row', position: 'absolute', bottom: 16,
-    left: 0, right: 0, justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  paginationDot: {
-    width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.white, opacity: 0.5,
-  },
-  paginationDotActive: { width: 20, backgroundColor: COLORS.gold, opacity: 1 },
-  noMediaContainer: {
-    height: 200, justifyContent: 'center', alignItems: 'center',
-    backgroundColor: COLORS.greyLight,
-  },
-  noMediaText: { marginTop: 12, color: COLORS.greyMedium, fontSize: 16 },
-  content: { padding: 20 },
-  titleSection: { marginBottom: 16 },
-  titleRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 8,
-  },
-  title: {
-    fontSize: 26, fontWeight: '700', color: COLORS.greyDark,
-    letterSpacing: 0.5, flex: 1, marginRight: 12,
-  },
-  availabilityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
-  availableBadge: {
-    backgroundColor: COLORS.goldLight, borderWidth: 1, borderColor: COLORS.gold,
-  },
-  unavailableBadge: {
-    backgroundColor: COLORS.greyLight, borderWidth: 1, borderColor: COLORS.greyMedium,
-  },
-  availabilityText: { fontSize: 12, fontWeight: '600', color: COLORS.greyDark },
-  price: { fontSize: 28, fontWeight: '700', color: COLORS.gold },
-  perMonth: { fontSize: 16, fontWeight: '400', color: COLORS.greyMedium },
-  quickActions: {
-    flexDirection: 'row', gap: 12, marginBottom: 24,
-    paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border,
-  },
-  quickActionBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.offWhite,
-  },
-  quickActionText: { fontSize: 13, fontWeight: '500', color: COLORS.greyDark },
-  section: { marginBottom: 24 },
-  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
-  sectionTitle: {
-    fontSize: 18, fontWeight: '600', color: COLORS.greyDark, letterSpacing: 0.3,
-  },
-  description: {
-    fontSize: 15, lineHeight: 22, color: COLORS.greyMedium,
-    backgroundColor: COLORS.offWhite, padding: 16, borderRadius: 16,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  detailsGrid: { flexDirection: 'row', gap: 12 },
-  detailCard: {
-    flex: 1, backgroundColor: COLORS.offWhite, borderRadius: 16, padding: 16,
-    alignItems: 'center', borderWidth: 1, borderColor: COLORS.border,
-  },
-  detailCardLabel: { fontSize: 13, color: COLORS.greyMedium, marginTop: 8, marginBottom: 4 },
-  detailCardValue: { fontSize: 15, fontWeight: '600', color: COLORS.greyDark },
-  mapContainer: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
-  mapPlaceholder: {
-    height: 160, backgroundColor: COLORS.offWhite,
-    justifyContent: 'center', alignItems: 'center', gap: 8,
-  },
-  mapPlaceholderText: { fontSize: 14, color: COLORS.greyMedium, fontWeight: '500' },
-  lockedMap: { backgroundColor: COLORS.greyLight },
-  lockedMapText: { fontSize: 16, fontWeight: '600', color: COLORS.greyMedium, marginTop: 8 },
-  lockedMapSubtext: { fontSize: 13, color: COLORS.greyMedium },
-  mapOverlay: {
-    position: 'absolute', top: 12, right: 12,
-    backgroundColor: 'rgba(212, 175, 55, 0.9)',
-    flexDirection: 'row', alignItems: 'center', gap: 4,
-    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
-  },
-  mapOverlayText: { fontSize: 12, fontWeight: '600', color: COLORS.white },
-  landlordCard: {
-    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.offWhite,
-    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border,
-  },
-  landlordAvatar: {
-    width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.goldLight,
-    justifyContent: 'center', alignItems: 'center', marginRight: 16,
-  },
-  landlordAvatarImage: { width: 56, height: 56, borderRadius: 28 },
-  landlordInitials: { fontSize: 20, fontWeight: '700', color: COLORS.gold },
-  landlordInfo: { flex: 1 },
-  landlordName: { fontSize: 16, fontWeight: '600', color: COLORS.greyDark, marginBottom: 4 },
-  landlordResponse: { fontSize: 13, color: COLORS.greyMedium },
-  bookContainer: {
-    backgroundColor: COLORS.white, paddingHorizontal: 20, paddingVertical: 16,
-    borderTopWidth: 1, borderTopColor: COLORS.border,
-    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05, shadowRadius: 8, elevation: 10,
-  },
-  bookButton: {
-    backgroundColor: COLORS.gold, borderRadius: 16, paddingVertical: 18,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
-    shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
-  },
-  bookButtonText: { color: COLORS.white, fontSize: 18, fontWeight: '700', letterSpacing: 0.5 },
-  fullscreenContainer: {
-    flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center',
-  },
-  fullscreenClose: {
-    position: 'absolute', top: 50, right: 20, zIndex: 10,
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
-  },
-  fullscreenMedia: { width: screenWidth, height: '100%' },
-  processingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 4,
-  },
-  processingText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  navArrowLeft: {
-    position: 'absolute',
-    left: 10,
-    top: '45%',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 20,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  navArrowRight: {
-    position: 'absolute',
-    right: 10,
-    top: '45%',
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    borderRadius: 20,
-    padding: 2,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bottomPadding: { height: 20 },
-  shareCtaCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.goldLight,
-    padding: 16,
-    borderRadius: 12,
-    marginHorizontal: 16,
-    marginVertical: 12,
-    borderWidth: 1,
-    borderColor: COLORS.gold,
-  },
-  shareCtaLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  shareCtaTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.greyDark,
-  },
-  shareCtaSubtitle: {
-    fontSize: 12,
-    color: COLORS.greyMedium,
-    marginTop: 2,
-  },
-});
-
-export default ListingDetailsScreen;
 </file>
 
 <file path="src/screens/student/ListingReviewScreen.tsx">
@@ -15722,439 +11954,6 @@ export const LocationService = {
 };
 </file>
 
-<file path="src/services/paymentService.ts">
-// src/services/paymentService.ts
-
-import { supabase } from "../utils/supabaseClient";
-
-const API_BASE_URL =
-  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL || "https://dhub.diracmr.com";
-
-export interface Payment {
-  id: string;
-
-  transactionId: string;
-
-  amount: number;
-
-  sender: string;
-
-  receiver: string;
-
-  status: "pending" | "completed" | "failed";
-
-  date: string;
-
-  description: string;
-
-  fee?: number;
-
-  netAmount?: number;
-}
-
-export interface InitiateTransferArgs {
-  payerPhone: string;
-
-  receiverPhone: string;
-
-  amount?: string;
-
-  reason: string;
-
-  transferType: string;
-
-  planId?: string;
-
-  tierId?: string;
-
-  client: {
-    name: string;
-
-    description: string;
-
-    payer_id: string;
-
-    payee_id: string;
-
-    listing_id: string;
-
-    booking_id: string;
-
-    idempotency_key: string;
-  };
-}
-
-export interface InitiateCollectionArgs {
-  payerPhone: string;
-
-  amount?: string;
-
-  reason: string;
-
-  planId?: string;
-
-  tierId?: string;
-
-  client: {
-    name: string;
-
-    id: string;
-
-    payer_id: string;
-
-    listing_id: string;
-
-    idempotency_key: string;
-  };
-}
-
-export interface InitiateBookingPaymentArgs {
-  bookingId: string;
-
-  payerPhone: string;
-
-  paymentKind: "initial" | "rent_completion" | "renewal";
-
-  idempotencyKey: string;
-}
-
-export interface InitiateVerificationPaymentArgs {
-  payerPhone: string;
-
-  listingId: string;
-
-  payerId: string;
-}
-
-/**
-
- * Retrieves the active Supabase session and constructs standard Auth headers.
-
- */
-
-const getAuthHeaders = async () => {
-  const {
-    data: { session },
-    error,
-  } = await supabase.auth.getSession();
-
-  if (error || !session?.access_token) {
-    console.error("🔒 [PaymentService] Auth Error: No active session found.");
-
-    throw new Error("Your session has expired. Please sign in again.");
-  }
-
-  return {
-    "Content-Type": "application/json",
-
-    Authorization: `Bearer ${session.access_token}`,
-  };
-};
-
-export const paymentService = {
-  async initiateCollection(args: InitiateCollectionArgs) {
-    console.info(
-      "💸 [PaymentService] Initiating Collection:",
-      args.client.idempotency_key,
-    );
-
-    const headers = await getAuthHeaders();
-
-    const response = await fetch(`${API_BASE_URL}/api/payments/collection`, {
-      method: "POST",
-
-      headers,
-
-      body: JSON.stringify(args),
-    });
-
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      console.error("❌ [PaymentService] Collection Failed:", body);
-
-      throw new Error(
-        body?.message ||
-          body?.error ||
-          `Request failed with status ${response.status}`,
-      );
-    }
-
-    console.info("✅ [PaymentService] Collection Success:", body);
-
-    return body;
-  },
-
-  async initiateTransfer(args: InitiateTransferArgs) {
-    console.info(
-      "💸 [PaymentService] Initiating Transfer:",
-      args.client.idempotency_key,
-    );
-
-    const headers = await getAuthHeaders();
-
-    const response = await fetch(`${API_BASE_URL}/api/payments/transfer`, {
-      method: "POST",
-
-      headers,
-
-      body: JSON.stringify(args),
-    });
-
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      console.error("❌ [PaymentService] Transfer Failed:", body);
-
-      throw new Error(
-        body?.message ||
-          body?.error ||
-          `Request failed with status ${response.status}`,
-      );
-    }
-
-    console.info("✅ [PaymentService] Transfer Success:", body);
-
-    return body;
-  },
-
-  async initiateBookingPayment(args: InitiateBookingPaymentArgs) {
-    console.info(
-      "💸 [PaymentService] Initiating Booking Payment for:",
-      args.bookingId,
-    );
-
-    const headers = await getAuthHeaders();
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/payments/booking-intents`,
-      {
-        method: "POST",
-
-        headers,
-
-        body: JSON.stringify(args),
-      },
-    );
-
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      console.error("❌ [PaymentService] Booking Payment Failed:", body);
-
-      throw new Error(body?.error || "Unable to start payment.");
-    }
-
-    console.info("✅ [PaymentService] Booking Payment Success:", body.data);
-
-    return body.data;
-  },
-
-  async initiateVerificationPayment(args: InitiateVerificationPaymentArgs) {
-    console.info(
-      "💸 [PaymentService] Initiating Verification Payment for listing:",
-      args.listingId,
-    );
-
-    const headers = await getAuthHeaders();
-
-    const response = await fetch(
-      `${API_BASE_URL}/api/payments/verification-intent`,
-      {
-        method: "POST",
-
-        headers,
-
-        body: JSON.stringify(args),
-      },
-    );
-
-    const body = await response.json().catch(() => ({}));
-
-    if (!response.ok) {
-      console.error("❌ [PaymentService] Verification Payment Failed:", body);
-
-      throw new Error(body?.error || "Unable to start verification payment.");
-    }
-
-    console.info(
-      "✅ [PaymentService] Verification Payment Success:",
-      body.data,
-    );
-
-    return body.data;
-  },
-
-  async fetchPayments(userId: string): Promise<Payment[]> {
-    console.info(`🔄 [PaymentService] Fetching history for user: ${userId}`);
-
-    const { data, error } = await supabase
-
-      .from("payments")
-
-      .select("*")
-
-      .eq("payer_id", userId)
-
-      .order("created_at", { ascending: false });
-
-    if (error) {
-      console.error("❌ [PaymentService] Supabase Fetch Error:", error);
-
-      throw new Error(error.message || "Failed to fetch payment history");
-    }
-
-    console.info(
-      `✅ [PaymentService] Fetched ${data?.length || 0} payment records.`,
-    );
-
-    return (data || []).map((row: any) => ({
-      id: row.id,
-
-      transactionId: row.transaction_ref || row.id,
-
-      amount: parseFloat(row.amount),
-
-      sender: row.payer_id,
-
-      receiver: row.payee_id,
-
-      status: row.status as any,
-
-      date: row.created_at,
-
-      description: row.currency ? `${row.currency} Payment` : "Payment",
-
-      fee: row.fee ? parseFloat(row.fee) : 0,
-
-      netAmount: row.net_amount
-        ? parseFloat(row.net_amount)
-        : parseFloat(row.amount),
-    }));
-  },
-};
-</file>
-
-<file path="src/services/supportService.ts">
-// src/services/supportService.ts
-import { supabase } from '../utils/supabaseClient';
-import { Ticket, Chat, FAQ } from '../types';
-
-const EDGE_FUNCTION_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/support-bot';
-
-// =========================
-// TICKETS
-// =========================
-export async function fetchLatestTicket(userId: string): Promise<Ticket | null> {
-  const { data, error } = await supabase
-    .from('tickets')
-    .select('*')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .limit(1);
-
-  if (error) throw error;
-  return data?.[0] ?? null;
-}
-
-export async function createTicket(userId: string): Promise<Ticket> {
-  const { data, error } = await supabase
-    .from('tickets')
-    .insert([{ user_id: userId, status: 'open', priority: 'normal' }])
-    .select()
-    .single();
-
-  if (error) throw error;
-  return data as Ticket;
-}
-
-// =========================
-// CHATS
-// =========================
-export async function fetchChats(ticketId: string): Promise<Chat[]> {
-  const { data, error } = await supabase
-    .from('chats')
-    .select('*')
-    .eq('ticket_id', ticketId)
-    .order('created_at', { ascending: true });
-
-  if (error) throw error;
-  return (data || []) as Chat[];
-}
-
-/**
- * Sends a chat message AND calls Edge Function to get bot reply/options.
- * Returns both the user message and optional bot reply.
- */
-export async function sendChatMessageWithBot(payload: {
-  ticket_id: string;
-  sender_id: string;
-  message: string;
-}): Promise<{ userMessage: Chat; botReply?: Chat; options?: string[] }> {
-  // 1️⃣ Persist user message
-  const { data: userMessage, error: userError } = await supabase
-    .from('chats')
-    .insert([
-      {
-        ticket_id: payload.ticket_id,
-        sender_id: payload.sender_id,
-        receiver_id: null,
-        message: payload.message,
-        read: false,
-        sender_type: 'user',
-        chat_type: 'support',
-        is_complaint: false,
-        is_faq_candidate: false,
-      },
-    ])
-    .select()
-    .single();
-
-  if (userError || !userMessage) throw userError ?? new Error('Failed to insert user message');
-
-  let botReply: Chat | undefined;
-  let options: string[] | undefined;
-
-  try {
-    // 2️⃣ Call Edge Function for instant bot response
-    const res = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticket_id: payload.ticket_id,
-        user_id: payload.sender_id,
-        message: payload.message,
-      }),
-    });
-
-    const data = await res.json();
-    if (data?.botData) {
-      botReply = data.botData as Chat;
-    }
-    if (data?.options) {
-      options = data.options as string[];
-    }
-  } catch (err) {
-    console.error('Edge function error:', err);
-  }
-
-  return { userMessage: userMessage as Chat, botReply, options };
-}
-
-// =========================
-// FAQ CACHE
-// =========================
-export async function fetchFaqs(limit = 10): Promise<FAQ[]> {
-  const { data, error } = await supabase
-    .from('faq_cache')
-    .select('*')
-    .limit(limit);
-
-  if (error) throw error;
-  return (data || []) as FAQ[];
-}
-</file>
-
 <file path="src/services/userCache.ts">
 // src/services/userCache.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -17338,416 +13137,6 @@ export async function uploadKycDocument(
     return publicUrl;
   } catch (err) {
     console.error(`Error uploading ${type}:`, err);
-    return null;
-  }
-}
-</file>
-
-<file path="src/utils/listings.ts">
-// src/utils/listings.ts
-import * as Location from 'expo-location';
-import { Linking, Platform } from 'react-native';
-import { supabase } from '../utils/supabaseClient';
-
-import {
-  Landlord,
-  ListingDetails,
-  ListingFilters,
-  ListingSummary,
-  MediaItem,
-  Review
-} from '../types';
-
-/* ======================================================
-   USER LOCATION HELPER
-   ====================================================== */
-
-export type UserLocation = {
-  lat: number;
-  lng: number;
-};
-
-// other helper types, exported so they do not conflict in HomeScreen
-export type { ListingFilters, ListingSummary };
-
-/**
- * getUserLocation
- * - Requests foreground permission
- * - Redirects to settings if denied
- * - Returns null safely
- */
-export async function getUserLocation(): Promise<UserLocation | null> {
-  try {
-    const { status } = await Location.getForegroundPermissionsAsync();
-    let finalStatus = status;
-
-    if (status !== 'granted') {
-      const req = await Location.requestForegroundPermissionsAsync();
-      finalStatus = req.status;
-    }
-
-    if (finalStatus !== 'granted') {
-      if (Platform.OS === 'ios') {
-        Linking.openURL('app-settings:');
-      } else {
-        Linking.openSettings();
-      }
-      return null;
-    }
-
-    const position = await Location.getCurrentPositionAsync({
-      accuracy: Location.Accuracy.Balanced,
-    });
-
-    return {
-      lat: position.coords.latitude,
-      lng: position.coords.longitude,
-    };
-  } catch (err) {
-    console.warn('getUserLocation failed:', err);
-    return null;
-  }
-}
-
-/* ======================================================
-   FETCH LISTINGS (SERVER-SIDE FILTERING)
-   ====================================================== */
-
-export async function fetchListings(
-  filters: ListingFilters
-): Promise<ListingSummary[]> {
-  try {
-    const {
-      search,
-      city,
-      rooms,
-      minPrice,
-      maxPrice,
-      availableOnly = true,
-      boostedFirst = true,
-      limit = 20,
-      offset = 0,
-      listing_type,
-      stay_type,
-      lat,
-      lng,
-      radius_m,
-    } = filters;
-
-    const isGeoSearch =
-      lat != null && lng != null && radius_m != null;
-
-    let query;
-
-    if (isGeoSearch) {
-      // ===== REAL GEO SEARCH (RPC) =====
-      query = supabase
-        .rpc('listings_within_radius', {
-          lat,
-          lng,
-          radius_m,
-        })
-        .select(`
-          id,
-          title,
-          price,
-          city,
-          rooms,
-          media,
-          avg_rating,
-          rating_count,
-          landlord_id,
-          available,
-          boost_until,
-          created_at,
-          listing_type,
-          stay_type,
-          price_unit,
-          processing_status,
-          description,
-          is_verified
-        `);
-    } else {
-      // ===== MASKED VIEW QUERY =====
-      query = supabase
-        .rpc('get_masked_listings')
-        .select(`
-          id,
-          title,
-          price,
-          city,
-          rooms,
-          media,
-          avg_rating,
-          rating_count,
-          landlord_id,
-          available,
-          boost_until,
-          created_at,
-          listing_type,
-          stay_type,
-          price_unit,
-          processing_status,
-          description,
-          is_verified
-        `);
-    }
-
-    // --------------------------------------------------
-    // COMMON FILTERS (APPLY TO BOTH PATHS)
-    // --------------------------------------------------
-
-    if (search) {
-      const ilike = `%${search.trim()}%`;
-      query = query.or(`title.ilike.${ilike},city.ilike.${ilike}`);
-    }
-
-    if (city) query = query.eq('city', city);
-    if (availableOnly) query = query.eq('available', true);
-
-    if (typeof rooms === 'number') query = query.eq('rooms', rooms);
-    if (rooms === '5+') query = query.gte('rooms', 5);
-
-    if (minPrice != null) query = query.gte('price', minPrice);
-    if (maxPrice != null) query = query.lte('price', maxPrice);
-
-    if (listing_type) query = query.eq('listing_type', listing_type);
-    if (stay_type) query = query.eq('stay_type', stay_type);
-
-    if (boostedFirst) {
-      query = query.order('boost_until', { ascending: false });
-    }
-
-    query = query
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    const { data, error } = await query;
-    if (error) {
-      console.error('[fetchListings] RPC error:', JSON.stringify(error));
-      return [];
-    }
-    if (!Array.isArray(data)) {
-      console.warn('[fetchListings] Unexpected data shape:', typeof data, data);
-      return [];
-    }
-
-    return data.map(row => {
-      const imagesArray = Array.isArray(row.media)
-        ? row.media
-            .filter((m: any) => m.type === 'image') // only images
-            .map((m: any) => {
-              const base = m.thumbUrl || m.url;
-              if (base && base.startsWith('/media/')) {
-                const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
-                return `${MEDIA_BASE_URL}${base}`;
-              }
-              return base;
-            })
-        : [];
-
-      return {
-        id: String(row.id),
-        title: row.title ?? '',
-        price: Number(row.price ?? 0),
-        city: row.city ?? '',
-        rooms: row.rooms ?? null,
-        landlord_id: row.landlord_id ?? '',
-        image_url: imagesArray[0] || 'https://via.placeholder.com/400x250?text=No+Image',
-        images: imagesArray.length ? imagesArray : ['https://via.placeholder.com/400x250?text=No+Image'],
-        avg_rating: row.avg_rating ?? null,
-        rating_count: row.rating_count ?? null,
-        available: row.available ?? null,
-        boosted: Boolean(row.boost_until),
-        created_at: row.created_at,
-        listing_type: row.listing_type,
-        stay_type: row.stay_type,
-        price_unit: row.price_unit,
-        processing_status: (row as any).processing_status ?? 'ready',
-        description: row.description ?? null,
-        is_verified: row.is_verified ?? null,
-      };
-    });
-  } catch (err) {
-    console.error('fetchListings error:', err);
-    return [];
-  }
-}
-
-/* ======================================================
-   FETCH LISTING DETAILS
-   ====================================================== */
-
-export async function fetchListingDetails(
-  id: string
-): Promise<ListingDetails | null> {
-  try {
-    const select = `
-      id,
-      title,
-      description,
-      price,
-      city,
-      latitude,
-      longitude,
-      media,
-      rooms,
-      available,
-      boost_until,
-      avg_rating,
-      rating_count,
-      created_at,
-      updated_at,
-      landlord_id,
-      processing_status,
-      landlord:users!listings_landlord_id_fkey(
-        id,
-        full_name,
-        email,
-        phone,
-        profile_pic,
-        created_at
-      )
-    `;
-
-    const { data: row, error } = await supabase
-      .from('listings')
-      .select(select)
-      .eq('id', id)
-      .single();
-
-    if (error || !row) return null;
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // LANDLORD PARSING — CRITICAL FIX
-    //
-    // Supabase PostgREST returns a *to-one* foreign key join as a plain
-    // object, NOT an array:
-    //
-    //   row.landlord = { id: '...', full_name: '...', phone: '...', ... }
-    //
-    // The previous code did:
-    //   const landlordArray = (row.landlord ?? []) as any[];
-    //   if (landlordArray.length > 0)  ← length of an object is undefined → falsy
-    //
-    // So landlord was ALWAYS set to `undefined`, which made listing.landlord
-    // null in the UI, hiding the Call button (no phone) and breaking handleChat.
-    //
-    // Fix: normalise both shapes (object OR array) into a single object.
-    // ─────────────────────────────────────────────────────────────────────────
-    const landlordRaw = row.landlord as any;
-    let landlord: Landlord | undefined;
-
-    if (landlordRaw) {
-      // to-one join → plain object; to-many (edge case) → array
-      const obj: any = Array.isArray(landlordRaw) ? landlordRaw[0] : landlordRaw;
-
-      if (obj?.id) {
-        landlord = {
-          id: obj.id,
-          full_name: obj.full_name ?? '',
-          email: obj.email ?? null,
-          phone: obj.phone ?? null,
-          profile_pic: obj.profile_pic ?? null,
-          created_at: obj.created_at,
-        };
-      }
-    }
-
-    // If the join silently failed (RLS, missing select, etc.) fall back to a
-    // separate direct query so the screen always has at minimum the landlord id.
-    if (!landlord && row.landlord_id) {
-      const { data: fallbackUser } = await supabase
-        .from('users')
-        .select('id, full_name, email, phone, profile_pic, created_at')
-        .eq('id', row.landlord_id)
-        .single();
-
-      if (fallbackUser) {
-        landlord = {
-          id: fallbackUser.id,
-          full_name: fallbackUser.full_name ?? '',
-          email: fallbackUser.email ?? null,
-          phone: fallbackUser.phone ?? null,
-          profile_pic: fallbackUser.profile_pic ?? null,
-          created_at: fallbackUser.created_at,
-        };
-      }
-    }
-
-    // Convert media — filter items that have both url and type
-    const media: MediaItem[] = Array.isArray(row.media)
-      ? row.media
-          .filter((m: any) => m?.url && m?.type)
-          .map((m: any) => {
-            const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
-            return {
-              ...m,
-              url: m.url.startsWith('/media/') ? `${MEDIA_BASE_URL}${m.url}` : m.url,
-              thumbUrl: m.thumbUrl && m.thumbUrl.startsWith('/media/') 
-                ? `${MEDIA_BASE_URL}${m.thumbUrl}` 
-                : m.thumbUrl,
-            };
-          })
-      : [];
-    // console.log('[fetchListingDetails] media data loaded');
-    // Fetch ratings
-    const { data: ratingsData } = await supabase
-      .from('ratings')
-      .select(`
-        id,
-        score,
-        comment,
-        created_at,
-        reviewer:users(id, full_name, profile_pic)
-      `)
-      .eq('listing_id', id)
-      .order('created_at', { ascending: false });
-
-    const ratings: Review[] = Array.isArray(ratingsData)
-      ? ratingsData.map((r: any) => {
-          // reviewer join is also a to-one → object, not array
-          const reviewerRaw = r.reviewer;
-          const reviewer = Array.isArray(reviewerRaw) ? reviewerRaw[0] : reviewerRaw;
-          return {
-            id: r.id,
-            score: r.score,
-            comment: r.comment ?? null,
-            created_at: r.created_at,
-            reviewer: {
-              id: reviewer?.id ?? '',
-              full_name: reviewer?.full_name ?? 'Unknown',
-              profile_pic: reviewer?.profile_pic ?? null,
-            },
-          };
-        })
-      : [];
-
-    // Return TS-safe ListingDetails
-    return {
-      id: row.id,
-      title: row.title,
-      description: row.description ?? null,
-      price: Number(row.price ?? 0),
-      city: row.city,
-      latitude: row.latitude ?? null,
-      longitude: row.longitude ?? null,
-      media,
-      rooms: row.rooms ?? null,
-      avg_rating: row.avg_rating ?? null,
-      rating_count: row.rating_count ?? null,
-      available: row.available ?? null,
-      boost_until: row.boost_until ?? null,
-      created_at: row.created_at,
-      updated_at: row.updated_at ?? undefined,
-      landlord_id: row.landlord_id,
-      landlord,       // ✅ now correctly populated
-      ratings,
-      processing_status: (row as any).processing_status ?? 'ready',
-    };
-
-  } catch (err) {
-    console.error('fetchListingDetails error:', err);
     return null;
   }
 }
@@ -20136,60 +15525,6 @@ android/
 ios/
 </file>
 
-<file path=".gitignore">
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
-node_modules/
-
-# Expo
-.expo/
-dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-
-# Metro
-.metro-health-check*
-
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
-
-# macOS
-.DS_Store
-*.pem
-
-# local env files
-.env
-.env*.local
-src/lib/.env
-
-# typescript
-*.tsbuildinfo
-
-app-example
-*.sql
-
-# generated native folders
-/ios
-/android
-client_secret_450420597510-6h67rqutdshr7dm96v0pqr0ga2busmur.apps.googleusercontent.com.json
-
-# Firebase / Push Notification Credentials
-google-services.json
-GoogleService-Info.plist
-</file>
-
 <file path="app.config.js">
 import 'dotenv/config';
 
@@ -20308,225 +15643,124 @@ module.exports = function (api) {
 };
 </file>
 
-<file path="context_output.txt">
-====================
---- context\DHUB Pricing Strategy Analysis (Bamenda, Cameroon).docx ---
-====================
-DHUB Pricing Strategy Analysis (Bamenda, Cameroon)
-Executive Summary
-We evaluate whether DHUB should charge tenants a fixed booking fee, a percentage commission on rent, or a hybrid. Both models can work, but each has trade-offs. A flat booking fee offers predictable revenue and avoids inflating rents, while a commission scales with rent but can deter price-sensitive renters[1][2]. In Cameroon’s student housing market (modest rents, price-sensitive users), a low flat fee may improve adoption, but it risks tenants bypassing full payment to landlords off-platform. A commission (e.g. 5–10% of rent) ties fees to transaction size but can reduce landlord/tenant willingness if too high[2]. We recommend a hybrid approach: a small flat booking fee (e.g. XAF 1,000) plus a modest commission (e.g. 5%) on the rent. This balances revenue and trust. Crucially, DHUB must collect rent via the platform (holding funds in escrow) to enforce fees and prevent bypass.
-Below we detail pros/cons, unit economics, operational needs, go-to-market tactics, implementation plan (12 mo Gantt), KPIs, and break-even analysis. We include tables for example economics and a competitor fee comparison, plus a Mermaid flowchart of the payment flow and a Gantt timeline. All assumptions (e.g. typical rent, fee levels) are stated; unverified items are noted as such.
-1. Booking Fee vs Commission: Pros & Cons
-Booking (Flat) Fee: A fixed per-booking charge (e.g. XAF 1,000) is simple and predictable revenue[1]. It does not scale with rent, so it is fairer for low-income students. Service fees tend to boost retention and conversion because sellers (landlords) aren’t burdened by a high percentage[1][2]. However, a downside is bypass risk: a renter may pay the booking fee, then deal directly with the landlord (off-app) to avoid paying the full rent via DHUB. If the flat fee is charged before unlocking the unit details, savvy users might simply obtain the address and negotiate in cash. A flat fee also caps revenue per transaction, so DHUB misses out when rents are higher.
-Commission (Percentage) Fee: Charging a percentage of rent (e.g. 5–10%) aligns fee with value[2]: higher rents yield more revenue. This can be less noticeable to tenants if embedded in the transaction, and it automatically scales with any rent increase. However, high commissions can be pricey for tenants and landlords. In gig economy examples, steep commissions (e.g. 30%) have provoked backlash[2]. For DHUB’s market, even a 5% fee on a XAF 30,000 rent is XAF 1,500 – modest, but multiples of that reduce affordability. Commission models can also discourage landlords if they see reduced net rent. Moreover, without additional control, tenants might pay the fee then pay rent partially off-platform (though if DHUB holds the contract, this is mitigated). Commissions create revenue volatility – if bookings drop, revenue plummets[2] – unlike a steady flat fee.
-Hybrid Approach: Combining both (a small fee + a small commission) is common[3][2]. It retains predictability and captures value on higher rents. For example, Etsy uses $0.20 plus 6.5% of sale (effectively hybrid). In DHUB’s case, we could charge a flat “service fee” (e.g. XAF 1,000) plus ~5% commission on the rent. This yields revenue from every booking while keeping the take-rate moderate. The downside is complexity: users pay two fees. But if presented clearly (e.g. “XAF 1k booking fee + 5% platform fee”), it can be accepted. Airbnb’s model is a split hybrid (3% + guest fee)[4]. A cautious approach is to test elasticity (as recommended by marketplace analysts[5]) and start low.
-Conclusion (Booking vs Commission): Because DHUB’s users are mostly students with low budgets and trust is paramount, a hybrid leaning toward a fixed fee is advisable. This yields stable revenue and fewer objections. The fixed fee should be nominal so as not to deter adoption, and the commission kept low. However, ensuring the rent is paid through the platform is critical: we must prevent off-platform payments. Thus, DHUB must implement an escrow/payment flow where tenants pay at least part of the rent (e.g. a deposit or first month) via DHUB to enforce the fee. (See Section 3 & Flowchart.)
-2. Recommended Tenant Pricing Model
-We recommend a flat booking fee + small commission hybrid. For example: XAF 1,000 booking fee per reservation (charged to tenant at booking) + 5% of the monthly rent (deducted on payout to landlord). This yields ~XAF 2,500 on a XAF 30k rent. This take-rate (≈8%) is competitive yet sustainable[1][6]. Key points to avoid bypass:
-Escrow Deposit: Require tenants to pay either a security deposit or first month’s rent via DHUB upon booking. Hold funds in escrow until move-in. Only when lease conditions met is the landlord paid. This ensures DHUB collects its fee (like the YoRent model[7][8]).
-Refundable Guarantee: Retain a small refundable deposit (1–2 months’ rent) to discourage no-shows, but separate from DHUB’s service fee (which is non-refundable).
-Payout Schedule: Pay landlords only after tenant moves in and verifies the listing. This gives DHUB control and reduces fraud. If tenant abandons, DHUB can refund or keep fee per policy.
-Transparent Fees: Show tenants exactly the total due: rent + DHUB fees. Framing the service fee as covering verification and support may justify it. Optionally, highlight that a portion goes to platform costs (as with Airbnb’s guest fee)[9].
-No Double Payment: The commission is simply deducted from the rent DHUB remits. Tenants still pay full rent amount, but DHUB deducts 5% before forwarding. Alternatively, require landlords to “top up” the remitted amount to ensure tenant pays listed price. This avoids doubling.
-Flowchart of the payment flow is shown below. It illustrates that the tenant pays via DHUB and DHUB retains the fee while forwarding rent to the landlord.
-flowchart LR    Tenant[Tenant] -->|Pays rent + fees via DHUB| Platform[DHUB Platform]    Platform -->|Retains booking fee (e.g. XAF 1,000)| DHUBRev[DHUB Revenue]    Platform -->|Forwards rent − commission (e.g. 5%)| Landlord[Landlord]    Tenant -->|Pays cash off-platform (bypass)| Landlord
-Landlord Fees: As instructed, landlords list for free initially. In future, a “featured listing” fee (e.g. XAF 5,000/month) can be introduced as a flag, but tenant fees are now primary.
-3. Unit Economics and Sensitivity
-Assume a typical student room rent of XAF 30,000/month. With a XAF 1,000 booking fee and 5% commission (XAF 1,500), DHUB earns XAF 2,500 per booking. If we assume DHUB’s direct cost (payment processing, support) is ≈10% of revenue, gross margin ≈90%. Table 1 illustrates revenue per booking and take-rate under different bypass rates:
-Bypass
-Bookings on DHUB (of 100)
-Gross GMV (XAF)
-Booking Fees Collected (XAF)
-Commission Collected (XAF)
-Total Rev. (XAF)
-Take-Rate
-0% (all on)
-100
-3,000,000
-100,000 (1k×100)
-150,000 (5% of 3,000k)
-250,000
-8.3%
-25% bypass
-75
-2,250,000
-75,000
-112,500
-187,500
-8.3%
-50% bypass
-50
-1,500,000
-50,000
-75,000
-125,000
-8.3%
-75% bypass
-25
-750,000
-25,000
-37,500
-62,500
-8.3%
-GMV = total rent value of bookings (bookings×XAF 30k). Take-Rate = DHUB revenue / GMV.
-Even as bypass grows, per-booking revenue stays at XAF 2,500, but total revenue drops linearly.
-At 50% bypass, DHUB earns only half the potential revenue, delaying break-even correspondingly.
-If we compared a flat-fee only model (XAF 2,500 booking fee, 0% commission), the take-rate on XAF 30k rises to 8.3% as well, but tenants pay upfront a larger fixed amount, possibly deterring low-income renters. A commission-only model (5% of rent, ~8.3% take-rate) yields identical per-booking revenue but lacks the stable booking fee. In all cases, bypass hurts: e.g. 50% off-platform means half the expected revenue.
-Table 1: Sample unit economics for XAF 30k rent, showing revenue and take-rate at various off-platform bypass rates. (Assumes 10% COGS.)
-4. Operational Requirements & Risks
-Payment Integration: DHUB must integrate local mobile money (MTN MoMo, Orange Money) and possibly bank transfers[10][11]. These cover >80% of transactions. MTN MoMo accounts are ubiquitous in Cameroon. Transaction fees (≈1–2%) and limits must be accounted for. DHUB should register as a business on these platforms. Ideally, use an escrow service or API to hold funds until conditions are met (per industry best practice[7]).
-KYC and Verification: To prevent fraud, require ID verification for landlords (e.g. national ID, tax number) and proof of ownership or mandate. Jarnias advises checking business registration if using agencies[12]. Each listing should be vetted (e.g. Google Maps/location check, photo validation[12]). Tenants should also register (though lighter checks) to discourage scammers.
-Dispute Resolution: Implement a clear policy and support channel. Collect signed tenancy details via DHUB (digital contract noting rent, deposit) to resolve disputes. If issues arise, DHUB can mediate (holding deposit). Retain evidence (screenshots, chat logs). Automated dispute workflows (refund rules, partial refunds) should be coded.
-Legal/Regulatory: Cameroonian law requires written lease with rent, payment method, deposit, etc.[13][14]. DHUB should encourage formal contracts (perhaps provide a template). Landlords legally must issue rent receipts[15]; DHUB can generate and send digital receipts for each transaction (improving trust and compliance). Note that failure to issue receipts is illegal[15]. OHADA law governs contracts; while DHUB need not be a legal firm, it should consult a Cameroonian lawyer on terms of service, liability, and commission tax obligations (Cameroon may tax platform fees).
-Fraud & Chargeback Risk: By requiring advance payment, DHUB takes risk if the tenant never moves in. To mitigate: (a) verify landlord/listing as above; (b) release money only after tenant confirms occupancy or after a short grace period; (c) use partial refunds for cancellations. Mobile money allows chargebacks within limits; DHUB should not fully rely on chargebacks for fraud.
-Staffing/Costs: Initial team likely needs: a developer to build payment/commission features; a customer service rep (bilingual FR/EN) for inquiries/disputes; local agents in Bamenda for onboarding landlords; a finance person for reconciliation. These overheads (~USD 1–2k/month each locally) are fixed costs to amortize. Marketing (university outreach) is another cost. We assume DHUB keeps overhead lean, so high gross margins (≈90%) can cover them after scale.
-5. Go-to-Market & Behavioral Incentives
-To encourage on-platform payments, DHUB should:
-Launch Promotion: Offer an introductory booking-fee waiver or discount (e.g. XAF 0 booking fee for first 50 users) to seed adoption. Clarify that this is temporary.
-Loyalty Program: Give points or a small discount for repeat bookings (e.g. 5% off third booking). Students are price-sensitive; accumulating discounts can lock them in.
-Price-Match Guarantee: Promise to refund part of the fee if the tenant finds a cheaper verified alternative. This signals confidence and trust.
-Landlord Incentives: Even though landlords currently pay nothing, reward early high-quality listings (e.g. “verified” badge, extra visibility). Later, when charging XAF 5k/month for featured slots, grandfather early adopters or bundle first month free to avoid churn.
-Insurance/Guarantees: Consider a damage/invoice insurance add-on (small fee) to make tenants feel safer when pre-paying.
-University Partnerships: Work with local universities (e.g. UNIBAM, Catholic Univ.) to educate students during orientation. DHUB can provide workshops or flyers, and maybe discount codes through student associations.
-Refer-a-Friend: A small referral bonus (XAF 500 credit) for referring another tenant who books. Viral loops can boost network effects.
-Trust Signals: Emphasize “verified listings”, reviews, and DHUB’s local presence. Use success stories (e.g. “Real student saved 20h in search”).
-6. Implementation Roadmap (12 Months)
-mermaid gantt title DHUB Tenant Payment Implementation dateFormat YYYY-MM section Q2 2026 Integrate Mobile Money APIs :done, a1, 2026-05, 2M Build Commission Logic :active, a2, 2026-06, 2M Develop Escrow/Deposit Module :active, a3, 2026-06, 2M Landlord Verification Workflow : a4, 2026-07, 2M section Q3 2026 Tenant Registration & Onboarding : a5, 2026-09, 1M Beta Launch (select users) : a6, 2026-10, 2M Monitor & Iterate (feedback) : a7, 2026-12, 2M section Q4 2026 Full Launch (Bamenda) :crit, a8, 2027-01, 1M Roll out Landlord Promo : a9, 2027-02, 1M section Q1 2027 Launch Loyalty/Referral Features : a10,2027-03, 2M University Partnerships : a11,2027-04, 2M
-Months 1–3 (Mid 2026): Integrate payments (MoMo, Orange), implement commission and escrow logic, set up verification processes.
-Months 4–5 (Late 2026): Onboard pilot landlords and tenants; soft-launch to refine. Collect feedback on fees/UX.
-Month 6 (Jan 2027): Official launch for all Bamenda. Begin promotions (discounts, referrals).
-Months 7–12 (2027): Add loyalty/referral features, expand marketing (campus campaigns), and plan national expansion. Continuously monitor KPIs (below) and adjust pricing as needed.
-Key KPIs: Conversion rate (session→booking), percentage of bookings paid on DHUB (vs. bypass), average booking value (rent+fee), ARPU (revenue/user), CAC (cost per new user), churn (% of landlords/tenants leaving). After launch, target ≥70% of bookings on-platform and steady ARPU growth as user base scales.
-7. Sensitivity Analysis & Break-even
-We compare the hybrid model to alternatives:
-Hybrid vs Flat-Only: Without commission, DHUB would earn only XAF 1,000 per booking (take-rate ~3.3% on XAF 30k). With commission, revenue per booking (+XAF 1,500) is 2.5× higher. Even if bypass were equal, break-even is reached much faster with the extra commission income.
-Hybrid vs Commission-Only: With no flat fee, initial cash flow is lower (only XAF 1,500/book). Many students might balk at a 5% surcharge and not book at all. The flat fee ensures a minimum revenue and commitment. The hybrid splits the burden.
-Break-even Impact: Assuming fixed costs (dev, staff) of ~XAF 10M/year, at XAF 2,500 gross per booking, DHUB needs ~4,000 successful bookings to break even. If 50% of potential bookings bypass, that doubles. Thus minimizing bypass (through escrow) is crucial. The hybrid model (vs commission-only) accelerates break-even by increasing revenue per on-platform booking.
-Competitor Fee Models
-Platform
-Region
-Landlord Fee
-Tenant Fee/Commission
-Notes
-Airbnb
-Global
-0% (hosts) or 15% *
-~15% total (split ~3% host + up to 12% guest)[4]
-Example of hybrid model (post-2026 moving to host-only fees)
-Bongalo
-Cameroon
-0% (listing free)
-(Unpublished, likely small commission)
-Homestay platform; uses mobile money[16]
-Lamudi
-Cameroon
-Subscription/listing fees (landlord pays)
-None (free browsing)
-Real estate classifieds; monetize via ads/subscriptions
-PrivateProp (NG)
-Nigeria
-0% (flat listing fee only)
-~2–5% commission[6]
-Leading African rental portal example (invoice fee)
-Trulia/Zillow
-USA
-0% (flat listing for agents)
-None for tenants
-US model: agents pay flat fees; tenants free (for comparison)
-No direct Cameroonian tenant-fee platform exists yet. Most African listing sites rely on landlord fees or ads[17]. In contrast, global players like Airbnb impose ~15% booking fees[4].
-Action Checklist
-Build & Test Payment Module: Integrate MTN/Orange Money and escrow; implement XAF 1k booking fee + ~5% commission in the flow.
-Enforce On-App Rent Payment: Design contract/signature flow requiring at least one month’s rent deposit via DHUB to secure booking (hold in escrow).
-Verify Listings & IDs: Implement strict KYC for landlords and listing verification (e.g. agent registration check)[12].
-Launch User Incentives: Roll out fee discounts/referrals and educate students via university partnerships to ensure uptake.
-Monitor KPIs Closely: Track % bookings using DHUB payment, CAC, ARPU, churn; adjust fee levels if adoption lags.
-By following this hybrid approach and implementation plan, DHUB can maximize on-platform transactions and revenue while minimizing bypass, positioning itself as the trusted student-housing solution in Bamenda.
-Sources: Cameroonian rental guides and startup reports[18][11][10], marketplace fee research[1][2][17], and DHUB’s own data (verified) on user preferences.
-[1] [2] [3] [4] [5] [9] Service Fee vs Commission in Marketplaces: Complete Comparison, Pros/Cons, and 2026 Optimization Guide
-https://greenmoov.app/articles/en/service-fee-vs-commission-in-marketplaces-complete-comparison-proscons-and-2026-optimization-guide/
-[6] What is marketplace commission (take rate?)
-https://www.sharetribe.com/marketplace-glossary/commission-take-rate/
-[7] [8] [17] How Rental Marketplaces Work: A Complete Guide for Entrepreneurs
-https://www.yo-rent.com/blog/how-rental-marketplaces-work-a-complete-guide-for-entrepreneurs/
-[10] New bookings platform to drive tourism in Cameroon - Ventureburn
-https://ventureburn.com/2022/09/new-bookings-platform-to-drive-tourism-in-cameroon/
-[11] [12] [13] [14] [15] [18] Find Housing in Cameroon: Complete Guide to Renting Safely
-https://www.jarniascyril.com/expatriation/install-cameroon-expat-complete-guide/find-housing-cameroon-tips-rent-safety/
-[16] What Is Bongalo? The Google-Backed Company Is Being Called ‘Africa's Airbnb’
-https://www.fodors.com/world/africa-and-middle-east/experiences/news/what-is-bongalo
-
-====================
---- context\TERMS OF SERVICE.docx ---
-====================
-D-HUB – TERMS OF SERVICE (Professional Version)
-1. Introduction
-Welcome to D-HUB (“the Platform”), a digital housing and property-location service designed to connect landlords with tenants. By accessing or using D-HUB, you agree to these Terms of Service (“Terms”). If you do not agree, do not use the Platform.
-2. Eligibility
-You must:
-Be at least 16 years old.
-Create an account with accurate, up-to-date information.
-Use the Platform in compliance with all applicable laws.
-3. Account Registration & Security
-Users must create an account to access certain features. You agree to:
-Keep your login credentials confidential.
-Accept responsibility for all activities under your account.
-Notify D-HUB immediately of unauthorized access.
-D-HUB may suspend or terminate accounts for violations of these Terms.
-4. Services Provided
-D-HUB provides:
-A property listing system for landlords.
-A housing search platform for tenants.
-A map-based house location feature.
-Communication options between landlords and tenants.
-D-HUB is not a real estate agent and does not guarantee the accuracy of listings.
-5. User Responsibilities
-Users agree not to:
-Post false, misleading, or fraudulent property information.
-Upload illegal, harmful, offensive, or copyrighted content without authorization.
-Use the Platform to harass, threaten, scam, or exploit others.
-Interfere with Platform security or functionality.
-6. Landlord Obligations
-Landlords must:
-Provide accurate descriptions and images of properties.
-Update availability status promptly.
-Not request illegal fees or engage in discriminatory renting practices.
-Ensure the safety and legality of their properties.
-D-HUB is not liable for landlord-tenant disputes.
-7. Tenant Obligations
-Tenants must:
-Provide truthful personal information when required.
-Use the platform solely for lawful property search purposes.
-Respect landlords’ property rights and communication channels.
-8. Payments (if applicable)
-If D-HUB offers paid features or subscription services:
-Fees will be displayed before purchase.
-Payments are final unless otherwise stated.
-D-HUB may modify prices with prior notice.
-9. Intellectual Property
-All platform designs, logos, systems, software, and content are owned by D-HUB.
-Users retain ownership of content they upload but grant D-HUB a non-exclusive license to display such content on the Platform.
-10. Third-Party Services
-D-HUB may integrate third-party services such as maps or payment processors.
-Users agree to also follow the terms of those providers.
-11. Limitation of Liability
-D-HUB is not responsible for:
-The accuracy of listings
-Property conditions
-Disputes between landlords and tenants
-Losses caused by misuse of the Platform
-Service interruptions or technical issues
-D-HUB is provided “as is” and “as available”.
-12. Termination
-D-HUB may suspend or terminate any account for:
-Violating these Terms
-Providing false information
-Misuse or abuse of the Platform
-Illegal activities
-Users may also delete their accounts at any time.
-13. Changes to Terms
-D-HUB may update these Terms at any time. Users will be notified of major changes.
-14. Governing Law
-These Terms shall be governed by the laws of The Republic of Cameroon, unless otherwise specified.
+<file path="deno.lock">
+{
+  "version": "5",
+  "remote": {
+    "https://edge.netlify.com/": "fd941d61d88673d5f28aab283fb86fcc50f08a3bc80ee5470498fcfa88c65cfb",
+    "https://edge.netlify.com/bootstrap/config.ts": "6a2ce0e544e15e8f8883a5c18da5948e37fd0f2619f68cb31f3af53c51817025",
+    "https://edge.netlify.com/bootstrap/context.ts": "e97240232121e2f369f6546ce961490f34d961ea1ea54be3ff09633e3f08373f",
+    "https://edge.netlify.com/bootstrap/cookie.ts": "8b0baae708989ca183c6f3b4ab3d029e6abcbc2e43f93edeb0ff447b3bbc3a05",
+    "https://edge.netlify.com/bootstrap/edge_function.ts": "b8253e86aa83c67341f5cfedeba5049d77fbf84dcab7eceff7566b7728ae9b39",
+    "https://edge.netlify.com/bootstrap/globals/types.ts": "eaa6148ded3121d8dee62dd91c86e7fe76601df0f3ca8d7962243a30f4c8935f"
+  },
+  "workspace": {
+    "packageJson": {
+      "dependencies": [
+        "npm:@expo/vector-icons@^15.0.3",
+        "npm:@hookform/resolvers@^3.10.0",
+        "npm:@mapbox/polyline@^1.2.1",
+        "npm:@react-native-async-storage/async-storage@^2.2.0",
+        "npm:@react-native-community/datetimepicker@8.4.4",
+        "npm:@react-native-community/netinfo@11.4.1",
+        "npm:@react-native-masked-view/masked-view@0.3.2",
+        "npm:@react-native-picker/picker@2.11.1",
+        "npm:@react-navigation/bottom-tabs@^7.4.0",
+        "npm:@react-navigation/elements@^2.6.3",
+        "npm:@react-navigation/native-stack@^7.6.2",
+        "npm:@react-navigation/native@^7.1.19",
+        "npm:@react-navigation/stack@^7.6.6",
+        "npm:@reduxjs/toolkit@^2.9.2",
+        "npm:@supabase/supabase-js@^2.110.8",
+        "npm:@types/mapbox__polyline@^1.0.5",
+        "npm:@types/mime-types@^3.0.1",
+        "npm:@types/node@^24.10.0",
+        "npm:@types/qrcode@^1.5.6",
+        "npm:@types/react@~19.1.10",
+        "npm:@types/uuid@10",
+        "npm:axios@^1.13.1",
+        "npm:babel-preset-expo@~54.0.10",
+        "npm:core-js@^3.25.1",
+        "npm:date-fns@^4.1.0",
+        "npm:dotenv@^17.4.2",
+        "npm:drizzle-orm@~0.44.7",
+        "npm:eslint-config-expo@10.0",
+        "npm:eslint@^9.25.0",
+        "npm:eventemitter3@^5.0.1",
+        "npm:expo-asset@~12.0.13",
+        "npm:expo-auth-session@^57.0.5",
+        "npm:expo-blob@~0.1.6",
+        "npm:expo-build-properties@~1.0.10",
+        "npm:expo-checkbox@~5.0.8",
+        "npm:expo-constants@~18.0.13",
+        "npm:expo-crypto@^57.0.1",
+        "npm:expo-device@~8.0.10",
+        "npm:expo-document-picker@~14.0.8",
+        "npm:expo-file-system@~19.0.23",
+        "npm:expo-font@~14.0.12",
+        "npm:expo-haptics@~15.0.8",
+        "npm:expo-image-picker@~17.0.11",
+        "npm:expo-image@~3.0.11",
+        "npm:expo-linear-gradient@~15.0.8",
+        "npm:expo-linking@~8.0.12",
+        "npm:expo-location@~19.0.8",
+        "npm:expo-maps@~0.12.10",
+        "npm:expo-notifications@~0.32.17",
+        "npm:expo-print@~15.0.8",
+        "npm:expo-secure-store@~15.0.8",
+        "npm:expo-sharing@~14.0.8",
+        "npm:expo-splash-screen@~31.0.13",
+        "npm:expo-sqlite@~16.0.10",
+        "npm:expo-status-bar@~3.0.9",
+        "npm:expo-symbols@~1.0.8",
+        "npm:expo-system-ui@~6.0.9",
+        "npm:expo-task-manager@~14.0.9",
+        "npm:expo-video-thumbnails@~10.0.8",
+        "npm:expo-video@~3.0.16",
+        "npm:expo-web-browser@~15.0.11",
+        "npm:expo@~54.0.36",
+        "npm:glob@*",
+        "npm:i18next@^26.3.6",
+        "npm:idb-keyval@^6.3.0",
+        "npm:js-cookie@^3.0.8",
+        "npm:js-sha256@~0.11.1",
+        "npm:lodash@^4.17.21",
+        "npm:lru-cache@*",
+        "npm:qrcode@^1.5.4",
+        "npm:react-dom@19.1.0",
+        "npm:react-hook-form@^7.54.2",
+        "npm:react-i18next@^17.0.11",
+        "npm:react-native-country-codes-picker@^2.3.5",
+        "npm:react-native-dotenv@^3.4.11",
+        "npm:react-native-gesture-handler@2.28",
+        "npm:react-native-hyperlink@~0.1.2",
+        "npm:react-native-maps@1.20.1",
+        "npm:react-native-markdown-display@^7.0.2",
+        "npm:react-native-qrcode-svg@^6.3.20",
+        "npm:react-native-reanimated@~4.1.1",
+        "npm:react-native-safe-area-context@5.6",
+        "npm:react-native-screens@4.16",
+        "npm:react-native-svg@^15.12.1",
+        "npm:react-native-url-polyfill@3",
+        "npm:react-native-uuid@^2.0.3",
+        "npm:react-native-web-maps@0.3",
+        "npm:react-native-web@~0.21.2",
+        "npm:react-native-webview@^13.15.0",
+        "npm:react-native-worklets@0.5.1",
+        "npm:react-native@0.81.5",
+        "npm:react-qr-code@^2.2.0",
+        "npm:react-redux@^9.2.0",
+        "npm:react@19.1.0",
+        "npm:rimraf@*",
+        "npm:text-encoding@*",
+        "npm:typescript@~5.9.2",
+        "npm:uuid@*",
+        "npm:world-countries@^5.1.0",
+        "npm:yup@^1.6.1"
+      ]
+    }
+  }
+}
 </file>
 
 <file path="DHUB_build.yaml">
@@ -21031,40 +16265,6 @@ Uploading 50MB 4K property walkthroughs natively crashes Javascript threads.
 - It operates sequentially and includes an `AbortSignal`, allowing users to explicitly "Cancel Upload", cleanly tearing down the chunk array if 3G completely drops.
 </file>
 
-<file path="eas.json">
-{
-  "cli": {
-    "version": ">= 16.28.0",
-    "appVersionSource": "remote"
-  },
-  "build": {
-    "development": {
-      "developmentClient": true,
-      "distribution": "internal"
-    },
-    "preview": {
-      "distribution": "internal",
-      "env": {
-        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
-      }
-    },
-    "production": {
-      "autoIncrement": true,
-      "env": {
-        "EXPO_PUBLIC_SUPABASE_URL": "https://lpdszzdmhzrowtppngjb.supabase.co",
-        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImxwZHN6emRtaHpyb3d0cHBuZ2piIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjA2MjI1MjksImV4cCI6MjA3NjE5ODUyOX0.hl8QZIOJtJ2WqbIFU3Dx8sR47A1cg3qnXrjXsuFSM24",
-        "EXPO_PUBLIC_API_URL": "https://dhub-gxid.onrender.com",
-        "DIRA_PAYMENT_URL": "https://dhub.diracmr.com",
-        "EXPO_PUBLIC_GOOGLE_MAPS_API_KEY": "REPLACE_ME_OR_USE_EAS_SECRET"
-      }
-    }
-  },
-  "submit": {
-    "production": {}
-  }
-}
-</file>
-
 <file path="eslint.config.js">
 // https://docs.expo.dev/guides/using-eslint/
 const { defineConfig } = require('eslint/config');
@@ -21335,6 +16535,10 @@ This plan provides a complete, secure, and developer‑ready pathway to launch t
 import { registerRootComponent } from 'expo';
 import App from './App';
 registerRootComponent(App);
+</file>
+
+<file path="placeholder.txt">
+test
 </file>
 
 <file path="README.md">
@@ -22137,196 +17341,2222 @@ const AuthListener: React.FC = () => {
 export default AuthListener;
 </file>
 
-<file path="src/components/MapView.web.tsx">
-// src/components/MapView.web.tsx
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+<file path="src/components/FullVideoPlayer.tsx">
+// src/components/FullVideoPlayer.tsx
+//
+// Uses expo-video (the current, non-deprecated player).
+//
+// The previous AVFoundationErrorDomain -11850 error was NOT an expo-video bug —
+// it was caused by the Cloudflare Worker returning plain 200 responses with no
+// Range request support. Native players (AVPlayer/ExoPlayer) require 206 Partial
+// Content. The Worker is now fixed, so expo-video works correctly.
 
-// Load Google Maps Script
-let googleMapsPromise: Promise<void> | null = null;
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google && (window as any).google.maps) return Promise.resolve();
-  if (googleMapsPromise) return googleMapsPromise;
+import { Ionicons } from '@expo/vector-icons';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 
-  googleMapsPromise = new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
-    script.async = true;
-    script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = (e) => reject(e);
-    document.head.appendChild(script);
-  });
-  return googleMapsPromise;
-};
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
-const MapContext = createContext<any>(null);
+const MAX_AUTO_RETRIES = 3;
+const BACKOFF = [1500, 3000, 6000]; // slightly longer for low-connectivity areas
 
-interface MapViewProps {
-  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
-  initialRegion?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
-  liteMode?: boolean;
-  mapType?: 'standard' | 'satellite' | 'hybrid' | 'terrain';
-  customMapStyle?: any[];
-  children?: React.ReactNode;
-  style?: any;
-  showsUserLocation?: boolean;
-  followsUserLocation?: boolean;
-  onPress?: (e: any) => void;
-  onRegionChangeComplete?: (region: any) => void;
-  scrollEnabled?: boolean;   // map to gestureHandling
-  zoomEnabled?: boolean;     // map to gestureHandling
-  rotateEnabled?: boolean;   // map to gestureHandling
-  pitchEnabled?: boolean;    // map to gestureHandling
+interface FullVideoPlayerProps {
+  url: string;
+  onClose: () => void;
+  processingStatus?: 'processing' | 'ready' | 'failed';
 }
 
-export const MapView: React.FC<MapViewProps> = ({
-  region,
-  initialRegion,
-  mapType = 'standard',
-  children,
-  style,
-  onRegionChangeComplete,
-  onPress,
-  scrollEnabled = true,
-  zoomEnabled = true,
-  rotateEnabled = true,
-  pitchEnabled = true,
-}) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [mapInstance, setMapInstance] = useState<any>(null);
-  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
-                 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS || 
-                 'AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8'; // fallback
+const FullVideoPlayer: React.FC<FullVideoPlayerProps> = ({ url, onClose, processingStatus }) => {
+  const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [playerKey, setPlayerKey] = useState(0);
+
+  // Pass URL as plain string — expo-video v3 does NOT accept { uri: url }
+  const player = useVideoPlayer(url, (p) => {
+    p.loop = false;
+    p.staysActiveInBackground = false;
+    // Do NOT call play() here — player is not ready yet.
+    // play() is called inside the readyToPlay status event below.
+  });
 
   useEffect(() => {
-    let isMounted = true;
-    loadGoogleMapsScript(apiKey).then(() => {
-      if (!isMounted || !mapRef.current) return;
-      const center = region || initialRegion;
-      if (!center) return;
-
-      // Determine gesture handling
-      const gestureHandling = (!scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled)
-        ? 'none'
-        : 'auto';
-
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: center.latitude, lng: center.longitude },
-        zoom: 10,
-        mapTypeId: mapType === 'satellite' ? 'satellite' : mapType === 'hybrid' ? 'hybrid' : mapType === 'terrain' ? 'terrain' : 'roadmap',
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        gestureHandling: gestureHandling,
-        zoomControl: zoomEnabled,
-        rotateControl: rotateEnabled,
-        tilt: pitchEnabled ? 45 : 0,
+    let sub: { remove: () => void } | null = null;
+    try {
+      sub = player.addListener('statusChange', ({ status }: { status: string }) => {
+        if (status === 'readyToPlay') {
+          retryCountRef.current = 0;
+          setPlayerStatus('playing');
+          try { player.play(); } catch (_) {}
+        } else if (status === 'loading' || status === 'buffering') {
+          setPlayerStatus('loading');
+        } else if (status === 'error') {
+          handleError();
+        }
       });
+    } catch (_) {}
 
-      setMapInstance(map);
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      try { sub?.remove(); } catch (_) {}
+      try { player.pause(); } catch (_) {}
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [player]);
 
-      if (onPress) {
-        map.addListener('click', (e: any) => {
-          if (e.latLng) {
-            onPress({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
-          }
-        });
-      }
-
-      if (onRegionChangeComplete) {
-        map.addListener('idle', () => {
-          const newCenter = map.getCenter();
-          if (newCenter) {
-            onRegionChangeComplete({
-              latitude: newCenter.lat(),
-              longitude: newCenter.lng(),
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
-          }
-        });
-      }
-    });
-
-    return () => { isMounted = false; };
-  }, [apiKey, region, initialRegion, mapType, scrollEnabled, zoomEnabled, rotateEnabled, pitchEnabled]);
-
-  // Update map center when region prop changes
-  useEffect(() => {
-    if (mapInstance && region) {
-      mapInstance.panTo({ lat: region.latitude, lng: region.longitude });
+  const handleError = () => {
+    if (retryCountRef.current < MAX_AUTO_RETRIES) {
+      const delay = BACKOFF[retryCountRef.current] ?? 6000;
+      retryCountRef.current += 1;
+      setPlayerStatus('loading');
+      retryTimerRef.current = setTimeout(() => setPlayerKey(k => k + 1), delay);
+    } else {
+      setPlayerStatus('error');
     }
-  }, [mapInstance, region]);
+  };
+
+  const handleManualRetry = () => {
+    retryCountRef.current = 0;
+    setPlayerStatus('loading');
+    setPlayerKey(k => k + 1);
+  };
+
+  if (Platform.OS === 'web') {
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity
+          style={styles.closeBtn}
+          onPress={onClose}
+          hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+        >
+          <Ionicons name="close" size={32} color="#fff" />
+        </TouchableOpacity>
+        {/* @ts-ignore - native HTML5 video element for web */}
+        <video
+          src={url}
+          controls
+          autoPlay
+          playsInline
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        />
+      </View>
+    );
+  }
 
   return (
-    <View style={[styles.container, style]}>
-      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
-      <MapContext.Provider value={mapInstance}>
-        {mapInstance && children}
-      </MapContext.Provider>
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={onClose}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="close" size={32} color="#fff" />
+      </TouchableOpacity>
+
+      <VideoView
+        key={playerKey}
+        style={styles.video}
+        player={player}
+        nativeControls
+        contentFit="contain"
+      />
+
+      {processingStatus === 'processing' && (
+        <View style={styles.processingBadge}>
+          <ActivityIndicator size="small" color="#fff" style={{ marginRight: 6 }} />
+          <Text style={styles.processingBadgeText}>Optimizing for performance…</Text>
+        </View>
+      )}
+
+      {playerStatus === 'loading' && (
+        <View style={styles.overlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.overlayText}>
+            {retryCountRef.current > 0
+              ? `Retrying… (${retryCountRef.current}/${MAX_AUTO_RETRIES})`
+              : 'Loading video…'}
+          </Text>
+        </View>
+      )}
+
+      {playerStatus === 'error' && (
+        <View style={styles.overlay}>
+          <Ionicons name="wifi-outline" size={52} color="rgba(255,255,255,0.7)" />
+          <Text style={styles.errorTitle}>Could not load video</Text>
+          <Text style={styles.errorSubtitle}>Check your connection and try again</Text>
+          <TouchableOpacity style={styles.retryBtn} onPress={handleManualRetry}>
+            <Ionicons name="refresh" size={18} color="#fff" />
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 };
 
-export const Marker: React.FC<{ 
-  coordinate: { latitude: number; longitude: number };
-  title?: string;
-  description?: string;
-  pinColor?: string;
-  onPress?: () => void;
-  draggable?: boolean;
-  onDragEnd?: (e: any) => void;
-}> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd, draggable }) => {
-  const map = useContext(MapContext);
-  useEffect(() => {
-    if (!map) return;
-    const marker = new window.google.maps.Marker({
-      position: { lat: coordinate.latitude, lng: coordinate.longitude },
-      map: map,
-      title: title,
-      draggable: draggable || false,
-      icon: pinColor === 'gold' ? 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png' : undefined,
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 56 : 40,
+    right: 20,
+    zIndex: 30,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  video: {
+    width: screenWidth,
+    height: screenHeight,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    zIndex: 20,
+  },
+  processingBadge: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 100 : 80,
+    backgroundColor: 'rgba(212, 175, 55, 0.8)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    zIndex: 40,
+  },
+  processingBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  overlayText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginTop: 12,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  errorSubtitle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});
+
+export default FullVideoPlayer;
+</file>
+
+<file path="src/components/FullVideoPlayer.web.tsx">
+// src/components/FullVideoPlayer.web.tsx
+// Web-specific video player using native HTML5 video for maximum compatibility.
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Dimensions,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+
+const MAX_AUTO_RETRIES = 3;
+const BACKOFF = [1500, 3000, 6000];
+
+interface FullVideoPlayerProps {
+  url: string;
+  onClose: () => void;
+  processingStatus?: 'processing' | 'ready' | 'failed';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Diagnostic helper — maps MediaError codes to human-readable strings
+// ─────────────────────────────────────────────────────────────────────────────
+function describeMediaError(err: MediaError | null): string {
+  if (!err) return 'No MediaError object';
+  const codes: Record<number, string> = {
+    1: 'MEDIA_ERR_ABORTED – fetch aborted by user',
+    2: 'MEDIA_ERR_NETWORK – network error while fetching',
+    3: 'MEDIA_ERR_DECODE – decoding failed (codec/container issue)',
+    4: 'MEDIA_ERR_SRC_NOT_SUPPORTED – src not supported (404, bad MIME, CORS)',
+  };
+  return codes[err.code] ?? `Unknown code ${err.code}`;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Pre-flight probe: fetch the URL with a Range header before handing it to
+// the <video> tag. This lets us distinguish:
+//   • 200 (no Range support) → worker bug
+//   • 206 (correct)          → worker is fine, browser may still fail
+//   • 403/404/5xx            → backend / R2 key issue
+//   • Network error          → CORS or DNS issue
+// ─────────────────────────────────────────────────────────────────────────────
+async function probeVideoUrl(url: string): Promise<void> {
+  console.group(`%c[VideoProbe] Pre-flight check → ${url}`, 'color: #D4AF37; font-weight: bold;');
+  try {
+    const res = await fetch(url, {
+      method: 'GET',
+      headers: { Range: 'bytes=0-1023' },
     });
-    if (onPress) marker.addListener('click', onPress);
-    if (onDragEnd) {
-      marker.addListener('dragend', (e: any) => {
-        if (e.latLng) {
-          onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
-        }
+    const ct = res.headers.get('content-type') ?? 'unknown';
+    const cl = res.headers.get('content-length') ?? 'unknown';
+    const cr = res.headers.get('content-range') ?? 'none';
+    const ar = res.headers.get('accept-ranges') ?? 'none';
+    const cc = res.headers.get('cache-control') ?? 'none';
+
+    const statusLabel = res.status === 206
+      ? '✅ 206 Partial Content (correct)'
+      : res.status === 200
+        ? '⚠️  200 OK — Worker returned full body, no Range support (WILL cause playback issues on some browsers)'
+        : `❌ ${res.status} ${res.statusText}`;
+
+    console.log('Status      :', statusLabel);
+    console.log('Content-Type:', ct);
+    console.log('Content-Length:', cl);
+    console.log('Content-Range:', cr);
+    console.log('Accept-Ranges:', ar);
+    console.log('Cache-Control:', cc);
+    console.log('All response headers:', Object.fromEntries(res.headers.entries()));
+
+    if (res.status >= 400) {
+      const body = await res.text().catch(() => '(could not read body)');
+      console.error('❌ Error body:', body);
+    }
+  } catch (netErr: any) {
+    console.error('❌ Network/CORS error — fetch itself failed. This means:');
+    console.error('   • CORS is blocking the request, OR');
+    console.error('   • The Worker URL is unreachable (DNS / firewall), OR');
+    console.error('   • The URL is completely wrong');
+    console.error('   Raw error:', netErr?.message ?? netErr);
+  }
+  console.groupEnd();
+}
+
+const FullVideoPlayer: React.FC<FullVideoPlayerProps> = ({ url, onClose, processingStatus }) => {
+  const [playerStatus, setPlayerStatus] = useState<'loading' | 'playing' | 'error'>('loading');
+  const [errorDetail, setErrorDetail] = useState<string>('');
+  const retryCountRef = useRef(0);
+  const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  // Run pre-flight probe once on mount (or when URL changes)
+  useEffect(() => {
+    if (processingStatus === 'processing' || processingStatus === 'failed') return;
+    console.group('%c[VideoPlayer] Mounting — full diagnostic run', 'color: #D4AF37; font-weight: bold; font-size: 14px;');
+    console.log('URL received by player :', url);
+    console.log('processingStatus       :', processingStatus);
+    console.log('User Agent             :', navigator.userAgent);
+    console.log('Online                 :', navigator.onLine);
+    probeVideoUrl(url).then(() => console.groupEnd());
+    return () => {
+      console.log('[VideoPlayer] Unmounting');
+    };
+  }, [url, processingStatus]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+
+    const handleCanPlay = () => {
+      console.log('[VideoPlayer] ✅ canplay — video is ready, calling play()');
+      retryCountRef.current = 0;
+      setPlayerStatus('playing');
+      setErrorDetail('');
+      video.play().catch((e) => console.warn('[VideoPlayer] play() rejected:', e));
+    };
+
+    const handleLoadStart = () => console.log('[VideoPlayer] loadstart — browser started fetching src');
+    const handleLoadedMetadata = () => {
+      console.log('[VideoPlayer] loadedmetadata — duration:', video.duration, 's | videoWidth:', video.videoWidth, '| videoHeight:', video.videoHeight);
+    };
+    const handleProgress = () => {
+      const b = video.buffered;
+      if (b.length > 0) {
+        console.log(`[VideoPlayer] progress — buffered 0-${b.end(b.length - 1).toFixed(1)}s of ${video.duration?.toFixed(1) ?? '?'}s`);
+      }
+    };
+    const handleWaiting = () => {
+      console.warn('[VideoPlayer] waiting — browser is stalling (buffer empty)');
+      setPlayerStatus('loading');
+    };
+    const handlePlaying = () => {
+      console.log('[VideoPlayer] ▶ playing');
+      setPlayerStatus('playing');
+    };
+    const handleStalled = () => console.warn('[VideoPlayer] stalled — network stopped delivering data');
+    const handleSuspend = () => console.log('[VideoPlayer] suspend — browser stopped downloading');
+    const handleAbort = () => console.warn('[VideoPlayer] abort — src fetch aborted');
+
+    const handleError = () => {
+      const me = video.error;
+      const desc = describeMediaError(me);
+      const detail = `code=${me?.code ?? 'null'} | ${desc}`;
+      console.group('%c[VideoPlayer] ❌ ERROR event', 'color: red; font-weight: bold;');
+      console.error('MediaError description :', desc);
+      console.error('video.src              :', video.src);
+      console.error('video.networkState     :', video.networkState, '(1=IDLE, 2=LOADING, 3=NO_SRC)');
+      console.error('video.readyState       :', video.readyState, '(0=HAVE_NOTHING, 1=HAVE_METADATA, 4=HAVE_ENOUGH)');
+      console.error('video.currentSrc       :', video.currentSrc);
+      console.groupEnd();
+
+      setErrorDetail(detail);
+
+      if (retryCountRef.current < MAX_AUTO_RETRIES) {
+        const delay = BACKOFF[retryCountRef.current] ?? 6000;
+        retryCountRef.current += 1;
+        console.log(`[VideoPlayer] Auto-retry ${retryCountRef.current}/${MAX_AUTO_RETRIES} in ${delay}ms`);
+        setPlayerStatus('loading');
+        retryTimerRef.current = setTimeout(() => {
+          console.log('[VideoPlayer] Calling video.load() for retry');
+          video.load();
+        }, delay);
+      } else {
+        console.error('[VideoPlayer] ❌ Max retries reached. Showing error screen.');
+        setPlayerStatus('error');
+      }
+    };
+
+    video.addEventListener('loadstart', handleLoadStart);
+    video.addEventListener('loadedmetadata', handleLoadedMetadata);
+    video.addEventListener('progress', handleProgress);
+    video.addEventListener('canplay', handleCanPlay);
+    video.addEventListener('waiting', handleWaiting);
+    video.addEventListener('playing', handlePlaying);
+    video.addEventListener('stalled', handleStalled);
+    video.addEventListener('suspend', handleSuspend);
+    video.addEventListener('abort', handleAbort);
+    video.addEventListener('error', handleError);
+
+    return () => {
+      if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+      video.removeEventListener('loadstart', handleLoadStart);
+      video.removeEventListener('loadedmetadata', handleLoadedMetadata);
+      video.removeEventListener('progress', handleProgress);
+      video.removeEventListener('canplay', handleCanPlay);
+      video.removeEventListener('waiting', handleWaiting);
+      video.removeEventListener('playing', handlePlaying);
+      video.removeEventListener('stalled', handleStalled);
+      video.removeEventListener('suspend', handleSuspend);
+      video.removeEventListener('abort', handleAbort);
+      video.removeEventListener('error', handleError);
+    };
+  }, [url]);
+
+  const handleManualRetry = () => {
+    console.log('[VideoPlayer] Manual retry triggered');
+    retryCountRef.current = 0;
+    setPlayerStatus('loading');
+    setErrorDetail('');
+    if (videoRef.current) {
+      probeVideoUrl(url).then(() => {
+        videoRef.current?.load();
       });
     }
-    return () => { marker.setMap(null); };
-  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor, draggable]);
-  return null;
-};
+  };
 
-export const Polyline: React.FC<{
-  coordinates: { latitude: number; longitude: number }[];
-  strokeColor?: string;
-  strokeWidth?: number;
-}> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
-  const map = useContext(MapContext);
-  useEffect(() => {
-    if (!map || coordinates.length === 0) return;
-    const path = coordinates.map(c => ({ lat: c.latitude, lng: c.longitude }));
-    const polyline = new window.google.maps.Polyline({
-      path: path,
-      strokeColor: strokeColor,
-      strokeWeight: strokeWidth,
-      map: map,
-    });
-    return () => { polyline.setMap(null); };
-  }, [map, coordinates, strokeColor, strokeWidth]);
-  return null;
+  // ── Block playback while FFmpeg is still processing / has failed ─────────
+  if (processingStatus === 'processing') {
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={32} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.overlay}>
+          <ActivityIndicator size="large" color="#D4AF37" />
+          <Text style={[styles.errorTitle, { color: '#D4AF37' }]}>Video Optimizing…</Text>
+          <Text style={styles.errorSubtitle}>
+            This video is still being processed for playback.{'\n'}Please check back in a few minutes.
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (processingStatus === 'failed') {
+    return (
+      <View style={styles.container}>
+        <TouchableOpacity style={styles.closeBtn} onPress={onClose} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+          <Ionicons name="close" size={32} color="#fff" />
+        </TouchableOpacity>
+        <View style={styles.overlay}>
+          <Ionicons name="alert-circle-outline" size={52} color="rgba(255,80,80,0.8)" />
+          <Text style={styles.errorTitle}>Processing Failed</Text>
+          <Text style={styles.errorSubtitle}>This video could not be optimized. Please re-upload.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.container}>
+      <TouchableOpacity
+        style={styles.closeBtn}
+        onPress={onClose}
+        hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+      >
+        <Ionicons name="close" size={32} color="#fff" />
+      </TouchableOpacity>
+
+      {/* @ts-ignore */}
+      <video
+        ref={videoRef}
+        src={url}
+        style={{
+          width: screenWidth,
+          height: screenHeight,
+          backgroundColor: '#000',
+        }}
+        controls
+        playsInline
+      />
+
+
+
+      {playerStatus === 'loading' && (
+        <View style={styles.overlay}>
+          <ActivityIndicator size="large" color="#fff" />
+          <Text style={styles.overlayText}>
+            {retryCountRef.current > 0
+              ? `Retrying… (${retryCountRef.current}/${MAX_AUTO_RETRIES})`
+              : 'Loading video…'}
+          </Text>
+        </View>
+      )}
+
+      {playerStatus === 'error' && (
+        <View style={styles.overlay}>
+          <Ionicons name="wifi-outline" size={52} color="rgba(255,255,255,0.7)" />
+          <Text style={styles.errorTitle}>Could not load video</Text>
+          <Text style={styles.errorSubtitle}>Check your connection and try again</Text>
+          {!!errorDetail && (
+            <Text style={[styles.errorSubtitle, { fontSize: 11, marginTop: 4, opacity: 0.6 }]}>
+              {errorDetail}
+            </Text>
+          )}
+          <TouchableOpacity style={styles.retryBtn} onPress={handleManualRetry}>
+            <Ionicons name="refresh" size={18} color="#fff" />
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', height: '100%' },
+  container: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  closeBtn: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 56 : 40,
+    right: 20,
+    zIndex: 30,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 12,
+    zIndex: 20,
+  },
+  processingBadge: {
+    position: 'absolute',
+    bottom: Platform.OS === 'ios' ? 100 : 80,
+    backgroundColor: 'rgba(212, 175, 55, 0.8)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    zIndex: 40,
+  },
+  processingBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  overlayText: {
+    color: 'rgba(255,255,255,0.8)',
+    fontSize: 14,
+    marginTop: 12,
+  },
+  errorTitle: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  errorSubtitle: {
+    color: 'rgba(255,255,255,0.6)',
+    fontSize: 13,
+    textAlign: 'center',
+    paddingHorizontal: 32,
+  },
+  retryBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.3)',
+  },
+  retryText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
 });
 
-export default MapView;
+export default FullVideoPlayer;
+</file>
+
+<file path="src/components/MapPickerModal.tsx">
+// src/components/MapPickerModal.tsx
+import polyline from '@mapbox/polyline'; // decode Google Directions polyline
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import MapView, { MapType, Marker, Polyline, Region } from 'react-native-maps';
+import { LatLng, requestLocationPermission } from '../utils/location';
+
+interface MapPickerModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onLocationSelected: (coords: LatLng) => void;
+  readOnly?: boolean;              // true for students
+  initialLocation?: LatLng;        // listing location
+  disableInteraction?: boolean;    // disables dragging/scrolling
+}
+
+const GOOGLE_API_KEY = Platform.OS === 'ios'
+   ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS
+  : process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
+if (!GOOGLE_API_KEY) throw new Error('Missing Google Maps API key');
+
+const MapPickerModal: React.FC<MapPickerModalProps> = ({
+  visible,
+  onClose,
+  onLocationSelected,
+  readOnly = false,
+  initialLocation,
+  disableInteraction = false,
+}) => {
+  const [region, setRegion] = useState<Region | null>(null);
+  const [markerCoords, setMarkerCoords] = useState<LatLng | null>(initialLocation ?? null);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [routeCoords, setRouteCoords] = useState<LatLng[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mapType, setMapType] = useState<MapType>('standard');
+  const routeInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Get user location
+  const loadUserLocation = useCallback(async () => {
+    setLoading(true);
+    const loc = await requestLocationPermission();
+    if (loc) {
+      setUserLocation(loc);
+      if (!initialLocation) setMarkerCoords(loc); // fallback for landlords
+      setRegion({
+        latitude: loc.latitude,
+        longitude: loc.longitude,
+        latitudeDelta: 0.01,
+        longitudeDelta: 0.01,
+      });
+    } else {
+      Alert.alert('Permission Denied', 'Cannot access location. Please enable GPS.');
+      onClose();
+    }
+    setLoading(false);
+  }, [onClose, initialLocation]);
+
+  useEffect(() => {
+    if (visible) loadUserLocation();
+  }, [visible, loadUserLocation]);
+
+  // Fetch Google Directions route
+  const fetchRoute = useCallback(async () => {
+    if (!userLocation || !markerCoords) return;
+    try {
+      const url = `https://maps.googleapis.com/maps/api/directions/json?origin=${userLocation.latitude},${userLocation.longitude}&destination=${markerCoords.latitude},${markerCoords.longitude}&key=${GOOGLE_API_KEY}&mode=driving`;
+      const response = await fetch(url);
+      const data = await response.json();
+      if (data.routes?.length) {
+        const points = polyline.decode(data.routes[0].overview_polyline.points);
+        const coords: LatLng[] = points.map(([lat, lng]) => ({ latitude: lat, longitude: lng }));
+        setRouteCoords(coords);
+      }
+    } catch (err) {
+      console.log('Route fetch error', err);
+    }
+  }, [userLocation, markerCoords]);
+
+  // Update route periodically for "live" effect
+    useEffect(() => {
+      if (visible && readOnly && userLocation && markerCoords) {
+        fetchRoute();
+        routeInterval.current = setInterval(fetchRoute, 15000);
+      }
+      return () => {
+        if (routeInterval.current !== null) {
+          clearInterval(routeInterval.current as unknown as number);
+        }
+      };
+    }, [visible, readOnly, userLocation, markerCoords, fetchRoute]);
+
+    // Drag marker (landlords only)
+  const handleDragEnd = (e: { nativeEvent: { coordinate: LatLng } }) => {
+    if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
+  };
+
+  // Done button for landlords
+  const handleDone = () => {
+    if (!markerCoords) {
+      Alert.alert('No location selected', 'Tap on the map.');
+      return;
+    }
+    onLocationSelected(markerCoords);
+  };
+
+  // Toggle map type
+  const toggleMapType = () => {
+    const types: MapType[] = ['standard', 'satellite', 'hybrid'];
+    setMapType(types[(types.indexOf(mapType) + 1) % types.length]);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide">
+      <View style={styles.container}>
+        {loading || !region ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#D4AF37" />
+            <Text style={styles.loadingText}>Loading map...</Text>
+          </View>
+        ) : (
+          <>
+            <MapView
+              style={styles.map}
+              initialRegion={region}
+              region={region}
+              mapType={mapType}
+              showsUserLocation
+              showsMyLocationButton={false}
+              scrollEnabled={true}
+              zoomEnabled={true ? true : false}
+              rotateEnabled={!disableInteraction}
+              pitchEnabled={!disableInteraction}
+              onPress={(e: { nativeEvent: { coordinate: LatLng } }) => {
+                              if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
+                            }}
+            >
+              {markerCoords && (
+                <Marker
+                  coordinate={markerCoords}
+                  draggable={!readOnly && !disableInteraction}
+                  onDragEnd={handleDragEnd}
+                  title="Listing Location"
+                  pinColor={readOnly ? 'gold' : 'red'}
+                />
+              )}
+              {userLocation && readOnly && routeCoords.length > 0 && (
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeColor="gold"
+                  strokeWidth={4}
+                />
+              )}
+            </MapView>
+
+            {/* Coordinates box */}
+            {markerCoords && (
+              <View style={styles.coordBox}>
+                <Text style={styles.coordText}>
+                  Lat: {markerCoords.latitude.toFixed(6)}, Lon: {markerCoords.longitude.toFixed(6)}
+                </Text>
+              </View>
+            )}
+
+            {/* Buttons */}
+            <View style={styles.buttons}>
+              <TouchableOpacity style={styles.button} onPress={onClose}>
+                <Text style={styles.buttonText}>Close</Text>
+              </TouchableOpacity>
+
+              {!readOnly && !disableInteraction && (
+                <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={handleDone}>
+                  <Text style={[styles.buttonText, { color: '#1A1A1A' }]}>Done</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={[styles.button, styles.mapTypeButton]} onPress={toggleMapType}>
+                <Text style={styles.buttonText}>{mapType.toUpperCase()}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  map: { flex: 1 },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  coordBox: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    alignSelf: 'center',
+    backgroundColor: '#fff9e6',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  coordText: { color: '#1A1A1A', fontWeight: '600' },
+  buttons: {
+    position: 'absolute',
+    bottom: 20,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  button: {
+    backgroundColor: '#2A2A2A',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  confirmButton: { backgroundColor: '#D4AF37' },
+  mapTypeButton: { backgroundColor: '#0066cc' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+});
+
+export default MapPickerModal;
+</file>
+
+<file path="src/components/MapPickerModal.web.tsx">
+// src/components/MapPickerModal.web.tsx
+import React, { useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Modal,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { LatLng, requestLocationPermission } from '../utils/location';
+import MapView, { Marker, Polyline } from './MapView.web';
+
+interface MapPickerModalProps {
+  visible: boolean;
+  onClose: () => void;
+  onLocationSelected: (coords: LatLng) => void;
+  readOnly?: boolean;
+  initialLocation?: LatLng;
+  disableInteraction?: boolean;
+}
+
+const MapPickerModal: React.FC<MapPickerModalProps> = ({
+  visible,
+  onClose,
+  onLocationSelected,
+  readOnly = false,
+  initialLocation,
+  disableInteraction = false,
+}) => {
+  const [region, setRegion] = useState({
+    latitude: initialLocation?.latitude || 3.8480,
+    longitude: initialLocation?.longitude || 11.5021,
+    latitudeDelta: 0.01,
+    longitudeDelta: 0.01,
+  });
+  const [markerCoords, setMarkerCoords] = useState<LatLng | null>(initialLocation ?? null);
+  const [userLocation, setUserLocation] = useState<LatLng | null>(null);
+  const [routeCoords] = useState<LatLng[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [mapType, setMapType] = useState<'standard' | 'satellite' | 'hybrid'>('standard');
+
+  useEffect(() => {
+    if (visible) {
+      setLoading(true);
+      requestLocationPermission().then(loc => {
+        if (loc) {
+          setUserLocation(loc);
+          if (!initialLocation) {
+            setMarkerCoords(loc);
+            setRegion({
+              latitude: loc.latitude,
+              longitude: loc.longitude,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            });
+          }
+        } else {
+          Alert.alert('Permission Denied', 'Cannot access location. Please enable GPS.');
+          onClose();
+        }
+        setLoading(false);
+      });
+    }
+  }, [visible]);
+
+  const handleDragEnd = (e: any) => {
+    if (!readOnly && !disableInteraction) {
+      const coord = e.nativeEvent.coordinate;
+      setMarkerCoords(coord);
+    }
+  };
+
+  const handleDone = () => {
+    if (!markerCoords) {
+      Alert.alert('No location selected', 'Tap on the map.');
+      return;
+    }
+    onLocationSelected(markerCoords);
+  };
+
+  const toggleMapType = () => {
+    const types: ('standard' | 'satellite' | 'hybrid')[] = ['standard', 'satellite', 'hybrid'];
+    const current = types.indexOf(mapType);
+    setMapType(types[(current + 1) % types.length]);
+  };
+
+  return (
+    <Modal visible={visible} animationType="slide">
+      <View style={styles.container}>
+        {loading || !region ? (
+          <View style={styles.loaderContainer}>
+            <ActivityIndicator size="large" color="#D4AF37" />
+            <Text style={styles.loadingText}>Loading map...</Text>
+          </View>
+        ) : (
+          <>
+            <MapView
+              style={styles.map}
+              region={region}
+              mapType={mapType}
+              showsUserLocation
+              scrollEnabled={!disableInteraction}
+              zoomEnabled={!disableInteraction}
+              rotateEnabled={!disableInteraction}
+              pitchEnabled={!disableInteraction}
+              onPress={(e: any) => {
+                if (!readOnly && !disableInteraction && e.nativeEvent?.coordinate) {
+                  setMarkerCoords(e.nativeEvent.coordinate);
+                }
+              }}
+              onRegionChangeComplete={(newRegion: any) => setRegion(newRegion)}
+            >
+              {markerCoords && (
+                <Marker
+                  coordinate={markerCoords}
+                  draggable={!readOnly && !disableInteraction}
+                  onDragEnd={handleDragEnd}
+                  title="Listing Location"
+                  pinColor={readOnly ? 'gold' : 'red'}
+                />
+              )}
+              {userLocation && readOnly && routeCoords.length > 0 && (
+                <Polyline
+                  coordinates={routeCoords}
+                  strokeColor="gold"
+                  strokeWidth={4}
+                />
+              )}
+            </MapView>
+
+            {markerCoords && (
+              <View style={styles.coordBox}>
+                <Text style={styles.coordText}>
+                  Lat: {markerCoords.latitude.toFixed(6)}, Lon: {markerCoords.longitude.toFixed(6)}
+                </Text>
+              </View>
+            )}
+
+            <View style={styles.buttons}>
+              <TouchableOpacity style={styles.button} onPress={onClose}>
+                <Text style={styles.buttonText}>Close</Text>
+              </TouchableOpacity>
+
+              {!readOnly && !disableInteraction && (
+                <TouchableOpacity style={[styles.button, styles.confirmButton]} onPress={handleDone}>
+                  <Text style={[styles.buttonText, { color: '#1A1A1A' }]}>Done</Text>
+                </TouchableOpacity>
+              )}
+
+              <TouchableOpacity style={[styles.button, styles.mapTypeButton]} onPress={toggleMapType}>
+                <Text style={styles.buttonText}>{mapType.toUpperCase()}</Text>
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+    </Modal>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1 },
+  map: { flex: 1 },
+  loaderContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16 },
+  coordBox: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 40,
+    alignSelf: 'center',
+    backgroundColor: '#fff9e6',
+    padding: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+  },
+  coordText: { color: '#1A1A1A', fontWeight: '600' },
+  buttons: {
+    position: 'absolute',
+    bottom: 20,
+    left: 10,
+    right: 10,
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  button: {
+    backgroundColor: '#2A2A2A',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  confirmButton: { backgroundColor: '#D4AF37' },
+  mapTypeButton: { backgroundColor: '#0066cc' },
+  buttonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+});
+
+export default MapPickerModal;
+</file>
+
+<file path="src/i18n/locales/en.json">
+{
+  "common": {
+    "welcome": "Welcome",
+    "save": "Save Changes",
+    "logout": "Logout",
+    "language": "Language",
+    "notifications": "Notifications",
+    "loading": "Loading...",
+    "cancel": "Cancel",
+    "close": "Close",
+    "error": "Error",
+    "success": "Success",
+    "updating": "Updating...",
+    "back": "Back",
+    "all": "All",
+    "on": "on",
+    "generated_by": "Generated by",
+    "date_locale": "en-US",
+    "mins_ago": "{{count}}m ago",
+    "hours_ago": "{{count}}h ago",
+    "days_ago": "{{count}}d ago",
+    "new": "New"
+  },
+  "profile": {
+    "title": "My Profile",
+    "full_name": "Full Name",
+    "email": "Email",
+    "phone": "Phone",
+    "momo": "Momo Number",
+    "change_password": "Change Password",
+    "delete_account": "Delete Account",
+    "view_bookings": "View My Bookings",
+    "upload_listing": "Upload Listing",
+    "manage_listings": "Manage Listings",
+    "report_tenant": "Report a Tenant",
+    "report_landlord": "Report a Landlord",
+    "report_bug": "Report a Bug",
+    "terms": "Terms & Privacy Policy",
+    "new_password": "New Password",
+    "confirm_password": "Confirm Password",
+    "update_password": "Update Password",
+    "enter_new_password": "Enter new password",
+    "reenter_password": "Re-enter password",
+    "language_label": "Language",
+    "saved": "Profile updated successfully",
+    "verification_required": "Verification Required",
+    "verification_msg": "A confirmation link has been sent to your new email. Please verify it before logging in with this email.",
+    "open_gmail": "Open Gmail",
+    "delete_confirm_title": "Delete Account",
+    "delete_confirm_msg": "Are you sure you want to delete your account? This action cannot be fully undone.",
+    "delete": "Delete",
+    "session_missing": "Session missing",
+    "session_missing_msg": "Cannot update email. Please log out and log back in."
+  },
+  "listing": {
+    "available": "Available",
+    "rented": "Rented",
+    "fcfa": "FCFA",
+    "per_month": "/month",
+    "message": "Message",
+    "call": "Call",
+    "saved": "Saved",
+    "save": "Save",
+    "description": "Description",
+    "no_description": "No description provided.",
+    "key_details": "Key Details",
+    "city": "City",
+    "rooms": "Rooms",
+    "status": "Status",
+    "location": "Location",
+    "landlord": "Landlord",
+    "responds_within": "Usually responds within 1 hour",
+    "reviews": "Reviews",
+    "book_now": "Book This Property",
+    "no_media": "No media available",
+    "click_fullscreen": "Click for full screen",
+    "location_locked": "Location Locked",
+    "location_locked_msg": "The interactive map is only available after booking, unless this listing is boosted.",
+    "no_location": "No Location",
+    "no_coords_msg": "Landlord hasn't provided coordinates",
+    "boost_now": "BOOST NOW!",
+    "boosted": "Boosted",
+    "processing_video": "Processing Video...",
+    "untitled": "Untitled",
+    "no_description_card": "No description available.",
+    "spacious": "Spacious",
+    "available_now": "Available now",
+    "view_details": "View Details"
+  },
+  "home": {
+    "title": "DHUB",
+    "subtitle": "Finding you a better home",
+    "search_placeholder": "Search by city, title...",
+    "filter_title": "Filters",
+    "price_range": "Price Range",
+    "listing_type": "Property Type",
+    "stay_type": "Stay Type",
+    "distance": "Distance",
+    "apply_filters": "Apply Filters",
+    "reset": "Reset",
+    "near_me": "Near me",
+    "types": {
+      "room": "Room",
+      "studio": "Studio",
+      "apartment": "Apartment",
+      "house": "House",
+      "guest_house": "Guest House",
+      "hotel": "Hotel"
+    },
+    "stays": {
+      "short_term": "Short Term",
+      "long_term": "Long Term",
+      "both": "Both"
+    },
+    "no_listings": "No properties found matching your criteria",
+    "listings_available": "properties found"
+  },
+  "booking": {
+    "title": "Book Property",
+    "check_in": "Check-in Date",
+    "check_out": "Check-out Date",
+    "confirm": "Confirm Booking Request",
+    "terms_agree": "I have read and agree to the terms & conditions",
+    "select_dates": "Select Dates",
+    "total": "Total",
+    "loading": "Loading property details...",
+    "not_found": "Listing not found",
+    "base_price": "Base price / month",
+    "duration_type": "Duration Type",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "discount_note": "10% off",
+    "yearly_discount_applied": "Includes 10% yearly discount",
+    "move_in": "Move-in Date",
+    "move_out": "Move-out Date",
+    "fee_info_button": "Why is the fee {{amount}}?",
+    "fee_info_title": "Why is the fee {{amount}}?",
+    "fee_info_description": "{{landlordName}} listed this property on DHUB with a fee of {{rentAmount}} and a caution fee of {{cautionFee}}. Your caution fee is held safely in this app to ensure that you receive it when leaving the house without damaging the property. Note that if you do not complete the payment of rent via the app and use another method, you will lose your caution fee.",
+    "learn_more": "Learn more",
+    "landlord_placeholder": "The landlord",
+    "tap_to_change": "Tap to change",
+    "estimated_move_in": "Estimated Move-In Date",
+    "estimated_total": "Estimated Total",
+    "terms_title": "Terms & Conditions",
+    "no_terms": "No specific terms have been provided for this listing. Standard rental agreement terms apply.",
+    "download_pdf": "Download Booking Agreement",
+    "save_pdf_sub": "Save a copy of the terms as PDF",
+    "view_agreement": "View full agreement",
+    "contract_view_title": "Full Rental Agreement",
+    "contract_title": "Digital Booking Agreement",
+    "default_terms_template": "Standard Rental Agreement:\n\n1. Parties: The agreement is between the tenant (the student) and the landlord.\n\n2. Term: The tenancy begins on the move-in date and ends on the move-out date specified in the booking.\n\n3. Rent & Payment: Rent and any applicable fees are payable through DHUB as described in the booking. Failure to complete payment through the DHUB platform may result in forfeiture of the caution (security) fee.\n\n4. Security Deposit (Caution): The caution fee is held in escrow by DHUB and will be released subject to the property's condition at checkout and reconciliation of outstanding charges.\n\n5. Use & Conduct: The tenant agrees to use the property for lawful residential purposes only, to keep it in good condition, and to comply with any house rules added by the landlord below.\n\n6. Maintenance & Repairs: Tenants must promptly report maintenance issues. Landlords are responsible for repairs unless damage is caused by the tenant's negligence.\n\n7. Termination: Early termination and dispute procedures follow the listing's stated terms and applicable local law.\n\n8. Governing Law: This agreement is governed by applicable law for the property's jurisdiction.\n\n9. Electronic Signature: By electronically signing, the tenant consents that this digital agreement is legally binding once the booking is active and payment is completed.\n\n[Add any specific house rules or additional terms here]",
+    "student_placeholder": "The student",
+    "contract_intro": "This Booking Agreement is entered into between {{studentName}} and {{landlordName}} for the property \"{{listingTitle}}\".",
+    "contract_amount": "The total estimated amount is {{total}}. Rent charge: {{rentAmount}}. Caution (escrow): {{cautionFee}}.",
+    "contract_escrow": "The caution fee is held securely by DHUB in escrow to protect the property and will be released subject to the property's condition at checkout.",
+    "contract_enforceability": "This agreement is pending until payment is completed through DHUB. Once payment is completed and the booking is activated, this agreement becomes enforceable.",
+    "contract_terms_version": "Agreement Terms Version: {{version}}.",
+    "contract_expiration": "Booking period: from {{start}} to {{end}}.",
+    "contract_signature_clause": "By electronically signing below, the tenant confirms they have read and accepted these terms and that this electronic signature will be treated as a legally binding agreement once the booking is active.",
+    "sign_agreement": "Sign booking agreement",
+    "signature_prompt": "Sign electronically to make this booking legally binding.",
+    "signature_prompt_title": "Electronic Agreement",
+    "signature_description": "Type your full name to electronically sign the booking agreement. This agreement will be pending until payment is completed, and it becomes enforceable once the booking is active.",
+    "signature_placeholder": "Type your full name as legally binding consent",
+    "signature_error": "Please type your full name to sign the agreement.",
+    "sign_now": "Sign Now",
+    "signature_summary_title": "Agreement Signed",
+    "signature_summary_sub": "Signed on {{date}}. Complete payment to enforce the agreement.",
+    "signature_review_title": "Signed Agreement",
+    "signature_review_description": "This agreement has been signed. The QR code below can be used to verify the agreement ID later.",
+    "agreement_details": "Agreement Details",
+    "agreement_id_label": "Agreement ID",
+    "signed_at_label": "Signed At",
+    "signature_method_label": "Signature Method",
+    "signature_method_typed": "Typed name",
+    "signature_text_label": "Signature Text",
+    "agreement_hash_label": "Agreement Hash",
+    "contract_status_label": "Contract Status",
+    "contract_status_signed": "Signed (pending enforcement)",
+    "enforceable_note": "This booking agreement is enforceable once payment is completed and the booking becomes active.",
+    "qr_code_label": "Agreement QR Code",
+    "signed_by": "Signed by",
+    "signature_required_title": "Signature Required",
+    "signature_required_msg": "Please sign the booking agreement before creating the booking.",
+    "signature_required_hint": "You must sign the agreement before confirming the booking.",
+    "accept_to_continue": "Accept the terms above to continue",
+    "agreement_required": "Agreement Required",
+    "agreement_msg": "Please read and accept the terms & conditions first.",
+    "select_duration_msg": "Please choose a duration type (Monthly or Yearly).",
+    "invalid_dates_msg": "The end date must be after the start date.",
+    "failed": "Booking Failed",
+    "failed_msg": "Something went wrong. Please try again.",
+    "declined_title": "Booking Declined",
+    "declined_msg": "The landlord has declined your booking request.",
+    "not_approved_title": "Not Yet Approved",
+    "not_approved_msg": "The landlord has not approved this booking yet. Please wait.",
+    "pending_title": "Booking Request",
+    "hero_payment_complete": "Payment Complete!",
+    "hero_ready_to_pay": "Ready to Pay",
+    "hero_awaiting_approval": "Awaiting Approval",
+    "hero_payment_complete_sub": "Your booking has been confirmed. Welcome home!",
+    "hero_ready_to_pay_sub": "The landlord approved your request. Complete your payment to confirm.",
+    "hero_awaiting_approval_sub": "Your booking request has been sent. The landlord will review it shortly.",
+    "progress": "Progress",
+    "step_request_sent": "Request Sent",
+    "step_request_sent_sub": "Awaiting landlord review",
+    "step_approved": "Landlord Approved",
+    "step_approved_sub": "Ready to proceed to payment",
+    "step_confirmed": "Booking Confirmed",
+    "step_confirmed_sub": "Payment received & stay confirmed",
+    "property": "Property",
+    "amount_due": "Amount Due",
+    "booking_status": "Booking Status",
+    "approval": "Approval",
+    "key_details": "Key Details",
+    "expired_title": "Booking Expired",
+    "expired_msg": "Your booking request expired because payment was not completed within 24 hours. Please start a new request to secure this property.",
+    "proceed_to_payment": "Proceed to Payment",
+    "wait_notice": "We'll notify you as soon as the landlord responds. This usually takes a few hours.",
+    "success_notice": "Payment completed successfully. Your booking is now confirmed!"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clear_all": "Clear All",
+    "empty": "No notifications yet",
+    "clear_all_confirm_title": "Clear All",
+    "clear_all_confirm_msg": "Mark all notifications as read?",
+    "view_details": "View Details",
+    "reply_now": "Reply Now",
+    "dismiss": "Dismiss"
+  },
+  "payment": {
+    "title": "Payments",
+    "history_tab": "Payment History",
+    "send_tab": "Send Payment",
+    "recent_transactions": "Recent Transactions",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "loading_history": "Loading history...",
+    "no_history": "No payment history yet.",
+    "retry": "Retry",
+    "momo_number_label": "Your MTN MoMo Number *",
+    "momo_placeholder": "06XX XXX XXX",
+    "amount_label": "Amount (XAF) *",
+    "amount_placeholder": "Enter amount",
+    "receiver_label": "Receiver *",
+    "description_label": "Description",
+    "description_placeholder": "Payment purpose (optional)",
+    "send_button": "Send Payment",
+    "receipt_title": "Payment Receipt",
+    "qr_verify": "Scan to verify transaction",
+    "transaction_details": "Transaction Details",
+    "amount_details": "Amount Details",
+    "parties_title": "Parties",
+    "transaction_id": "Transaction ID",
+    "date": "Date",
+    "status": "Status",
+    "amount": "Amount",
+    "fee": "Fee",
+    "net_amount": "Net Amount",
+    "from": "From",
+    "to": "To",
+    "download_pdf": "Download PDF",
+    "close": "Close",
+    "statuses": {
+      "completed": "Completed",
+      "pending": "Pending",
+      "failed": "Failed"
+    },
+    "initiate_success_title": "Payment Initiated 🎉",
+    "initiate_success_msg": "Your payment has been sent. Please approve the MoMo prompt on your phone to complete the transaction.",
+    "validation_error": "Validation Error",
+    "validation_msg": "Please fill in all required fields (Amount and Phone numbers)",
+    "amount_error": "Please enter a valid amount",
+    "session_error": "Session Error",
+    "session_msg": "User session not found. Please log in again.",
+    "payment_error": "Payment Error"
+  },
+  "chat": {
+    "placeholder": "Type a message...",
+    "loading": "Loading conversation...",
+    "online": "Online",
+    "unknown_user": "Unknown User",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "empty_title": "Start the conversation",
+    "empty_subtitle": "Say hello! Your messages are private between you and {{name}}.",
+    "other_user": "the other user"
+  },
+  "bookings": {
+    "title": "My Bookings",
+    "details_title": "Booking Details",
+    "total": "Total",
+    "confirmed": "Confirmed",
+    "paid": "Paid",
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "active": "Active",
+    "upcoming": "Upcoming",
+    "from": "From",
+    "to": "To",
+    "days_left": "{{count}}d left",
+    "days_left_label": "Days Left",
+    "amount_label": "Amount (XAF)",
+    "rooms_label": "Rooms",
+    "info_title": "Booking Information",
+    "check_in": "Check-in",
+    "check_out": "Check-out",
+    "payment_status_label": "Payment Status",
+    "agreed_to_terms": "Agreed to Terms",
+    "property_details": "Property Details",
+    "actions": "Actions",
+    "rate_property": "Rate this property",
+    "report_issue": "Report an issue",
+    "help_title": "Need help with this booking?",
+    "call_support": "Call Support",
+    "email_support": "Email Support",
+    "pay_now": "Proceed to Payment",
+    "cancel_booking": "Cancel Booking",
+    "ended": "Ended",
+    "no_bookings": "No Bookings Yet",
+    "no_bookings_msg": "When you book a property, your bookings will appear here",
+    "explore": "Explore Properties",
+    "offline_mode": "Offline Mode",
+    "offline_msg": "You're viewing cached data. Some information may be outdated.",
+    "cache_notice": "Showing cached bookings",
+    "renew_grace_subtitle": "Pay the XAF 5,000 Rent Processing Fee to renew, or confirm your move-out now. Auto-termination in {{days}} day(s).",
+    "renew_lease_subtitle": "Your lease is ending soon. Choose to extend your stay or plan your move-out.",
+    "why_am_i_paying": "Why am I paying this?",
+    "why_payment_title": "Why this payment?",
+    "why_payment_caution": "1. Caution Guarantee:",
+    "why_payment_caution_desc": " Your money is held safely by DHUB. It serves as a guarantee.",
+    "why_payment_fee": "2. Processing Fee:",
+    "why_payment_fee_desc": " A non-refundable FCFA 5,000 fee is applied for the service.",
+    "why_payment_unlocks": "3. Unlocks the property:",
+    "why_payment_unlocks_desc": " Once paid, you'll receive the property's exact location to visit and inspect.",
+    "why_payment_refund": "4. Refund Policy:",
+    "why_payment_refund_desc": " If you don't like the property and cancel the booking, 97% of your caution is refunded (a 3% platform fee is deducted).",
+    "i_understand": "I Understand",
+    "initial_deposit_label": "Initial Deposit (Caution + FCFA 5,000 Rent Processing Fee)",
+    "complete_rent_payment": "Complete Rent Payment",
+    "cancel_booking_refund_caution": "Cancel Booking & Refund Caution",
+    "refund_processing": "Refund Processing",
+    "refund_processing_desc": "For security reasons and to protect our landlords, DHUB takes up to 72 hours to verify and process caution refunds. Your money (minus 3% platform fee) will be sent to your Mobile Money account soon.",
+    "refund_paused": "Refund Paused",
+    "refund_paused_desc": "Your caution refund has been placed on hold by DHUB for manual review. Please contact support at support@dhubcmr.com for assistance.",
+    "i_have_moved_in": "I Have Moved In ✓",
+    "location_not_available": "Location not available",
+    "tap_to_open_maps": "Tap to open maps",
+    "dispute_resolution": "Dispute Resolution",
+    "dispute_resolution_desc": "The landlord has raised an issue regarding the property condition. Please provide your explanation and upload up to 3 photos as evidence. DHUB will review and make a final ruling.",
+    "your_evidence_submitted": "Your Evidence Submitted:",
+    "photos_count": "Photos ({{count}}/3):",
+    "unable_to_load": "Unable to Load Booking",
+    "try_again": "Try Again",
+    "extend_stay": "Extend Stay",
+    "confirm_checkout": "Confirm Checkout",
+    "unknown_property": "Unknown Property",
+    "size": "Size",
+    "not_specified": "Not specified",
+    "utilities": "Utilities",
+    "included": "Included",
+    "parking": "Parking",
+    "available": "Available",
+    "duration_label": "Duration:",
+    "time_remaining_label": "Time Remaining:",
+    "status_label": "Status:",
+    "pending_move_in": "Pending Move-In",
+    "location_and_landlord": "Location & Landlord",
+    "unknown": "Unknown",
+    "one_year": "1 Year",
+    "days_count": "{{count}} Days",
+    "daily": "Daily",
+    "monthly": "Monthly",
+    "yearly": "Yearly"
+  },
+  "auth": {
+    "welcome_back": "Welcome Back",
+    "sign_in_subtitle": "Sign in to your account",
+    "phone": "Phone",
+    "email": "Email",
+    "phone_placeholder": "Phone Number (e.g. 6xxxxxxxx)",
+    "email_placeholder": "Email Address",
+    "password": "Password",
+    "sign_in": "Sign In",
+    "signing_in": "Signing In...",
+    "magic_link": "Or send me a Magic Link (No password)",
+    "or": "OR",
+    "continue_with_google": "Continue with Google",
+    "forgot_password": "Forgot Password?",
+    "no_account": "Don't have an account?",
+    "sign_up": "Sign Up",
+    "create_account": "Create Account",
+    "sign_up_subtitle": "Join DHUB to find your next home",
+    "i_am_student": "I am a Student",
+    "i_am_landlord": "I am a Landlord",
+    "full_name": "Full Name",
+    "whatsapp_number": "WhatsApp Number (9 digits)",
+    "mobile_money": "Mobile Money Number (9 digits)",
+    "password_placeholder": "Password (min 6 characters)",
+    "confirm_password": "Confirm Password",
+    "age_placeholder": "Age",
+    "address_placeholder": "Home Address",
+    "agree_tos": "I agree to the Terms of Service and Privacy Policy",
+    "signing_up": "Signing Up...",
+    "has_account": "Already have an account?",
+    "sign_in_link": "Sign In"
+  }
+}
+</file>
+
+<file path="src/i18n/locales/fr.json">
+{
+  "common": {
+    "welcome": "Bienvenue",
+    "save": "Enregistrer",
+    "logout": "Déconnexion",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "loading": "Chargement...",
+    "cancel": "Annuler",
+    "error": "Erreur",
+    "success": "Succès",
+    "updating": "Mise à jour...",
+    "back": "Retour",
+    "all": "Tous",
+    "new": "Nouveau",
+    "unknown": "Inconnu",
+    "guest": "Invité",
+    "on": "le",
+    "generated_by": "Généré par",
+    "date_locale": "fr-FR",
+    "mins_ago": "il y a {{count}}m",
+    "hours_ago": "il y a {{count}}h",
+    "days_ago": "il y a {{count}}j"
+  },
+  "profile": {
+    "title": "Mon Profil",
+    "full_name": "Nom Complet",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "momo": "Numéro Momo",
+    "change_password": "Modifier le mot de passe",
+    "delete_account": "Supprimer le compte",
+    "view_bookings": "Voir mes réservations",
+    "upload_listing": "Ajouter une annonce",
+    "manage_listings": "Gérer les annonces",
+    "report_tenant": "Signaler un locataire",
+    "report_landlord": "Signaler un propriétaire",
+    "report_bug": "Signaler un bug",
+    "terms": "Conditions & Politique de confidentialité",
+    "new_password": "Nouveau mot de passe",
+    "confirm_password": "Confirmer le mot de passe",
+    "update_password": "Mettre à jour",
+    "enter_new_password": "Entrez le nouveau mot de passe",
+    "reenter_password": "Confirmez le mot de passe",
+    "language_label": "Langue",
+    "saved": "Profil mis à jour avec succès",
+    "verification_required": "Vérification requise",
+    "verification_msg": "Un lien de confirmation a été envoyé à votre nouvelle adresse. Veuillez vérifier avant de vous connecter.",
+    "open_gmail": "Ouvrir Gmail",
+    "delete_confirm_title": "Supprimer le compte",
+    "delete_confirm_msg": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+    "delete": "Supprimer",
+    "session_missing": "Session manquante",
+    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter."
+  },
+  "listing": {
+    "available": "Disponible",
+    "rented": "Loué",
+    "fcfa": "FCFA",
+    "per_month": "/mois",
+    "message": "Message",
+    "call": "Appeler",
+    "saved": "Enregistré",
+    "save": "Enregistrer",
+    "description": "Description",
+    "no_description": "Aucune description fournie.",
+    "key_details": "Détails clés",
+    "city": "Ville",
+    "rooms": "Pièces",
+    "status": "Statut",
+    "location": "Localisation",
+    "landlord": "Propriétaire",
+    "responds_within": "Répond généralement en 1 heure",
+    "reviews": "Avis",
+    "book_now": "Réserver cette propriété",
+    "no_media": "Aucun média disponible",
+    "click_fullscreen": "Cliquez pour plein écran",
+    "location_locked": "Localisation verrouillée",
+    "location_locked_msg": "La carte interactive n'est disponible qu'après la réservation, sauf si cette annonce est boostée.",
+    "no_location": "Pas de localisation",
+    "no_coords_msg": "Le propriétaire n'a pas fourni de coordonnées",
+    "boost_now": "BOOSTER MAINTENANT !",
+    "boosted": "Boosté",
+    "processing_video": "Traitement de la vidéo...",
+    "untitled": "Sans titre",
+    "no_description_card": "Aucune description disponible.",
+    "spacious": "Spacieux",
+    "available_now": "Disponible maintenant",
+    "view_details": "Voir les détails"
+  },
+  "home": {
+    "title": "DHUB",
+    "subtitle": "Trouvez un meilleur foyer",
+    "search_placeholder": "Rechercher par ville, titre...",
+    "filter_title": "Filtres",
+    "price_range": "Gamme de prix",
+    "listing_type": "Type de propriété",
+    "stay_type": "Type de séjour",
+    "distance": "Distance",
+    "apply_filters": "Appliquer les filtres",
+    "reset": "Réinitialiser",
+    "near_me": "Près de moi",
+    "types": {
+      "room": "Chambre",
+      "studio": "Studio",
+      "apartment": "Appartement",
+      "house": "Maison",
+      "guest_house": "Maison d'hôtes",
+      "hotel": "Hôtel"
+    },
+    "stays": {
+      "short_term": "Court Terme",
+      "long_term": "Long Terme",
+      "both": "Les deux"
+    },
+    "no_listings": "Aucune propriété trouvée correspondant à vos critères",
+    "listings_available": "propriétés trouvées"
+  },
+  "booking": {
+    "title": "Réserver la propriété",
+    "check_in": "Date d'arrivée",
+    "check_out": "Date de départ",
+    "confirm": "Confirmer la demande de réservation",
+    "terms_agree": "J'ai lu et j'accepte les conditions générales",
+    "select_dates": "Sélectionner les dates",
+    "total": "Total",
+    "loading": "Chargement des détails de la propriété...",
+    "not_found": "Annonce non trouvée",
+    "base_price": "Prix de base / mois",
+    "duration_type": "Type de durée",
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "discount_note": "-10%",
+    "yearly_discount_applied": "Remise annuelle de 10% incluse",
+    "move_in": "Date d'entrée",
+    "landlord_placeholder": "Le propriétaire",
+    "tap_to_change": "Appuyez pour modifier",
+    "estimated_move_in": "Date d'emménagement estimée",
+    "estimated_total": "Total estimé",
+    "terms_title": "Conditions générales",
+    "no_terms": "Aucune condition spécifique n'a été fournie pour cette annonce. Les conditions de location standard s'appliquent.",
+    "download_pdf": "Télécharger le contrat",
+    "save_pdf_sub": "Enregistrer une copie en PDF",
+    "accept_to_continue": "Acceptez les conditions pour continuer",
+    "agreement_required": "Accord requis",
+    "agreement_msg": "Veuillez lire et accepter les conditions générales d'abord.",
+    "select_duration_msg": "Veuillez choisir un type de durée (Mensuel ou Annuel).",
+    "invalid_dates_msg": "La date de fin doit être postérieure à la date de début.",
+    "failed": "Échec de la réservation",
+    "failed_msg": "Un problème est survenu. Veuillez réessayer.",
+    "declined_title": "Réservation déclinée",
+    "declined_msg": "Le propriétaire a décliné votre demande de réservation.",
+    "not_approved_title": "Pas encore approuvé",
+    "not_approved_msg": "Le propriétaire n'a pas encore approuvé cette réservation. Veuillez patienter.",
+    "pending_title": "Demande de réservation",
+    "hero_payment_complete": "Paiement terminé !",
+    "hero_ready_to_pay": "Prêt à payer",
+    "hero_awaiting_approval": "En attente d'approbation",
+    "hero_payment_complete_sub": "Votre réservation a été confirmée. Bienvenue chez vous !",
+    "hero_ready_to_pay_sub": "Le propriétaire a approuvé votre demande. Effectuez votre paiement pour confirmer.",
+    "hero_awaiting_approval_sub": "Votre demande de réservation a été envoyée. Le propriétaire l'examinera sous peu.",
+    "progress": "Progrès",
+    "step_request_sent": "Demande envoyée",
+    "step_request_sent_sub": "En attente de l'examen du propriétaire",
+    "step_approved": "Approuvé par le propriétaire",
+    "step_approved_sub": "Prêt à passer au paiement",
+    "step_confirmed": "Réservation confirmée",
+    "step_confirmed_sub": "Paiement reçu et séjour confirmé",
+    "property": "Propriété",
+    "amount_due": "Montant dû",
+    "booking_status": "Statut de la réservation",
+    "approval": "Approbation",
+    "proceed_to_payment": "Passer au paiement",
+    "wait_notice": "Nous vous informerons dès que le propriétaire répondra. Cela prend généralement quelques heures.",
+    "success_notice": "Paiement effectué avec succès. Votre réservation est maintenant confirmée!"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clear_all": "Tout effacer",
+    "empty": "Pas encore de notifications",
+    "clear_all_confirm_title": "Tout effacer",
+    "clear_all_confirm_msg": "Marquer toutes les notifications comme lues ?",
+    "view_details": "Voir les détails",
+    "reply_now": "Répondre maintenant",
+    "dismiss": "Ignorer"
+  },
+  "payment": {
+    "title": "Paiements",
+    "history_tab": "Historique",
+    "send_tab": "Envoyer",
+    "recent_transactions": "Transactions récentes",
+    "refresh": "Actualiser",
+    "refreshing": "Actualisation...",
+    "loading_history": "Chargement de l'historique...",
+    "no_history": "Aucun historique de paiement.",
+    "retry": "Réessayer",
+    "momo_number_label": "Votre numéro MTN MoMo *",
+    "momo_placeholder": "6XX XXX XXX",
+    "amount_label": "Montant (XAF) *",
+    "amount_placeholder": "Entrez le montant",
+    "receiver_label": "Destinataire *",
+    "description_label": "Description",
+    "description_placeholder": "Motif du paiement (optionnel)",
+    "send_button": "Envoyer le paiement",
+    "receipt_title": "Reçu de paiement",
+    "qr_verify": "Scanner pour vérifier la transaction",
+    "transaction_details": "Détails de la transaction",
+    "amount_details": "Détails du montant",
+    "parties_title": "Parties",
+    "transaction_id": "ID Transaction",
+    "date": "Date",
+    "status": "Statut",
+    "amount": "Montant",
+    "fee": "Frais",
+    "net_amount": "Montant net",
+    "from": "De",
+    "to": "À",
+    "download_pdf": "Télécharger PDF",
+    "close": "Fermer",
+    "statuses": {
+      "completed": "Terminé",
+      "pending": "En attente",
+      "failed": "Échoué"
+    },
+    "initiate_success_title": "Paiement initié 🎉",
+    "initiate_success_msg": "Votre paiement a été envoyé. Veuillez valider la demande MoMo sur votre téléphone pour terminer la transaction.",
+    "validation_error": "Erreur de validation",
+    "validation_msg": "Veuillez remplir tous les champs obligatoires (Montant et numéros de téléphone)",
+    "amount_error": "Veuillez entrer un montant valide",
+    "session_error": "Erreur de session",
+    "session_msg": "Session utilisateur non trouvée. Veuillez vous reconnecter.",
+    "payment_error": "Erreur de paiement"
+  },
+  "chat": {
+    "placeholder": "Écrivez un message...",
+    "loading": "Chargement de la conversation...",
+    "online": "En ligne",
+    "unknown_user": "Utilisateur inconnu",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "empty_title": "Démarrer la conversation",
+    "empty_subtitle": "Dites bonjour ! Vos messages sont privés entre vous et {{name}}.",
+    "other_user": "l'autre utilisateur"
+  },
+  "bookings": {
+    "title": "Mes Réservations",
+    "details_title": "Détails de la réservation",
+    "total": "Total",
+    "confirmed": "Confirmé",
+    "paid": "Payé",
+    "pending": "En attente",
+    "cancelled": "Annulé",
+    "active": "Actif",
+    "upcoming": "À venir",
+    "from": "Du",
+    "to": "Au",
+    "days_left": "{{count}}j restants",
+    "days_left_label": "Jours restants",
+    "amount_label": "Montant (XAF)",
+    "rooms_label": "Pièces",
+    "info_title": "Informations de réservation",
+    "check_in": "Arrivée",
+    "check_out": "Départ",
+    "payment_status_label": "Statut du paiement",
+    "agreed_to_terms": "Conditions acceptées",
+    "property_details": "Détails de la propriété",
+    "actions": "Actions",
+    "rate_property": "Noter cette propriété",
+    "report_issue": "Signaler un problème",
+    "help_title": "Besoin d'aide ?",
+    "call_support": "Appeler le support",
+    "email_support": "Email support",
+    "pay_now": "Procéder au paiement",
+    "cancel_booking": "Annuler la réservation",
+    "ended": "Terminé",
+    "no_bookings": "Aucune réservation",
+    "no_bookings_msg": "Lorsque vous réservez une propriété, vos réservations apparaîtront ici",
+    "explore": "Explorer les propriétés",
+    "offline_mode": "Mode Hors Ligne",
+    "offline_msg": "Vous consultez des données en cache. Certaines informations peuvent être obsolètes.",
+    "cache_notice": "Affichage des réservations en cache",
+    "renew_grace_subtitle": "Payez les frais de traitement de loyer de 5 000 FCFA pour renouveler, ou confirmez votre déménagement maintenant. Résiliation automatique dans {{days}} jour(s).",
+    "renew_lease_subtitle": "Votre bail se termine bientôt. Choisissez de prolonger votre séjour ou planifiez votre déménagement.",
+    "why_am_i_paying": "Pourquoi je paie ça ?",
+    "why_payment_title": "Pourquoi ce paiement ?",
+    "why_payment_caution": "1. Garantie de Caution :",
+    "why_payment_caution_desc": " Votre argent est conservé en toute sécurité par DHUB. Il sert de garantie.",
+    "why_payment_fee": "2. Frais de Traitement :",
+    "why_payment_fee_desc": " Des frais non remboursables de 5 000 FCFA sont appliqués pour le service.",
+    "why_payment_unlocks": "3. Débloque la propriété :",
+    "why_payment_unlocks_desc": " Une fois payé, vous recevrez l'emplacement exact de la propriété pour visiter et inspecter.",
+    "why_payment_refund": "4. Politique de Remboursement :",
+    "why_payment_refund_desc": " Si vous n'aimez pas la propriété et annulez la réservation, 97% de votre caution est remboursée (3% de frais de plateforme sont déduits).",
+    "i_understand": "Je Comprends",
+    "initial_deposit_label": "Dépôt Initial (Caution + 5 000 FCFA Frais de Traitement)",
+    "complete_rent_payment": "Compléter le Paiement du Loyer",
+    "cancel_booking_refund_caution": "Annuler la Réservation & Rembourser la Caution",
+    "refund_processing": "Remboursement en Cours",
+    "refund_processing_desc": "Pour des raisons de sécurité et pour protéger nos propriétaires, DHUB prend jusqu'à 72 heures pour vérifier et traiter les remboursements de caution. Votre argent (moins 3% de frais de plateforme) sera envoyé sur votre compte Mobile Money bientôt.",
+    "refund_paused": "Remboursement Suspendu",
+    "refund_paused_desc": "Votre remboursement de caution a été mis en attente par DHUB pour un examen manuel. Veuillez contacter le support à support@dhubcmr.com pour obtenir de l'aide.",
+    "i_have_moved_in": "J'ai Emménagé ✓",
+    "location_not_available": "Emplacement non disponible",
+    "tap_to_open_maps": "Appuyez pour ouvrir les cartes",
+    "dispute_resolution": "Résolution de Litige",
+    "dispute_resolution_desc": "Le propriétaire a soulevé un problème concernant l'état de la propriété. Veuillez fournir votre explication et télécharger jusqu'à 3 photos comme preuve. DHUB examinera et rendra une décision finale.",
+    "your_evidence_submitted": "Votre Preuve Soumise :",
+    "photos_count": "Photos ({{count}}/3):",
+    "unable_to_load": "Impossible de charger la réservation",
+    "try_again": "Réessayer",
+    "extend_stay": "Prolonger le séjour",
+    "confirm_checkout": "Confirmer le départ",
+    "unknown_property": "Propriété inconnue",
+    "size": "Taille",
+    "not_specified": "Non spécifié",
+    "utilities": "Services publics",
+    "included": "Inclus",
+    "parking": "Parking",
+    "available": "Disponible",
+    "duration_label": "Durée :",
+    "time_remaining_label": "Temps restant :",
+    "status_label": "Statut :",
+    "pending_move_in": "En attente d'emménagement",
+    "location_and_landlord": "Emplacement et propriétaire",
+    "unknown": "Inconnu",
+    "one_year": "1 An",
+    "days_count": "{{count}} Jours",
+    "daily": "Quotidien",
+    "monthly": "Mensuel",
+    "yearly": "Annuel"
+  },
+  "auth": {
+    "welcome_back": "Bon retour",
+    "sign_in_subtitle": "Connectez-vous à votre compte",
+    "phone": "Téléphone",
+    "email": "Email",
+    "phone_placeholder": "Numéro de téléphone (ex: 6xxxxxxxx)",
+    "email_placeholder": "Adresse email",
+    "password": "Mot de passe",
+    "sign_in": "Se connecter",
+    "signing_in": "Connexion en cours...",
+    "magic_link": "Ou envoyez-moi un Lien Magique (sans mot de passe)",
+    "or": "OU",
+    "continue_with_google": "Continuer avec Google",
+    "forgot_password": "Mot de passe oublié ?",
+    "no_account": "Vous n'avez pas de compte ?",
+    "sign_up": "S'inscrire",
+    "create_account": "Créer un compte",
+    "sign_up_subtitle": "Rejoignez DHUB pour trouver votre prochaine maison",
+    "i_am_student": "Je suis un Étudiant",
+    "i_am_landlord": "Je suis un Propriétaire",
+    "full_name": "Nom complet",
+    "whatsapp_number": "Numéro WhatsApp (9 chiffres)",
+    "mobile_money": "Numéro Mobile Money (9 chiffres)",
+    "password_placeholder": "Mot de passe (min 6 caractères)",
+    "confirm_password": "Confirmer le mot de passe",
+    "age_placeholder": "Âge",
+    "address_placeholder": "Adresse du domicile",
+    "agree_tos": "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité",
+    "signing_up": "Inscription en cours...",
+    "has_account": "Vous avez déjà un compte ?",
+    "sign_in_link": "Se connecter"
+  }
+}
+</file>
+
+<file path="src/i18n/locales/pcm.json">
+{
+  "common": {
+    "welcome": "Welcome",
+    "save": "Save Am",
+    "logout": "Log Out",
+    "language": "Language",
+    "notifications": "Notifications",
+    "loading": "E dey load...",
+    "cancel": "Cancel",
+    "error": "Error",
+    "success": "E don work",
+    "updating": "E dey update...",
+    "back": "Go Back",
+    "all": "All",
+    "new": "New",
+    "unknown": "E no know",
+    "guest": "Visitor",
+    "on": "for",
+    "generated_by": "Make by",
+    "date_locale": "en-GB",
+    "mins_ago": "{{count}}m ago",
+    "hours_ago": "{{count}}h ago",
+    "days_ago": "{{count}}d ago"
+  },
+  "profile": {
+    "title": "My Profile",
+    "full_name": "Your Full Name",
+    "email": "Email",
+    "phone": "Phone Number",
+    "momo": "Momo Number",
+    "change_password": "Change Password",
+    "delete_account": "Delete Account",
+    "view_bookings": "See My Bookings",
+    "upload_listing": "Upload House",
+    "manage_listings": "Manage Houses",
+    "report_tenant": "Report Tenant",
+    "report_landlord": "Report Landlord",
+    "report_bug": "Report Bug",
+    "terms": "Terms & Privacy",
+    "new_password": "New Password",
+    "confirm_password": "Confirm Password",
+    "update_password": "Update Password",
+    "enter_new_password": "Enter new password",
+    "reenter_password": "Enter password again",
+    "language_label": "Language",
+    "saved": "Profile don update",
+    "verification_required": "You need to verify",
+    "verification_msg": "We don send confirm link go your new email. Check am before you login.",
+    "open_gmail": "Open Gmail",
+    "delete_confirm_title": "Delete Account",
+    "delete_confirm_msg": "You sure say you want delete your account? E no fit undo.",
+    "delete": "Delete",
+    "session_missing": "Session no dey",
+    "session_missing_msg": "You no fit update email. Logout and login again."
+  },
+  "listing": {
+    "available": "E dey available",
+    "rented": "People don rent am",
+    "fcfa": "FCFA",
+    "message": "Message",
+    "call": "Call Am",
+    "saved": "Saved",
+    "save": "Save",
+    "description": "Description",
+    "no_description": "No description for here.",
+    "key_details": "Important Info",
+    "city": "City",
+    "rooms": "Rooms",
+    "status": "Status",
+    "location": "Location",
+    "landlord": "Landlord",
+    "responds_within": "E dey reply sharp sharp",
+    "reviews": "What people talk",
+    "book_now": "Book This House",
+    "no_media": "No pictures/video",
+    "click_fullscreen": "Click to see big",
+    "location_locked": "Location lock",
+    "location_locked_msg": "You must book before you see map, or if the house get boost.",
+    "no_location": "No map",
+    "no_coords_msg": "Landlord no put map location",
+    "per_month": "/month",
+    "boost_now": "MAKE E POP!",
+    "boosted": "E dey pop",
+    "processing_video": "Video de load...",
+    "untitled": "No name",
+    "no_description_card": "No description here.",
+    "spacious": "Big space",
+    "available_now": "E dey ready",
+    "view_details": "See more"
+  },
+  "home": {
+    "title": "DHUB",
+    "subtitle": "Find better house for your head",
+    "search_placeholder": "Search city or house name...",
+    "filter_title": "Filters",
+    "price_range": "How much you want pay",
+    "listing_type": "Which kind house",
+    "stay_type": "How long you go stay",
+    "distance": "How far e dey",
+    "apply_filters": "Check am",
+    "reset": "Clean am",
+    "near_me": "Near me",
+    "types": {
+      "room": "Room",
+      "studio": "Studio",
+      "apartment": "Apartment",
+      "house": "House",
+      "guest_house": "Guest House",
+      "hotel": "Hotel"
+    },
+    "stays": {
+      "short_term": "Small time",
+      "long_term": "Long time",
+      "both": "Any one"
+    },
+    "no_listings": "No house dey for your head",
+    "listings_available": "house dem dey"
+  },
+  "booking": {
+    "title": "Book This House",
+    "check_in": "When you dey come",
+    "check_out": "When you dey go",
+    "confirm": "Confirm Booking Request",
+    "terms_agree": "I don read and I gree for the terms",
+    "select_dates": "Pick Dates",
+    "total": "Total",
+    "loading": "We dey load house info...",
+    "not_found": "House no dey",
+    "base_price": "Base price / month",
+    "duration_type": "Duration Type",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "discount_note": "10% off",
+    "yearly_discount_applied": "10% off since na for year",
+    "move_in": "When you go enter",
+    "landlord_placeholder": "Di landlord",
+    "tap_to_change": "Tap to change",
+    "estimated_move_in": "Estimated Move-In Date",
+    "estimated_total": "Estimated Total",
+    "terms_title": "Terms & Conditions",
+    "no_terms": "No specific terms for here. Standard rental terms apply.",
+    "download_pdf": "Download Booking Agreement",
+    "save_pdf_sub": "Save copy as PDF",
+    "accept_to_continue": "Gree for terms before you continue",
+    "agreement_required": "You must gree",
+    "agreement_msg": "Abeg read and gree for the terms first.",
+    "select_duration_msg": "Pick how long you go stay (Month or Year).",
+    "invalid_dates_msg": "Date you dey commot must be after date you enter.",
+    "failed": "Booking Failed",
+    "failed_msg": "Something go wrong. Abeg try again.",
+    "declined_title": "Dem decline am",
+    "declined_msg": "Landlord don decline your booking.",
+    "not_approved_title": "E neva ready",
+    "not_approved_msg": "Landlord neva approve this booking yet. Wait small.",
+    "pending_title": "Booking Request",
+    "hero_payment_complete": "Money don enter!",
+    "hero_ready_to_pay": "Ready for pay",
+    "hero_awaiting_approval": "We dey wait landlord",
+    "hero_payment_complete_sub": "Your booking don set. Welcome home!",
+    "hero_ready_to_pay_sub": "Landlord don approve. Pay money now make e confirm.",
+    "hero_awaiting_approval_sub": "We don send your request. Landlord go check am soon.",
+    "progress": "How e dey go",
+    "step_request_sent": "Request don go",
+    "step_request_sent_sub": "Wait make landlord check am",
+    "step_approved": "Landlord don gree",
+    "step_approved_sub": "Pay money now",
+    "step_confirmed": "Booking don set",
+    "step_confirmed_sub": "Money don enter & house don set",
+    "property": "House",
+    "amount_due": "Money for pay",
+    "booking_status": "Status",
+    "approval": "Approval",
+    "proceed_to_payment": "Go pay money",
+    "wait_notice": "We go tell you when landlord answer. E no go long.",
+    "success_notice": "Money don enter sharp sharp. Your booking don confirm!"
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clear_all": "Clear All",
+    "empty": "No message yet",
+    "clear_all_confirm_title": "Clear All",
+    "clear_all_confirm_msg": "Read all the messages?",
+    "view_details": "See more",
+    "reply_now": "Answer now",
+    "dismiss": "Comot am"
+  },
+  "payment": {
+    "title": "Pay Money",
+    "history_tab": "Payment History",
+    "send_tab": "Send Money",
+    "recent_transactions": "Recent Transactions",
+    "refresh": "Refresh",
+    "refreshing": "E dey refresh...",
+    "loading_history": "We dey load history...",
+    "no_history": "No payment history yet.",
+    "retry": "Try again",
+    "momo_number_label": "Your MTN MoMo Number *",
+    "momo_placeholder": "6XX XXX XXX",
+    "amount_label": "Money (XAF) *",
+    "amount_placeholder": "Enter how much",
+    "receiver_label": "Who you dey send am to *",
+    "description_label": "Description",
+    "description_placeholder": "Why you dey pay (if you like)",
+    "send_button": "Send Money",
+    "receipt_title": "Payment Receipt",
+    "qr_verify": "Scan to check transaction",
+    "transaction_details": "Transaction Details",
+    "amount_details": "Money Details",
+    "parties_title": "People wey follow for talk",
+    "transaction_id": "Transaction ID",
+    "date": "Date",
+    "status": "Status",
+    "amount": "Amount",
+    "fee": "Fee",
+    "net_amount": "Total Money",
+    "from": "From",
+    "to": "To",
+    "download_pdf": "Download PDF",
+    "close": "Close",
+    "statuses": {
+      "completed": "E don finish",
+      "pending": "E dey wait",
+      "failed": "E no work"
+    },
+    "initiate_success_title": "Money don go! 🎉",
+    "initiate_success_msg": "Your payment don start. Abeg check your phone for MoMo prompt to finish am.",
+    "validation_error": "Error for what you write",
+    "validation_msg": "Abeg put everything (Money and Phone numbers)",
+    "amount_error": "Abeg put correct money",
+    "session_error": "Session error",
+    "session_msg": "We no see you. Abeg login again.",
+    "payment_error": "Payment error"
+  },
+  "chat": {
+    "placeholder": "Write something...",
+    "loading": "We dey load chat...",
+    "online": "Online",
+    "unknown_user": "Unknown Person",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "empty_title": "Start to talk",
+    "empty_subtitle": "Say hello! Your messages dey private between you and {{name}}.",
+    "other_user": "the other person"
+  },
+  "bookings": {
+    "title": "My Bookings",
+    "details_title": "Booking Details",
+    "total": "Total",
+    "confirmed": "Confirmed",
+    "paid": "Paid",
+    "pending": "E dey wait",
+    "cancelled": "E don cancel",
+    "active": "Active",
+    "upcoming": "E dey come",
+    "from": "From",
+    "to": "To",
+    "days_left": "{{count}} days remain",
+    "days_left_label": "Days Remain",
+    "amount_label": "Money (XAF)",
+    "rooms_label": "Rooms",
+    "info_title": "Booking Info",
+    "check_in": "Check-in",
+    "check_out": "Check-out",
+    "payment_status_label": "Payment Status",
+    "agreed_to_terms": "I gree for terms",
+    "property_details": "House Details",
+    "actions": "Actions",
+    "rate_property": "Rate this house",
+    "report_issue": "Report problem",
+    "help_title": "You need help?",
+    "call_support": "Call Support",
+    "email_support": "Email Support",
+    "pay_now": "Pay Now",
+    "cancel_booking": "Cancel Booking",
+    "ended": "E don finish",
+    "no_bookings": "No Bookings Yet",
+    "no_bookings_msg": "When you book house, everything go show for here",
+    "explore": "Explore Properties",
+    "offline_mode": "Offline Mode",
+    "offline_msg": "You dey look cached data. Some things fit don change.",
+    "cache_notice": "Showing cached bookings",
+    "renew_grace_subtitle": "Pay di XAF 5,000 Rent Processing Fee make you renew, or confirm say you dey comot now. Auto-termination in {{days}} day(s).",
+    "renew_lease_subtitle": "Your lease dey end soon. Choose to stay longer or plan your move-out.",
+    "why_am_i_paying": "Why I dey pay dis one?",
+    "why_payment_title": "Why dis payment?",
+    "why_payment_caution": "1. Caution Guarantee:",
+    "why_payment_caution_desc": " Your money dey safe wit DHUB. E stand as guarantee.",
+    "why_payment_fee": "2. Processing Fee:",
+    "why_payment_fee_desc": " A non-refundable FCFA 5,000 fee for the service.",
+    "why_payment_unlocks": "3. Unlocks di property:",
+    "why_payment_unlocks_desc": " Once you pay, you go see di exact location to visit and inspect.",
+    "why_payment_refund": "4. Refund Policy:",
+    "why_payment_refund_desc": " If you no like di property and you cancel di booking, 97% of your caution go come back (dem go deduct 3% platform fee).",
+    "i_understand": "I Understand",
+    "initial_deposit_label": "Initial Deposit (Caution + FCFA 5,000 Rent Processing Fee)",
+    "complete_rent_payment": "Complete Rent Payment",
+    "cancel_booking_refund_caution": "Cancel Booking & Refund Caution",
+    "refund_processing": "Refund Processing",
+    "refund_processing_desc": "For security reasons and to protect our landlords, DHUB takes up to 72 hours to verify and process caution refunds. Your money (minus 3% platform fee) will be sent to your Mobile Money account soon.",
+    "refund_paused": "Refund Paused",
+    "refund_paused_desc": "Your caution refund has been placed on hold by DHUB for manual review. Please contact support at support@dhubcmr.com for assistance.",
+    "i_have_moved_in": "I Don Enter ✓",
+    "location_not_available": "Location no dey",
+    "tap_to_open_maps": "Tap to open maps",
+    "dispute_resolution": "Dispute Resolution",
+    "dispute_resolution_desc": "Di landlord don raise issue about di property. Abeg provide your explanation and upload up to 3 photos as evidence. DHUB go review and make final ruling.",
+    "your_evidence_submitted": "Your Evidence Submitted:",
+    "photos_count": "Photos ({{count}}/3):",
+    "unable_to_load": "No fit load booking",
+    "try_again": "Try again",
+    "extend_stay": "Extend stay",
+    "confirm_checkout": "Confirm comot",
+    "unknown_property": "Unknown Property",
+    "size": "Size",
+    "not_specified": "Dem no specify",
+    "utilities": "Utilities",
+    "included": "E dey inside",
+    "parking": "Parking",
+    "available": "E dey",
+    "duration_label": "Duration:",
+    "time_remaining_label": "Time Remaining:",
+    "status_label": "Status:",
+    "pending_move_in": "Pending Move-In",
+    "location_and_landlord": "Location & Landlord",
+    "unknown": "Unknown",
+    "one_year": "1 Year",
+    "days_count": "{{count}} Days",
+    "daily": "Daily",
+    "monthly": "Monthly",
+    "yearly": "Yearly"
+  },
+  "auth": {
+    "welcome_back": "Welcome Back",
+    "sign_in_subtitle": "Enter your account",
+    "phone": "Phone",
+    "email": "Email",
+    "phone_placeholder": "Phone Number (e.g. 6xxxxxxxx)",
+    "email_placeholder": "Email Address",
+    "password": "Password",
+    "sign_in": "Enter",
+    "signing_in": "We dey enter...",
+    "magic_link": "Send me Magic Link (No password)",
+    "or": "OR",
+    "continue_with_google": "Continue wit Google",
+    "forgot_password": "You forget Password?",
+    "no_account": "You no get account?",
+    "sign_up": "Sign Up",
+    "create_account": "Create Account",
+    "sign_up_subtitle": "Join DHUB make you find house",
+    "i_am_student": "I be Student",
+    "i_am_landlord": "I be Landlord",
+    "full_name": "Full Name",
+    "whatsapp_number": "WhatsApp Number (9 digits)",
+    "mobile_money": "Mobile Money Number (9 digits)",
+    "password_placeholder": "Password (min 6 characters)",
+    "confirm_password": "Confirm Password",
+    "age_placeholder": "Age",
+    "address_placeholder": "Home Address",
+    "agree_tos": "I agree to di Terms of Service",
+    "signing_up": "We dey sign up...",
+    "has_account": "You don get account already?",
+    "sign_in_link": "Sign In"
+  }
+}
 </file>
 
 <file path="src/navigation/AuthStack.tsx">
@@ -22425,415 +19655,6 @@ const RootNavigator: React.FC = () => {
 };
 
 export default RootNavigator;
-</file>
-
-<file path="src/screens/auth/SignInScreen.tsx">
-// src/screens/auth/SignInScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback, // ✅ Fixed: added missing import
-  View
-} from 'react-native';
-import { useDispatch, useSelector } from 'react-redux';
-
-import * as Linking from 'expo-linking';
-import ButtonPrimary from '../../components/ButtonPrimary';
-import { DiraBranding } from '../../components/DiraBranding';
-import { LanguageSelector } from '../../components/LanguageSelector';
-import { useTheme } from '../../context/ThemeContext';
-import type { AppDispatch } from '../../store/store';
-import { AuthStackParamList } from '../../types';
-import { normalizePhone } from '../../utils/authHelpers';
-import { loginWithEmail, loginWithGoogle, loginWithPhone } from '../../utils/login';
-import { supabase } from '../../utils/supabaseClient';
-
-type SignInScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
-
-const SignInScreen: React.FC = () => {
-  const navigation = useNavigation<SignInScreenNavigationProp>();
-  const dispatch = useDispatch<AppDispatch>();
-  const { error: globalError } = useSelector((state: any) => state.auth);
-
-  const [identifier, setIdentifier] = useState('');
-  const [password, setPassword] = useState('');
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
-  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
-
-  const { colors: themeColors, isDark } = useTheme();
-
-  const colors = React.useMemo(() => ({
-    background: themeColors.background,
-    card: themeColors.card,
-    border: themeColors.border,
-    primary: themeColors.primary,
-    text: themeColors.text,
-    textSecondary: themeColors.textSecondary,
-    inputBg: isDark ? '#2A2A2A' : '#fafafa',
-    footerBg: isDark ? '#1A1A1A' : '#fcfaf2',
-    error: themeColors.error,
-  }), [themeColors, isDark]);
-
-  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-
-  // Clear local loading if global error occurs
-  React.useEffect(() => {
-    if (globalError && loading) {
-      setLoading(false);
-      setErrorMessage(globalError);
-    }
-  }, [globalError, loading]);
-
-  const sanitizePhone = (text: string) => text.replace(/\D/g, '').slice(0, 9);
-  const handleIdentifierChange = (text: string) => {
-    setIdentifier(text);
-    setErrorMessage('');
-  };
-
-  const handleSignIn = async () => {
-    console.log('[SignInScreen] Sign In button pressed. Method:', loginMethod);
-    Keyboard.dismiss();
-    setErrorMessage('');
-
-    if (!identifier.trim() || !password.trim()) {
-      setErrorMessage(`Please enter your ${loginMethod} and password.`);
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      if (loginMethod === 'phone') {
-        const digits = sanitizePhone(identifier);
-        const normalized = normalizePhone(digits);
-        if (!normalized || !normalized.startsWith('+237') || normalized.length !== 13) {
-          setErrorMessage('Please enter a valid Cameroon phone number (9 digits).');
-          setLoading(false);
-          return;
-        }
-        console.log('[SignInScreen] Attempting phone login...');
-        await loginWithPhone(normalized, password);
-      } else {
-        const isEmail = /\S+@\S+\.\S+/.test(identifier.trim());
-        if (!isEmail) {
-          setErrorMessage('Please enter a valid email address.');
-          setLoading(false);
-          return;
-        }
-        console.log('[SignInScreen] Attempting email login...');
-        await loginWithEmail(identifier.trim(), password);
-      }
-    } catch (err: any) {
-      console.error('[SignInScreen] Sign-in error:', err.message);
-      setErrorMessage(err.message || 'Please check your credentials and try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleGoogleSignIn = async () => {
-    setLoading(true);
-    setErrorMessage('');
-    try {
-      await loginWithGoogle();
-    } catch (err: any) {
-       console.error('[SignInScreen] Google Sign-in error:', err.message);
-       if (err.message === 'ACCOUNT_NOT_FOUND') {
-         setErrorMessage('Account not found. Please use the Sign Up screen first.');
-       } else {
-         setErrorMessage(err.message || 'Could not complete Google sign-in.');
-       }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleMagicLink = async () => {
-    if (!identifier.trim() || !/\S+@\S+\.\S+/.test(identifier.trim())) {
-      setErrorMessage('Please enter a valid email address.');
-      return;
-    }
-    setLoading(true);
-    setErrorMessage('');
-    try {
-      const redirectUrl = Platform.OS === 'web' 
-        ? `${window.location.origin}/auth/callback`
-        : Linking.createURL('auth/callback');
-      
-      const { error } = await supabase.auth.signInWithOtp({
-        email: identifier.trim(),
-        options: {
-          emailRedirectTo: redirectUrl,
-          shouldCreateUser: true,
-        },
-      });
-      if (error) throw error;
-      
-      navigation.navigate('EmailVerification', { 
-        email: identifier.trim(), 
-        mode: 'signup' 
-      });
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Could not send Magic Link.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!identifier.trim() || !/\S+@\S+\.\S+/.test(identifier.trim())) {
-      setErrorMessage('Please enter your email to reset your password.');
-      return;
-    }
-    
-    setLoading(true);
-    setErrorMessage('');
-    try {
-      const resetRedirectUrl = Platform.OS === 'web' 
-        ? `${window.location.origin}/auth/callback`
-        : Linking.createURL('auth/callback');      
-      const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), {
-        redirectTo: resetRedirectUrl,
-      });
-      if (error) throw error;
-      
-      navigation.navigate('EmailVerification', { email: identifier.trim(), mode: 'recovery' });
-    } catch (err: any) {
-      setErrorMessage(err.message || 'Could not send reset link.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={styles.header}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
-      </View>
-
-      <KeyboardAvoidingView
-        style={{ flex: 1 }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <ScrollView
-            contentContainerStyle={styles.container}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-          >
-            <View style={styles.methodToggleContainer}>
-              <TouchableOpacity 
-                style={[styles.methodToggleBtn, loginMethod === 'phone' && styles.methodToggleBtnActive]}
-                onPress={() => { setLoginMethod('phone'); setIdentifier(''); setErrorMessage(''); }}
-              >
-                <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>Phone</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[styles.methodToggleBtn, loginMethod === 'email' && styles.methodToggleBtnActive]}
-                onPress={() => { setLoginMethod('email'); setIdentifier(''); setErrorMessage(''); }}
-              >
-                <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>Email</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={styles.formContainer}>
-              {loginMethod === 'phone' ? (
-                <View style={styles.phoneInputContainer}>
-                  <View style={styles.phonePrefix}><Text style={styles.phonePrefixText}>+237</Text></View>
-                  <TextInput
-                    placeholder="Phone Number (e.g. 6xxxxxxxx)"
-                    style={styles.phoneInput}
-                    placeholderTextColor={colors.textSecondary}
-                    value={identifier}
-                    onChangeText={handleIdentifierChange}
-                    keyboardType="phone-pad"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="tel"
-                    editable={!loading}
-                    maxLength={9}
-                  />
-                </View>
-              ) : (
-                <View style={styles.phoneInputContainer}>
-                  <TextInput
-                    placeholder="Email Address"
-                    style={styles.phoneInput}
-                    placeholderTextColor={colors.textSecondary}
-                    value={identifier}
-                    onChangeText={handleIdentifierChange}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    autoComplete="email"
-                    editable={!loading}
-                  />
-                </View>
-              )}
-
-              <View style={styles.passwordContainer}>
-                <TextInput
-                  placeholder="Password"
-                  style={styles.passwordInput}
-                  placeholderTextColor={colors.textSecondary}
-                  value={password}
-                  onChangeText={setPassword}
-                  secureTextEntry={!showPassword}
-                  autoComplete="password"
-                  textContentType="password"
-                  editable={!loading}
-                />
-                <TouchableOpacity
-                  onPress={() => setShowPassword(!showPassword)}
-                  disabled={loading}
-                  style={styles.eyeButton}
-                >
-                  <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-
-              <ButtonPrimary
-                title={loading ? 'Signing In...' : 'Sign In'}
-                onPress={handleSignIn}
-                disabled={loading}
-              />
-
-              {loginMethod === 'email' && (
-                <TouchableOpacity 
-                  onPress={handleMagicLink} 
-                  disabled={loading}
-                  style={styles.magicLinkBtn}
-                >
-                  <Text style={styles.magicLinkBtnText}>Or send me a Magic Link (No password)</Text>
-                </TouchableOpacity>
-              )}
-
-              <View style={styles.dividerContainer}>
-                <View style={styles.divider} />
-                <Text style={styles.dividerText}>OR</Text>
-                <View style={styles.divider} />
-              </View>
-
-              <TouchableOpacity
-                style={styles.googleButton}
-                onPress={handleGoogleSignIn}
-                disabled={loading}
-              >
-                <Ionicons name="logo-google" size={20} color={colors.text} />
-                <Text style={styles.googleButtonText}>Continue with Google</Text>
-              </TouchableOpacity>
-
-              {loading && <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />}
-
-              {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
-
-              <View style={styles.linksContainer}>
-                <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
-                  <Text style={styles.linkText}>Forgot Password?</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-
-      <View style={styles.footer}>
-        <View style={styles.brandingWrapper}>
-          <DiraBranding />
-        </View>
-
-        <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUp')}>
-          <Text style={styles.switchText}>Don't have an account? <Text style={styles.link}>Sign Up</Text></Text>
-        </TouchableOpacity>
-        
-        <View style={styles.languageWrapper}>
-          <LanguageSelector />
-        </View>
-      </View>
-    </View>
-  );
-};
-
-const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
-  container: { flexGrow: 1, padding: 24, paddingBottom: 80 },
-  formContainer: { width: '100%' },
-  header: {
-    paddingTop: Platform.OS === 'ios' ? 80 : 60,
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-    alignItems: 'center',
-  },
-  title: { fontSize: 32, fontWeight: 'bold', textAlign: 'center', color: colors.primary },
-  subtitle: { fontSize: 16, textAlign: 'center', color: colors.textSecondary, marginTop: 8 },
-  methodToggleContainer: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 12, padding: 4, marginVertical: 24, marginHorizontal: 0 },
-  methodToggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
-  methodToggleBtnActive: { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
-  methodToggleText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
-  methodToggleTextActive: { color: colors.primary },
-  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.inputBg },
-  phonePrefix: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: colors.card, borderRightWidth: 1, borderRightColor: colors.border },
-  phonePrefixText: { fontSize: 16, fontWeight: '600', color: colors.text },
-  phoneInput: { flex: 1, padding: 16, fontSize: 16, color: colors.text },
-  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 24, backgroundColor: colors.inputBg },
-  passwordInput: { flex: 1, padding: 16, fontSize: 16, color: colors.text },
-  eyeButton: { padding: 16 },
-  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-  divider: { flex: 1, height: 1, backgroundColor: colors.border },
-  dividerText: { marginHorizontal: 16, color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
-  googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.background },
-  googleButtonText: { marginLeft: 12, fontSize: 16, fontWeight: '600', color: colors.text },
-  loader: { marginTop: 16 },
-  linksContainer: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
-  linkText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
-  magicLinkBtn: { marginTop: 12, paddingVertical: 10, alignItems: 'center' },
-  magicLinkBtnText: { color: colors.textSecondary, fontSize: 14, textDecorationLine: 'underline' },
-  signUpLink: { marginBottom: 2, alignItems: 'center' },
-  switchText: { textAlign: 'center', fontSize: 13, color: colors.textSecondary },
-  link: { color: colors.primary, fontWeight: '600' },
-  errorText: { 
-    color: '#fff', 
-    backgroundColor: colors.error,
-    padding: 12,
-    borderRadius: 8,
-    textAlign: 'center', 
-    marginTop: 16, 
-    fontSize: 14, 
-    fontWeight: '600',
-    overflow: 'hidden'
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: colors.footerBg,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    paddingVertical: 8,
-  },
-  brandingWrapper: { marginTop: 0, marginBottom: 2 },
-  languageWrapper: { paddingBottom: Platform.OS === 'ios' ? 10 : 5 },
-});
-
-export default SignInScreen;
 </file>
 
 <file path="src/screens/auth/SignUpScreen.tsx">
@@ -23488,6 +20309,352 @@ const styles = StyleSheet.create({
 export default SignUpScreen;
 </file>
 
+<file path="src/screens/common/ChatWrapper.tsx">
+// src/screens/common/ChatWrapper.tsx
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  FlatList,
+  TouchableOpacity,
+  ActivityIndicator,
+  StyleSheet,
+  StatusBar,
+  Animated,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSelector } from 'react-redux';
+import { RootState } from '../../store/store';
+import ChatScreen from './ChatScreen';
+import { fetchUserThreads, fetchThreadUnreadCount, subscribeToThreads } from '../../services/chatService';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { StudentStackParamList } from '../../types';
+import { useTheme } from '../../context/ThemeContext';
+
+type ThreadItemProcessed = {
+  threadId: string;
+  displayName: string;
+  lastMessage: string | null;
+  lastMessageTime: string | null;
+  unreadCount: number;
+  participantId: string;
+};
+
+const STATIC_COLORS = {
+  success: '#34C759',
+} as const;
+
+type ChatWrapperNavProp = NativeStackNavigationProp<StudentStackParamList>;
+
+const ChatWrapper: React.FC = () => {
+  const navigation = useNavigation<ChatWrapperNavProp>();
+  const route = useRoute<RouteProp<{ Chat: { threadId?: string } }, 'Chat'>>();
+  const currentUser = useSelector((state: RootState) => state.auth.user);
+  const [threads, setThreads] = useState<ThreadItemProcessed[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null);
+  const floatingButtonAnim = useRef(new Animated.Value(1)).current;
+
+  const { colors: themeColors, isDark } = useTheme();
+  const COLORS = React.useMemo(() => ({
+    primary: themeColors.primary,
+    primaryDark: themeColors.primary,
+    primaryLight: isDark ? 'rgba(212,175,55,0.15)' : 'rgba(212,175,55,0.1)',
+    background: themeColors.background,
+    textPrimary: themeColors.text,
+    textSecondary: themeColors.textSecondary,
+    textTertiary: isDark ? '#666666' : '#999999',
+    bubbleOther: themeColors.card,
+    border: themeColors.border,
+    ...STATIC_COLORS,
+  }), [themeColors, isDark]);
+  const styles = React.useMemo(() => getStyles(COLORS, isDark), [COLORS, isDark]);
+
+  useEffect(() => {
+    if (route.params?.threadId) {
+      setSelectedThreadId(route.params.threadId);
+    }
+  }, [route.params?.threadId]);
+
+  const loadThreads = async () => {
+    if (!currentUser?.id) return;
+    setLoading(true);
+    try {
+      const raw = await fetchUserThreads(currentUser.id, 50);
+      const processed: ThreadItemProcessed[] = [];
+
+      for (const t of raw) {
+        const others = t.participants.filter(p => p.id !== currentUser.id);
+        const displayName = others.length === 1 ? others[0].fullName : 'Unknown';
+
+        processed.push({
+          threadId: t.threadId,
+          displayName,
+          lastMessage: t.lastMessage,
+          lastMessageTime: t.lastMessageTime,
+          unreadCount: t.unreadCount, 
+          participantId: others[0]?.id || '',
+        });
+      }
+
+      setThreads(processed);
+    } catch (err) {
+      console.error('load threads failed:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadThreads();
+    
+    // Animate floating button
+    const animation = Animated.loop(
+      Animated.sequence([
+        Animated.timing(floatingButtonAnim, {
+          toValue: 1.1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(floatingButtonAnim, {
+          toValue: 1,
+          duration: 1000,
+          useNativeDriver: true,
+        }),
+      ])
+    );
+    
+    animation.start();
+    
+    return () => {
+      animation.stop();
+    };
+  }, [floatingButtonAnim, currentUser?.id]); 
+
+  useEffect(() => {
+    if (currentUser?.id) {
+      // Subscribe to real-time changes
+      const unsubscribe = subscribeToThreads(currentUser.id, () => {
+        console.log('[ChatWrapper] Thread list refresh triggered via realtime');
+        loadThreads();
+      });
+      
+      return () => unsubscribe();
+    }
+  }, [currentUser?.id]);
+
+  const handleThreadSelect = (threadId: string) => {
+    setSelectedThreadId(threadId);
+  };
+
+  const formatTime = (timestamp: string | null) => {
+    if (!timestamp) return '';
+    let dateStr = timestamp.replace(' ', 'T');
+    if (!dateStr.includes('Z') && !dateStr.includes('+')) {
+      dateStr += 'Z'; // Assume UTC from database
+    }
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffHours = (now.getTime() - date.getTime()) / 1000 / 60 / 60;
+    
+    if (diffHours < 24) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else if (diffHours < 48) {
+      return 'Yesterday';
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+    }
+  };
+
+  const handleSupportPress = () => {
+    navigation.navigate('Support', { currentUserId: currentUser?.id || '' });
+  };
+
+  if (!currentUser) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text>Loading user...</Text>
+      </View>
+    );
+  }
+
+  if (selectedThreadId) {
+    return (
+      <ChatScreen
+        threadId={selectedThreadId}
+        currentUserId={currentUser.id}
+        onBack={() => setSelectedThreadId(null)}
+      />
+    );
+  }
+
+  const renderThreadItem = ({ item }: { item: ThreadItemProcessed }) => {
+    const initials = item.displayName
+      .split(' ')
+      .map(s => s[0])
+      .join('')
+      .slice(0, 2)
+      .toUpperCase();
+
+    return (
+      <TouchableOpacity
+        style={styles.threadCard}
+        onPress={() => handleThreadSelect(item.threadId)}
+        activeOpacity={0.7}
+      >
+        <LinearGradient
+          colors={[COLORS.primary, COLORS.primaryDark]}
+          style={styles.avatar}
+        >
+          <Text style={styles.avatarText}>{initials}</Text>
+        </LinearGradient>
+
+        <View style={styles.threadContent}>
+          <View style={styles.threadHeader}>
+            <Text style={styles.threadName} numberOfLines={1}>
+              {item.displayName}
+            </Text>
+            <Text style={styles.threadTime}>
+              {formatTime(item.lastMessageTime)}
+            </Text>
+          </View>
+          
+          <View style={styles.threadMessageContainer}>
+            <Text style={[
+              styles.threadMessage,
+              item.unreadCount > 0 && styles.unreadThreadMessage
+            ]} numberOfLines={1}>
+              {item.lastMessage || 'No messages yet'}
+            </Text>
+            {item.unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{item.unreadCount}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  return (
+    <View style={styles.container}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.background} />
+      
+      {/* Header */}
+      <SafeAreaView style={styles.headerSafeArea}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Chats</Text>
+          <TouchableOpacity style={styles.newChatButton}>
+            <Ionicons name="create-outline" size={24} color={COLORS.primary} />
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={COLORS.primary} />
+          <Text style={styles.loadingText}>Loading conversations...</Text>
+        </View>
+      ) : threads.length === 0 ? (
+        <View style={styles.emptyContainer}>
+          <MaterialCommunityIcons
+            name="chat-outline"
+            size={64}
+            color={COLORS.textTertiary}
+          />
+          <Text style={styles.emptyTitle}>No conversations yet</Text>
+          <Text style={styles.emptySubtitle}>
+            Start a new conversation to chat with others
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={threads}
+          keyExtractor={item => item.threadId}
+          contentContainerStyle={styles.listContainer}
+          renderItem={renderThreadItem}
+          showsVerticalScrollIndicator={false}
+          initialNumToRender={10}
+          maxToRenderPerBatch={10}
+          windowSize={5}
+          removeClippedSubviews={false}
+        />
+      )}
+
+      {/* Floating Support Button */}
+      <Animated.View style={[
+        styles.floatingButton,
+        {
+          transform: [{ scale: floatingButtonAnim }],
+        }
+      ]}>
+        <TouchableOpacity
+          onPress={handleSupportPress}
+          style={styles.floatingButtonInner}
+          activeOpacity={0.8}
+        >
+          <LinearGradient
+            colors={[COLORS.primary, COLORS.primaryDark]}
+            style={styles.floatingButtonGradient}
+          >
+            <Ionicons name="headset" size={24} color="#FFFFFF" />
+          </LinearGradient>
+        </TouchableOpacity>
+      </Animated.View>
+    </View>
+  );
+};
+
+const getStyles = (COLORS: any, isDark: boolean) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: COLORS.background },
+  headerSafeArea: { backgroundColor: COLORS.background },
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 16,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  headerTitle: { fontSize: 32, fontWeight: '700', color: COLORS.textPrimary },
+  newChatButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  loadingText: { marginTop: 12, fontSize: 16, color: COLORS.textSecondary },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: '600', color: COLORS.textSecondary, marginTop: 16 },
+  emptySubtitle: { fontSize: 14, color: COLORS.textTertiary, marginTop: 8, textAlign: 'center' },
+  listContainer: { paddingVertical: 8 },
+  threadCard: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 20, paddingVertical: 14,
+    backgroundColor: COLORS.background,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  avatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+  avatarText: { color: '#fff', fontWeight: '600', fontSize: 20 },
+  threadContent: { flex: 1, marginLeft: 16 },
+  threadHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 },
+  threadName: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, flex: 1 },
+  threadTime: { fontSize: 12, color: COLORS.textTertiary, marginLeft: 8 },
+  threadMessageContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  threadMessage: { fontSize: 14, color: COLORS.textSecondary, flex: 1, marginRight: 8 },
+  unreadThreadMessage: { color: COLORS.textPrimary, fontWeight: '500' },
+  unreadBadge: { backgroundColor: COLORS.primary, borderRadius: 12, minWidth: 24, height: 24, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 6 },
+  unreadText: { color: '#fff', fontSize: 12, fontWeight: '600' },
+  floatingButton: { position: 'absolute', bottom: 24, right: 20, zIndex: 100 },
+  floatingButtonInner: {
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 8,
+  },
+  floatingButtonGradient: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+});
+
+export default ChatWrapper;
+</file>
+
 <file path="src/screens/common/LegalScreen.tsx">
 // src/screens/common/LegalScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
@@ -23561,270 +20728,207 @@ const styles = StyleSheet.create({
 export default LegalScreen;
 </file>
 
-<file path="src/screens/landlord/BoostScreen.tsx">
-// src/screens/landlord/BoostScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { CompositeNavigationProp, useNavigation, useRoute } from '@react-navigation/native';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import React, { useState } from 'react';
+<file path="src/screens/landlord/DashboardScreen.tsx">
+// src/screens/landlord/DashboardScreen.tsx
+import React, { useState, useEffect } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
   View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Alert,
 } from 'react-native';
-import { useDispatch } from 'react-redux';
-import { useTheme } from '../../context/ThemeContext';
-import { setBoost } from '../../store/boostSlice';
-import { LandlordStackParamList, LandlordStackRouteProp, LandlordTabParamList } from '../../types';
+import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabaseClient';
+import { useAuth } from '../../hooks/useAuth';
+import { usePaymentSuccessNotifier } from '../../hooks/usePaymentSuccessNotifier';
 
-interface BoostPlan {
-  id: string;
-  label: string;
-  durationDays: number;
-  price: number;
-}
+import DashboardStats from '../../components/landlord/DashboardStats';
+import QuickActions from '../../components/landlord/QuickActions';
+import RecentActivity from '../../components/landlord/RecentActivity';
+import ListingsPreview from '../../components/landlord/ListingsPreview';
+import { Ionicons } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTheme } from '../../context/ThemeContext';
 
-type BoostScreenNavigationProp = CompositeNavigationProp<
-  NativeStackNavigationProp<LandlordStackParamList, 'BoostScreen'>,
-  BottomTabNavigationProp<LandlordTabParamList>
->;
+const DashboardScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const { colors } = useTheme();
+  const [landlordProfile, setLandlordProfile] = useState<any>(null);
 
-const BoostScreen: React.FC = () => {
-  const navigation = useNavigation<BoostScreenNavigationProp>();
-  const route = useRoute<LandlordStackRouteProp<'BoostScreen'>>();
-  const dispatch = useDispatch();
+  // ── Pop an in-app Alert the instant a payment is confirmed ─────────────
+  usePaymentSuccessNotifier(navigation);
 
-  const listingId = route.params.listingId;
+  const KYC_CACHE_KEY = `kyc_status_${user?.id}`;
 
-  const [boostPlans, setBoostPlans] = useState<BoostPlan[]>([]);
-  const [selectedPlan, setSelectedPlan] = useState<BoostPlan | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [fetchingPlans, setFetchingPlans] = useState(true);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  useEffect(() => {
+    if (user) {
+      fetchLandlordData();
+    }
+  }, [user]);
 
-  React.useEffect(() => {
-    const fetchPlans = async () => {
-      setFetchingPlans(true);
-      setFetchError(null);
-      console.log('[BoostScreen] Fetching boost plans...');
+  const fetchLandlordData = async () => {
+    if (!user) return;
 
-      try {
-        const { data, error, status } = await supabase
-          .from('boost_plans')
-          .select('*')
-          .eq('active', true)
-          .order('duration_days', { ascending: true });
-
-        console.log('[BoostScreen] Supabase response:', { data, error, status });
-
-        if (error) {
-          console.error('[BoostScreen] Supabase error:', error);
-          setFetchError(`Error: ${error.message} (code: ${error.code})`);
-          setBoostPlans([]);
-        } else if (data && data.length > 0) {
-          console.log(`[BoostScreen] Found ${data.length} boost plans`);
-          setBoostPlans(data.map(p => ({
-            id: p.id,
-            label: p.label,
-            durationDays: p.duration_days,
-            price: Number(p.price)
-          })));
-        } else {
-          console.warn('[BoostScreen] No boost plans found (empty data)');
-          setFetchError('No boost plans available. Please contact support.');
-          setBoostPlans([]);
-        }
-      } catch (err: any) {
-        console.error('[BoostScreen] Unexpected error:', err);
-        setFetchError(`Unexpected error: ${err.message || err}`);
-        setBoostPlans([]);
-      } finally {
-        setFetchingPlans(false);
+    try {
+      // 1️⃣ Load approved KYC from AsyncStorage first
+      const cached = await AsyncStorage.getItem(KYC_CACHE_KEY);
+      if (cached) {
+        const parsed = JSON.parse(cached);
+        setLandlordProfile(parsed);
       }
-    };
-    fetchPlans();
-  }, []);
 
-  const { colors, isDark } = useTheme();
-  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+      // 2️⃣ Fetch fresh profile from Supabase
+      const { data: profile, error: profileError } = await supabase
+        .from('landlord_profiles')
+        .select('address, city, kyc_status')
+        .eq('user_id', user.id)
+        .single();
 
-  const handlePay = () => {
-    if (!selectedPlan) {
-      Alert.alert('Select Plan', 'Please select a boost plan to continue.');
+      if (profileError && profileError.code !== 'PGRST116') throw profileError;
+
+      if (profile) {
+        setLandlordProfile(profile);
+
+        // Persist only if approved
+        if (profile.kyc_status === 'approved') {
+          await AsyncStorage.setItem(KYC_CACHE_KEY, JSON.stringify(profile));
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching landlord data:', error);
+    }
+  };
+
+  const handleCreateListing = () => {
+    if (landlordProfile?.kyc_status !== 'approved') {
+      Alert.alert(
+        'KYC Required',
+        'Please complete your KYC verification before creating listings.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Verify Now',
+            onPress: () => navigation.navigate('KYCVerification' as never),
+          },
+        ]
+      );
       return;
     }
-
-    setLoading(true);
-
-    dispatch(setBoost({
-      listingId,
-      planId: selectedPlan.id,
-      durationDays: selectedPlan.durationDays,
-      price: selectedPlan.price,
-      purpose: 'boost',
-    }));
-
-    navigation.navigate('Tabs', {
-      screen: 'Payments',
-      params: {
-        listingId,
-        planId: selectedPlan.id,
-        durationDays: selectedPlan.durationDays,
-        price: selectedPlan.price,
-        purpose: 'boosting',
-      },
-    });
-    setLoading(false);
+    navigation.navigate('UploadListing' as never);
   };
 
   return (
-    <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <View style={[styles.header, { backgroundColor: colors.card }]}>
+        <View>
+          <Text style={[styles.welcome, { color: colors.primary }]}>Welcome back</Text>
+          <Text style={[styles.name, { color: colors.text }]}>{user?.fullName || 'Landlord'}</Text>
+        </View>
+        <TouchableOpacity
+          style={[styles.notificationBtn, { backgroundColor: colors.border }]}
+          onPress={() => navigation.navigate('Notifications' as never)}
+        >
+          <Ionicons name="notifications-outline" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Boost Listing</Text>
-        <View style={{ width: 24 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.sectionTitle}>Choose a Boost Plan</Text>
-
-        {fetchingPlans ? (
-          <ActivityIndicator color={colors.primary} />
-        ) : fetchError ? (
-          <View style={styles.errorContainer}>
-            <Text style={styles.errorText}>{fetchError}</Text>
-            <TouchableOpacity 
-              style={styles.retryButton} 
-              onPress={() => {
-                setFetchingPlans(true);
-                setFetchError(null);
-                // Re‑trigger fetch
-                const fetchPlans = async () => { /* copy logic or use a ref */ };
-                // We'll just reload the effect by forcing a key change or using a refetch function.
-                // For simplicity, we'll just navigate back and forth, but we'll implement a refetch function.
-              }}
-            >
-              <Text style={styles.retryButtonText}>Retry</Text>
-            </TouchableOpacity>
-          </View>
-        ) : boostPlans.length === 0 ? (
-          <Text style={styles.noPlansText}>No plans available.</Text>
-        ) : (
-          boostPlans.map(plan => (
-            <TouchableOpacity
-              key={plan.id}
-              style={[
-                styles.planCard,
-                selectedPlan?.id === plan.id && styles.planCardSelected,
-              ]}
-              onPress={() => setSelectedPlan(plan)}
-            >
-              <Text style={styles.planLabel}>{plan.label}</Text>
-              <Text style={styles.planPrice}>{plan.price.toLocaleString()} FCFA</Text>
-            </TouchableOpacity>
-          ))
+      <ScrollView showsVerticalScrollIndicator={false}>
+        {/* KYC Status Banner */}
+        {landlordProfile?.kyc_status !== 'approved' && (
+          <TouchableOpacity
+            style={[styles.kycBanner, { backgroundColor: colors.error }]}
+            onPress={() => navigation.navigate('KYCVerification' as never)}
+          >
+            <Ionicons
+              name={
+                landlordProfile?.kyc_status === 'pending'
+                  ? 'time-outline'
+                  : 'alert-circle-outline'
+              }
+              size={20}
+              color="#FFF"
+            />
+            <Text style={styles.kycText}>
+              {landlordProfile?.kyc_status === 'pending'
+                ? 'KYC Verification Pending'
+                : 'Complete KYC Verification to start listing properties'}
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#FFF" />
+          </TouchableOpacity>
         )}
 
-        {/* Summary */}
-        <View style={styles.summary}>
-          <Text style={styles.summaryText}>
-            Selected Plan:{' '}
-            {selectedPlan
-              ? `${selectedPlan.label} - ${selectedPlan.price.toLocaleString()} FCFA`
-              : 'None'}
-          </Text>
-        </View>
+        {/* Dashboard Stats */}
+        {user && <DashboardStats landlordId={user.id} />}
 
-        {/* Pay Button */}
-        <TouchableOpacity
-          style={[styles.payButton, loading && styles.payButtonDisabled]}
-          onPress={handlePay}
-          disabled={loading}
-        >
-          {loading ? (
-            <ActivityIndicator color={isDark ? '#1A1A1A' : '#FFFFFF'} />
-          ) : (
-            <Text style={styles.payButtonText}>Pay & Boost</Text>
-          )}
-        </TouchableOpacity>
+        {/* Quick Actions */}
+        <QuickActions
+          onAddListing={handleCreateListing}
+          onManageListings={() => navigation.navigate('ManageListings' as never)}
+          onViewBookings={() => navigation.navigate('Bookings' as never)}
+          onViewPayments={() => navigation.navigate('Payments' as never)}
+        />
 
-        {/* Why Boost Section */}
-        <View style={styles.whyBoostContainer}>
-          <Text style={styles.whyBoostTitle}>Why Boost?</Text>
-          <Text style={styles.whyBoostText}>
-            Boosting your listing makes it appear first in search results and highlights it for maximum visibility.
-            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make!
-          </Text>
-        </View>
+        {/* Recent Listings Preview */}
+        {user && <ListingsPreview landlordId={user.id} />}
+
+        {/* Recent Activity */}
+        {user && <RecentActivity landlordId={user.id} />}
       </ScrollView>
     </View>
   );
 };
 
-const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.background },
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+  },
   header: {
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'center',
     paddingHorizontal: 20,
     paddingTop: 60,
     paddingBottom: 20,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
+    backgroundColor: '#2A2A2A',
   },
-  headerTitle: { color: colors.text, fontSize: 18, fontWeight: 'bold' },
-  content: { padding: 20 },
-  sectionTitle: { color: colors.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 20 },
-  planCard: {
-    backgroundColor: colors.card,
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
+  welcome: {
+    color: '#D4AF37',
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  name: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginTop: 4,
+  },
+  notificationBtn: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#333333',
+  },
+  kycBanner: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  planCardSelected: {
-    borderColor: colors.primary,
-    backgroundColor: isDark ? '#2D2510' : '#FFF8E1',
-  },
-  planLabel: { color: colors.text, fontSize: 16, fontWeight: '600' },
-  planPrice: { color: colors.primary, fontSize: 16, fontWeight: '700' },
-  summary: { marginTop: 24 },
-  summaryText: { color: colors.text, fontSize: 14 },
-  payButton: {
-    backgroundColor: colors.primary,
-    paddingVertical: 16,
+    backgroundColor: '#D4AF37',
+    margin: 20,
+    padding: 16,
     borderRadius: 12,
-    alignItems: 'center',
-    marginTop: 30,
+    gap: 12,
   },
-  payButtonDisabled: { opacity: 0.6 },
-  payButtonText: { color: isDark ? '#1A1A1A' : '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
-  whyBoostContainer: { marginTop: 40, backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
-  whyBoostTitle: { color: colors.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
-  whyBoostText: { color: colors.text, fontSize: 14, lineHeight: 20 },
-  errorContainer: { alignItems: 'center', marginVertical: 20 },
-  errorText: { color: colors.error, textAlign: 'center', marginBottom: 12 },
-  retryButton: { backgroundColor: colors.primary, paddingHorizontal: 20, paddingVertical: 8, borderRadius: 8 },
-  retryButtonText: { color: colors.background, fontWeight: 'bold' },
-  noPlansText: { textAlign: 'center', color: colors.textSecondary, marginVertical: 20 },
+  kycText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+  },
 });
 
-export default BoostScreen;
+export default DashboardScreen;
 </file>
 
 <file path="src/screens/landlord/EditListingScreen.tsx">
@@ -24756,1351 +21860,90 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 export default EditListingScreen;
 </file>
 
-<file path="src/screens/landlord/UploadListingScreen.tsx">
-// src/screens/landlord/UploadListingScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as VideoThumbnails from 'expo-video-thumbnails';
-import React, { useEffect, useRef, useState } from 'react';
-import { useTranslation } from 'react-i18next';
+<file path="src/screens/landlord/PaymentScreen.tsx">
+// src/screens/landlord/PaymentsScreen.tsx
+import { useRoute } from '@react-navigation/native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
+  Modal,
   ScrollView,
-  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
 } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import MapPickerModal from '../../components/MapPickerModal';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../hooks/useAuth';
-import { MediaItem } from '../../types';
-import { requestLocationPermission } from '../../utils/location';
+import { Payment } from '../../services/paymentService';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { clearInitiateState, fetchPayments, initiateCollection, initiateVerificationPayment, upsertPayment } from '../../store/paymentsSlice';
+import type { RootState } from '../../store/store';
+import { LandlordTabRouteProp } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
-// ✅ FIX: import from the conditional upload (not upload.native)
-import { uploadListingMedia } from '../../utils/upload';
 
-const { width } = Dimensions.get('window');
+const RECEIVER_NAME = 'DHUB';
 
-// ─── Web‑safe alert helper ───────────────────────────────────────────────
-const showAlert = (title: string, message?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
-    // On web, fallback to native alert if React Native Alert fails
-    const msg = message ? `${title}\n${message}` : title;
-    window.alert(msg);
-    // Buttons are ignored on web; we handle via simple alert
-    return;
-  }
-  Alert.alert(title, message, buttons);
-};
+const PaymentsScreen: React.FC = () => {
+  const dispatch = useAppDispatch();
 
-const UploadListingScreen: React.FC = () => {
-  const navigation = useNavigation();
-  const { user } = useAuth();
-  const { t } = useTranslation();
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  const [loading, setLoading] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [mapLoading, setMapLoading] = useState(false);
-  const [focusedInput, setFocusedInput] = useState<string | null>(null);
-  const [uploadProgress, setUploadProgress] = useState<number[]>([]);
-
-  const { colors: themeColors, isDark } = useTheme();
-
-  const colors = React.useMemo(() => ({
-    background: themeColors.background,
-    card: themeColors.card,
-    border: themeColors.border,
-    primary: themeColors.primary,
-    text: themeColors.text,
-    textSecondary: themeColors.textSecondary,
-    inputBg: isDark ? '#2A2A2A' : '#f0f0f0',
-    inputFocusedBg: isDark ? '#333333' : '#ffffff',
-  }), [themeColors, isDark]);
-
-  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
-
-  const [form, setForm] = useState({
-    title: '',
-    description: '',
-    price: '',
-    address: '',
-    city: '',
-    rooms: '',
-    latitude: null as number | null,
-    longitude: null as number | null,
-    terms: '',
-    listing_type: 'apartment',
-    stay_type: 'long_term',
-    price_unit: 'per_month' as 'per_month' | 'per_night',
-  });
-
-  const handleListingTypeChange = (value: string) => {
-    const isDailyType = value === 'guest_house' || value === 'hotel';
-    setForm(p => ({
-      ...p,
-      listing_type: value,
-      price_unit: isDailyType ? 'per_night' : p.price_unit,
-      stay_type: isDailyType ? 'short_term' : p.stay_type,
-    }));
-  };
-
-  const LISTING_TYPES = [
-    { label: 'Room', value: 'room' },
-    { label: 'Studio', value: 'studio' },
-    { label: 'Apartment', value: 'apartment' },
-    { label: 'Guest House', value: 'guest_house' },
-    { label: 'Hotel', value: 'hotel' },
-  ];
-
-  const STAY_TYPES = [
-    { label: 'Short Term', value: 'short_term' },
-    { label: 'Long Term', value: 'long_term' },
-    { label: 'Both', value: 'both' },
-  ];
-
-  useEffect(() => {
-    if (!form.terms || form.terms.trim().length === 0) {
-      setForm((p) => ({ ...p, terms: t('booking.default_terms_template') }));
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const [media, setMedia] = useState<MediaItem[]>([]);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const handleInputFocus = (inputName: string) => {
-    setFocusedInput(inputName);
-  };
-
-  const pickMedia = async () => {
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
-      showAlert(
-        'Permission Needed',
-        'Enable media permissions to upload images and videos.'
-      );
-      return;
-    }
-
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images', 'videos'],
-      allowsMultipleSelection: true,
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets.length > 0) {
-      const newMedia: MediaItem[] = [];
-
-      for (const asset of result.assets) {
-        let thumbUrl = asset.uri;
-
-        if (asset.type === 'video') {
-          try {
-            const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 1000 });
-            thumbUrl = uri;
-          } catch (err) {
-            console.warn('Failed to generate video thumbnail:', err);
-          }
-        }
-
-        newMedia.push({
-          type: asset.type as 'image' | 'video',
-          url: asset.uri,
-          thumbUrl,
-          mimeType: asset.mimeType,
-        });
-      }
-
-      setMedia((prev) => [...prev, ...newMedia]);
-    }
-  };
-
-  const removeMedia = (index: number) => {
-    setMedia((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const openLocationPicker = async () => {
-    setMapLoading(true);
-    const loc = await requestLocationPermission();
-    if (!loc) {
-      setMapLoading(false);
-      return;
-    }
-    setShowMap(true);
-  };
-
-  const generateMarker = (text: string) => {
-    const ts = Date.now().toString().slice(-6);
-    const userIdPart = user?.id?.slice(0, 6) || 'xxxxxx';
-    return `${ts}-${userIdPart}`;
-  };
-
-  const handleSubmit = async () => {
-    if (!user) return;
-
-    // ─── Validation ────────────────────────────────────────────────
-    if (!form.title?.trim()) {
-      showAlert('Missing Information', 'Please enter a property title.');
-      return;
-    }
-    if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) {
-      showAlert('Missing Information', 'Please enter a valid price.');
-      return;
-    }
-    if (!form.city?.trim()) {
-      showAlert('Missing Information', 'Please enter a city.');
-      return;
-    }
-    if (!form.address?.trim()) {
-      showAlert('Missing Information', 'Please enter an address.');
-      return;
-    }
-    if (form.latitude === null || form.longitude === null) {
-      showAlert('Location Required', 'Please select a location on the map.');
-      return;
-    }
-    if (!form.terms || form.terms.trim().length < 10) {
-      showAlert('Terms Required', 'Please provide Terms & Conditions (at least 10 characters).');
-      return;
-    }
-    // ─── End validation ──────────────────────────────────────────
-
-    setLoading(true);
-    try {
-      const marker = generateMarker(form.terms);
-
-      // 1. Create the listing record first to get a valid ID
-      const { data: listing, error: insertError } = await supabase
-        .from('listings')
-        .insert({
-          landlord_id: user.id,
-          title: form.title,
-          description: form.description,
-          price: Number(form.price),
-          address: form.address,
-          city: form.city,
-          latitude: form.latitude,
-          longitude: form.longitude,
-          rooms: form.rooms ? Number(form.rooms) : null,
-          media: [],
-          available: true,
-          terms_text: form.terms,
-          terms_marker: marker,
-          listing_type: form.listing_type,
-          stay_type: form.stay_type,
-          price_unit: form.price_unit,
-        })
-        .select()
-        .single();
-
-      if (insertError || !listing) {
-        throw new Error(insertError?.message || "Failed to create listing record");
-      }
-
-      const listingId = listing.id;
-
-      // 2. Prepare atomic media uploads using the listingId
-      setUploadProgress(new Array(media.length).fill(0));
-      abortControllerRef.current = new AbortController();
-
-      const uploadPromises = media.map(async (item, index) => {
-        const ext = item.type === 'image' ? 'webp' : 'mp4';
-        const fileName = `listings/${listingId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
-        
-        return uploadListingMedia(
-          item.url,
-          fileName,
-          item.type,
-          listingId,
-          item.type === 'video' ? item.thumbUrl : undefined,
-          item.mimeType,
-        (progress: number) => {
-          setUploadProgress(prev => {
-            const newProgress = [...prev];
-            newProgress[index] = progress;
-            return newProgress;
-          });
-        },
-          abortControllerRef.current!.signal
-        );
-      });
-
-      // Execute all uploads in parallel
-      const uploadedMedia = await Promise.all(uploadPromises);
-
-      // 3. Final commit: update the listing with the uploaded media array
-      const { error: updateError } = await supabase
-        .from('listings')
-        .update({ media: uploadedMedia })
-        .eq('id', listingId);
-
-      if (updateError) {
-        throw new Error("Media upload succeeded, but failed to link to property: " + updateError.message);
-      }
-
-      showAlert('Success!', 'Your property listing has been created successfully.', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
-    } catch (err: any) {
-      console.error('Error creating listing:', err);
-      showAlert('Error', err.message || 'Failed to create listing. Please try again.');
-      abortControllerRef.current = null;
-      setLoading(false);
-    }
-  };
-
-  const handleCancelUpload = () => {
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-  };
-
-  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => (
-    <View style={styles.mediaItemWrapper}>
-      <View style={styles.imageContainer}>
-        <Image source={{ uri: item.thumbUrl }} style={styles.mediaImage} />
-        {item.type === 'video' && (
-          <View style={styles.videoIconContainer}>
-            <Ionicons name="play-circle" size={32} color={colors.text} />
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.removeImageBtn}
-          onPress={() => removeMedia(index)}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="close" size={18} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.mediaBadge}>
-        <Text style={styles.mediaBadgeText}>{index + 1}</Text>
-      </View>
-    </View>
+  // Redux state
+  const user = useAppSelector((state: RootState) => state.auth.user);
+  const payments = useAppSelector((state: RootState) => state.payments.history);
+  const { initiating, initiateError, initiateData, fetchingHistory, fetchError } = useAppSelector(
+    (state: RootState) => state.payments
   );
 
-  return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
-      
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()} 
-          style={styles.backButton}
-          activeOpacity={0.7}
-        >
-          <Ionicons name="arrow-back" size={24} color={colors.primary} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add New Property</Text>
-        <View style={styles.headerRight} />
-      </View>
+  const route = useRoute<LandlordTabRouteProp<'Payments'>>();
+  const routeParams = route.params;
+  const isVerificationFlow = routeParams && 'reason' in routeParams && routeParams.reason === 'verification';
+  const boostParams = !isVerificationFlow && routeParams && 'planId' in routeParams ? routeParams : undefined;
+  const verificationParams = isVerificationFlow ? routeParams : undefined;
 
-      <MapPickerModal
-        visible={showMap}
-        onClose={() => {
-          setShowMap(false);
-          setMapLoading(false);
-        }}
-        onLocationSelected={(coords) => {
-          setForm((prev) => ({
-            ...prev,
-            latitude: coords.latitude,
-            longitude: coords.longitude,
-          }));
-          setShowMap(false);
-          setMapLoading(false);
-        }}
-      />
+  const [activeTab, setActiveTab] = useState<'history' | 'send'>('history');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
 
-      <KeyboardAvoidingView 
-        style={{ flex: 1 }} 
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      >
-        <ScrollView 
-          ref={scrollViewRef}
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-            {/* Media Section */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="images-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Property Photos & Videos</Text>
-              </View>
-              <Text style={styles.sectionSubtitle}>
-                Add up to 10 photos or videos of your property
-              </Text>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false} 
-                contentContainerStyle={styles.mediaList}
-              >
-                <TouchableOpacity 
-                  style={styles.addPhotoBtn} 
-                  onPress={pickMedia}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="camera-outline" size={32} color={colors.primary} />
-                  <Text style={styles.addPhotoText}>Add Media</Text>
-                </TouchableOpacity>
+  // Clear stale thunk state on mount
+  useEffect(() => { dispatch(clearInitiateState()); }, []);
 
-                {media.map((item, index) => (
-                  <View key={`${item.url}-${index}`}>
-                    {renderMediaItem({ item, index })}
-                  </View>
-                ))}
-              </ScrollView>
-            </View>
-
-            {/* Basic Info */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="home-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Basic Information</Text>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Listing Type <Text style={styles.requiredStar}>*</Text></Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                  {LISTING_TYPES.map((type) => (
-                    <TouchableOpacity
-                      key={type.value}
-                      style={[styles.chip, form.listing_type === type.value && styles.chipSelected]}
-                      onPress={() => handleListingTypeChange(type.value)}
-                    >
-                      <Text style={[styles.chipText, form.listing_type === type.value && styles.chipTextSelected]}>
-                        {type.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Stay Type <Text style={styles.requiredStar}>*</Text></Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
-                  {STAY_TYPES.map((type) => (
-                    <TouchableOpacity
-                      key={type.value}
-                      style={[styles.chip, form.stay_type === type.value && styles.chipSelected]}
-                      onPress={() => setForm(p => ({ ...p, stay_type: type.value }))}
-                    >
-                      <Text style={[styles.chipText, form.stay_type === type.value && styles.chipTextSelected]}>
-                        {type.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
-              </View>
-              
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Property Title <Text style={styles.requiredStar}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, focusedInput === 'title' && styles.inputFocused]}
-                  value={form.title}
-                  onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
-                  placeholder="e.g., Modern Apartment in Bonapriso"
-                  placeholderTextColor={colors.textSecondary}
-                  onFocus={() => handleInputFocus('title')}
-                  onBlur={() => setFocusedInput(null)}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Description</Text>
-                <TextInput
-                  style={[styles.input, styles.textArea, focusedInput === 'description' && styles.inputFocused]}
-                  value={form.description}
-                  onChangeText={(t) => setForm((p) => ({ ...p, description: t }))}
-                  placeholder="Describe your property's features, location, and amenities..."
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                  onFocus={() => handleInputFocus('description')}
-                  onBlur={() => setFocusedInput(null)}
-                />
-              </View>
-
-              <View style={styles.row}>
-                <View style={[styles.inputGroup, styles.halfWidthLeft]}>
-                  <Text style={styles.label}>
-                    {form.price_unit === 'per_night' ? 'Daily Price (FCFA)' : 'Monthly Price (FCFA)'}{' '}
-                    <Text style={styles.requiredStar}>*</Text>
-                  </Text>
-                  <TextInput
-                    style={[styles.input, focusedInput === 'price' && styles.inputFocused]}
-                    value={form.price}
-                    onChangeText={(t) => setForm((p) => ({ ...p, price: t }))}
-                    placeholder={form.price_unit === 'per_night' ? '15000' : '150000'}
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    onFocus={() => handleInputFocus('price')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                  {/* Price Unit Toggle */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                    {(['per_month', 'per_night'] as const).map((unit) => (
-                      <TouchableOpacity
-                        key={unit}
-                        style={[
-                          styles.chip,
-                          { paddingHorizontal: 10, paddingVertical: 6 },
-                          form.price_unit === unit && styles.chipSelected,
-                        ]}
-                        onPress={() => setForm(p => ({ ...p, price_unit: unit }))}
-                      >
-                        <Text style={[styles.chipText, { fontSize: 11 }, form.price_unit === unit && styles.chipTextSelected]}>
-                          {unit === 'per_month' ? '/ Month' : '/ Night'}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                </View>
-
-                <View style={[styles.inputGroup, styles.halfWidthRight]}>
-                  <Text style={styles.label}>Number of Rooms</Text>
-                  <TextInput
-                    style={[styles.input, focusedInput === 'rooms' && styles.inputFocused]}
-                    value={form.rooms}
-                    onChangeText={(t) => setForm((p) => ({ ...p, rooms: t }))}
-                    placeholder="3"
-                    placeholderTextColor={colors.textSecondary}
-                    keyboardType="numeric"
-                    onFocus={() => handleInputFocus('rooms')}
-                    onBlur={() => setFocusedInput(null)}
-                  />
-                </View>
-              </View>
-            </View>
-
-            {/* Location */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="location-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Location</Text>
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>Street Address <Text style={styles.requiredStar}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, focusedInput === 'address' && styles.inputFocused]}
-                  value={form.address}
-                  onChangeText={(t) => setForm((p) => ({ ...p, address: t }))}
-                  placeholder="123 Rue de la Paix"
-                  placeholderTextColor={colors.textSecondary}
-                  onFocus={() => handleInputFocus('address')}
-                  onBlur={() => setFocusedInput(null)}
-                />
-              </View>
-
-              <View style={styles.inputGroup}>
-                <Text style={styles.label}>City <Text style={styles.requiredStar}>*</Text></Text>
-                <TextInput
-                  style={[styles.input, focusedInput === 'city' && styles.inputFocused]}
-                  value={form.city}
-                  onChangeText={(t) => setForm((p) => ({ ...p, city: t }))}
-                  placeholder="Douala"
-                  placeholderTextColor={colors.textSecondary}
-                  onFocus={() => handleInputFocus('city')}
-                  onBlur={() => setFocusedInput(null)}
-                />
-              </View>
-
-              <TouchableOpacity
-                style={[styles.locationPicker, mapLoading && styles.submitBtnDisabled]}
-                onPress={openLocationPicker}
-                disabled={mapLoading}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="map-outline" size={22} color={colors.primary} />
-                {mapLoading ? (
-                  <ActivityIndicator style={{ marginLeft: 12 }} color={colors.primary} />
-                ) : form.latitude && form.longitude ? (
-                  <Text style={styles.locationPickerText}>
-                    Selected: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
-                  </Text>
-                ) : (
-                  <Text style={styles.locationPickerText}>Tap to select location on map</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-
-            {/* Terms */}
-            <View style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Terms & Conditions <Text style={styles.requiredStar}>*</Text></Text>
-              </View>
-              
-              <TextInput
-                style={[styles.input, styles.termsArea, focusedInput === 'terms' && styles.inputFocused]}
-                value={form.terms}
-                onChangeText={(t) => setForm((p) => ({ ...p, terms: t }))}
-                multiline
-                numberOfLines={6}
-                placeholder="Enter your terms and conditions..."
-                placeholderTextColor={colors.textSecondary}
-                textAlignVertical="top"
-                onFocus={() => handleInputFocus('terms')}
-                onBlur={() => setFocusedInput(null)}
-              />
-              
-              <View style={styles.termsHint}>
-                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.hintText}>
-                  Students will review and agree to these terms before booking
-                </Text>
-              </View>
-            </View>
-
-            {/* Submit */}
-            <TouchableOpacity
-              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
-              onPress={handleSubmit}
-              disabled={loading}
-              activeOpacity={0.8}
-            >
-              {loading ? (
-                <ActivityIndicator size="small" color={colors.background} />
-              ) : (
-                <>
-                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.background} />
-                  <Text style={styles.submitBtnText}>Create Property Listing</Text>
-                </>
-              )}
-            </TouchableOpacity>
-
-            <View style={styles.bottomPadding} />
-        </ScrollView>
-      </KeyboardAvoidingView>
-
-      {/* Upload Progress Overlay */}
-      {loading && (
-        <View style={styles.overlay}>
-          <View style={styles.progressCard}>
-            <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.progressTitle}>Uploading Media...</Text>
-            <Text style={styles.progressSubtitle}>
-              Please do not close the app or turn off your screen.
-            </Text>
-
-            <View style={{ width: '100%' }}>
-              <View style={styles.progressBarContainer}>
-                <Text style={styles.progressLabel}>
-                  Uploading {media.length} file{media.length !== 1 ? 's' : ''}... 
-                  ({( (uploadProgress.reduce((a,b)=>a+b,0) / Math.max(1, media.length)) * 100 ).toFixed(0)}%)
-                </Text>
-                <View style={styles.progressBarTrack}>
-                  <View style={[styles.progressBarFill, { width: `${(uploadProgress.reduce((a,b)=>a+b,0) / Math.max(1, media.length)) * 100}%` }]} />
-                </View>
-              </View>
-              
-              <TouchableOpacity 
-                style={[styles.submitBtn, { backgroundColor: '#E74C3C', marginTop: 24, width: '100%' }]} 
-                onPress={handleCancelUpload}
-              >
-                <Text style={styles.submitBtnText}>Cancel Upload</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      )}
-    </SafeAreaView>
-  );
-};
-
-const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: colors.background 
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
-    backgroundColor: colors.background,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: colors.card,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  headerTitle: { 
-    color: colors.text, 
-    fontSize: 20, 
-    fontWeight: '600',
-    letterSpacing: 0.5,
-  },
-  headerRight: {
-    width: 40,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  content: {
-    padding: 16,
-    paddingBottom: 200,
-  },
-  section: {
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  sectionTitle: { 
-    color: colors.text, 
-    fontSize: 18, 
-    fontWeight: '600',
-    letterSpacing: 0.3,
-  },
-  sectionSubtitle: {
-    color: colors.textSecondary,
-    fontSize: 14,
-    marginBottom: 16,
-    marginLeft: 28,
-  },
-  inputGroup: { 
-    marginBottom: 16 
-  },
-  label: { 
-    color: colors.text, 
-    fontSize: 14, 
-    fontWeight: '600', 
-    marginBottom: 8,
-    letterSpacing: 0.3,
-  },
-  requiredStar: {
-    color: colors.primary,
-    fontSize: 14,
-  },
-  input: {
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    padding: 16,
-    color: colors.text,
-    fontSize: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  inputFocused: {
-    borderColor: colors.primary,
-    backgroundColor: colors.inputFocusedBg,
-  },
-  chipScroll: {
-    gap: 8,
-    paddingVertical: 4,
-  },
-  chip: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    backgroundColor: colors.inputBg,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  chipSelected: {
-    backgroundColor: colors.primary,
-    borderColor: colors.primary,
-  },
-  chipText: {
-    color: colors.text,
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  chipTextSelected: {
-    color: colors.background,
-  },
-  textArea: { 
-    minHeight: 100,
-    textAlignVertical: 'top',
-  },
-  termsArea: {
-    minHeight: 150,
-    textAlignVertical: 'top',
-  },
-  row: { 
-    flexDirection: 'row',
-    marginHorizontal: -4,
-  },
-  halfWidthLeft: {
-    flex: 1,
-    marginRight: 4,
-  },
-  halfWidthRight: {
-    flex: 1,
-    marginLeft: 4,
-  },
-  mediaList: {
-    paddingRight: 16,
-    gap: 8,
-  },
-  mediaItemWrapper: {
-    position: 'relative',
-    marginRight: 12,
-  },
-  addPhotoBtn: {
-    width: 120,
-    height: 120,
-    borderWidth: 2,
-    borderColor: colors.primary,
-    borderStyle: 'dashed',
-    borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: colors.card,
-    marginRight: 12,
-  },
-  addPhotoText: { 
-    color: colors.primary, 
-    fontSize: 12, 
-    marginTop: 8,
-    fontWeight: '500',
-  },
-  imageContainer: { 
-    position: 'relative', 
-    width: 120, 
-    height: 120, 
-    borderRadius: 16,
-    overflow: 'hidden',
-  },
-  mediaImage: { 
-    width: 120, 
-    height: 120, 
-    borderRadius: 16,
-  },
-  removeImageBtn: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    borderRadius: 16,
-    width: 28,
-    height: 28,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.primary,
-  },
-  videoIconContainer: {
-    position: 'absolute',
-    top: 44,
-    left: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  mediaBadge: {
-    position: 'absolute',
-    bottom: 8,
-    left: 8,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-  },
-  mediaBadgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  bottomPadding: {
-    height: 60,
-  },
-  submitBtnDisabled: {
-    opacity: 0.7,
-  },
-  submitBtn: {
-    backgroundColor: colors.primary,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-    borderRadius: 16,
-    gap: 8,
-    marginTop: 8,
-  },
-  submitBtnText: {
-    color: colors.background,
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
-  locationPicker: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 16,
-    backgroundColor: colors.inputBg,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  locationPickerText: {
-    flex: 1,
-    color: colors.text,
-    fontSize: 14,
-    marginLeft: 12,
-  },
-  termsHint: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 12,
-    paddingHorizontal: 4,
-  },
-  hintText: {
-    flex: 1,
-    color: colors.textSecondary,
-    fontSize: 12,
-  },
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    zIndex: 1000,
-  },
-  progressCard: {
-    width: '85%',
-    backgroundColor: colors.card,
-    borderRadius: 20,
-    padding: 24,
-    alignItems: 'center',
-  },
-  progressTitle: {
-    color: colors.text,
-    fontSize: 18,
-    fontWeight: 'bold',
-    marginBottom: 8,
-  },
-  progressSubtitle: {
-    color: colors.primary,
-    fontSize: 14,
-    textAlign: 'center',
-    marginBottom: 24,
-    fontWeight: '500',
-  },
-  progressBarContainer: {
-    width: '100%',
-    marginBottom: 16,
-  },
-  progressLabel: {
-    color: colors.textSecondary,
-    fontSize: 12,
-    marginBottom: 8,
-  },
-  progressBarTrack: {
-    height: 8,
-    backgroundColor: colors.inputBg,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: 4,
-  },
-});
-
-export default UploadListingScreen;
-</file>
-
-<file path="src/screens/student/BookingDetails.tsx">
-// src/screens/student/BookingDetails.tsx
-import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { differenceInDays, format } from "date-fns";
-import * as ImagePicker from 'expo-image-picker';
-import React, { useCallback, useEffect, useMemo, useState } from "react";
-import { useTranslation } from "react-i18next";
-import {
-    ActivityIndicator,
-    Alert,
-    Dimensions,
-    Image,
-    Linking,
-    Modal,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
-} from "react-native";
-import MapView from 'react-native-maps';
-import { SafeAreaView } from "react-native-safe-area-context";
-import FullVideoPlayer from "../../components/FullVideoPlayer";
-import { useTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../hooks/useAuth";
-import { triggerPushNotifications } from '../../hooks/usePushNotifications';
-import { LocationService } from '../../services/LocationService';
-import { StudentStackParamList } from "../../types";
-import { supabase } from '../../utils/supabaseClient';
-import { uploadListingMedia } from '../../utils/upload.native';
-
-const { width } = Dimensions.get("window");
-
-type BookingDetailsNavProp = NativeStackNavigationProp<StudentStackParamList, "BookingDetails">;
-type BookingDetailsRouteProp = RouteProp<StudentStackParamList, "BookingDetails">;
-
-type MediaItem = {
-  url: string;
-  type: 'image' | 'video';
-  thumbUrl?: string;
-  processing_status?: string;
-};
-
-type ListingType = {
-  id: string;
-  title: string;
-  address: string | null;
-  city: string;
-  price: string;
-  description: string | null;
-  rooms: number | null;
-  media: MediaItem[] | null;
-  terms_text: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  landlord?: {
-    id: string;
-    full_name: string;
-    phone: string;
-  };
-  listing_type?: string | null;
-};
-
-type BookingFull = {
-  id: string;
-  listing_id: string;
-  landlord_id: string;
-  student_id: string;
-  amount: string;
-  start_date: string;
-  end_date: string;
-  status: "pending" | "confirmed" | "cancelled" | "completed";
-  approval_status: "pending" | "approved" | "rejected";
-  payment_status: "pending" | "completed" | "failed";
-  agreed_to_terms: boolean;
-  tenant_confirmation: boolean;
-  landlord_confirmation: boolean;
-  duration_type?: string;
-  total_amount?: number;
-  created_at: string;
-  updated_at: string;
-  caution_fee?: number;
-  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed' | 'refund_pending' | 'forfeited_bypass' | 'refund_queued' | 'refund_paused';
-  rent_payment_status?: string;
-  contract_status?: 'active' | 'grace' | 'expired' | 'renewed' | 'terminated';
-  is_renewal_active?: boolean;
-  listing: ListingType;
-  entry_media?: MediaItem[] | null;
-  exit_media?: MediaItem[] | null;
-};
-
-const STORAGE_KEY_PREFIX = "@booking_";
-const CACHE_DURATION = 5 * 60 * 1000; // Reduced to 5 minutes
-
-export default function BookingDetails() {
-  const { t } = useTranslation();
-  const navigation = useNavigation<BookingDetailsNavProp>();
-  const route = useRoute<BookingDetailsRouteProp>();
-  const { bookingId } = route.params;
-  const { user } = useAuth();
-  const { colors: themeColors, isDark } = useTheme();
-  const COLORS = useMemo(() => ({
-    gold: themeColors.primary,
-    goldLight: isDark ? '#2D2510' : '#F5E7C8',
-    goldDark: themeColors.primary,
-    white: themeColors.card,
-    offWhite: isDark ? '#1A1A1A' : '#F8F9FA',
-    greyDark: themeColors.text,
-    greyMedium: themeColors.textSecondary,
-    greyLight: isDark ? '#2A2A2A' : '#ECF0F1',
-    border: themeColors.border,
-    shadow: '#000000',
-    success: themeColors.success,
-    warning: '#FFD700',
-    danger: themeColors.error,
-    orange: '#FFA500',
-    purple: '#9B59B6',
-    background: themeColors.background,
-  }), [themeColors, isDark]);
-  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
-
-  const [booking, setBooking] = useState<BookingFull | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
-  const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [uploadingMedia, setUploadingMedia] = useState(false);
-  const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
-
-  // Caution Refund Flow States
-  const [showSurveyModal, setShowSurveyModal] = useState(false);
-  const [cancellationReason, setCancellationReason] = useState<string | null>(null);
-  const [cancellationDetails, setCancellationDetails] = useState('');
-  const [updating, setUpdating] = useState(false);
-
-  const handleUploadMedia = async (type: 'entry' | 'exit') => {
-    try {
-      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
-      const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-
-      if (!cameraPermission.granted || !libraryPermission.granted) {
-        Alert.alert('Permission Needed', 'Enable camera and media permissions to take and save pictures.');
-        return;
-      }
-
-      const result = await ImagePicker.launchCameraAsync({
-        quality: 0.8,
-        allowsEditing: true,
-      });
-
-      if (!result.canceled && result.assets && result.assets.length > 0) {
-        setUploadingMedia(true);
-        const asset = result.assets[0];
-
-        const ext = 'webp';
-        const fileName = `bookings/${bookingId}/${type}_${Date.now()}.${ext}`;
-
-        const uploadedMedia = await uploadListingMedia(
-          asset.uri,
-          fileName,
-          'image',
-          bookingId,
-          undefined,
-          asset.mimeType || 'image/jpeg'
-        );
-
-        const currentMediaArray = ((booking as any)[`${type}_media`] as any[]) || [];
-        const newMediaObj = { url: uploadedMedia.url, timestamp: new Date().toISOString() };
-        const updatedArray = [...currentMediaArray, newMediaObj];
-
-        const { error: dbError } = await supabase
-          .from('bookings')
-          .update({ [`${type}_media`]: updatedArray })
-          .eq('id', bookingId);
-
-        if (dbError) throw dbError;
-
-        Alert.alert('Success', `${type === 'entry' ? 'Entry' : 'Exit'} picture captured successfully.`);
-        fetchBookingDetails(true);
-      }
-    } catch (err: any) {
-      console.error(err);
-      Alert.alert('Error', 'Failed to capture media: ' + (err.message || ''));
-    } finally {
-      setUploadingMedia(false);
-    }
-  };
-
-  const handleGoBack = () => {
-    if (navigation.canGoBack()) {
-      navigation.goBack();
-    } else {
-      navigation.navigate("ViewBookingsScreen");
-    }
-  };
-
-  const fetchBookingDetails = useCallback(async (forceRefresh = false) => {
-    if (!user?.id || !bookingId) {
-      setError(!user?.id ? "User not authenticated" : "No booking ID provided");
-      setLoading(false);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
-    try {
-      if (!forceRefresh) {
-        const cached = await AsyncStorage.getItem(STORAGE_KEY_PREFIX + bookingId);
-        if (cached) {
-          try {
-            const { data, timestamp } = JSON.parse(cached);
-            if (data?.id) {
-              setBooking(data);
-              setLoading(false);
-
-              if (Date.now() - timestamp > CACHE_DURATION || data.approval_status === 'pending') {
-                fetchBookingDetails(true);
-              }
-              return;
-            } else {
-              await AsyncStorage.removeItem(STORAGE_KEY_PREFIX + bookingId);
-            }
-          } catch {
-            await AsyncStorage.removeItem(STORAGE_KEY_PREFIX + bookingId);
-          }
-        }
-      }
-
-      const { data, error } = await supabase
-        .from("bookings")
-        .select("*, listings(*, landlord:users!listings_landlord_id_fkey(id, full_name, phone))")
-        .eq("id", bookingId)
-        .eq("student_id", user.id)
-        .single();
-
-      if (error) throw error;
-      if (!data) throw new Error("Booking not found");
-
-      const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
-      const rawMedia = data.listings?.media;
-      const mediaItems: MediaItem[] = Array.isArray(rawMedia)
-        ? rawMedia
-          .filter((m: any) => m?.url && m?.type)
-          .map((m: any) => ({
-            url: m.url.startsWith('/media/') ? `${MEDIA_BASE_URL}${m.url}` : m.url,
-            type: m.type,
-            thumbUrl: m.thumbUrl && m.thumbUrl.startsWith('/media/')
-              ? `${MEDIA_BASE_URL}${m.thumbUrl}`
-              : m.thumbUrl,
-            processing_status: m.processing_status || 'ready',
-          }))
-        : [];
-
-      const bookingData: BookingFull = {
-        ...data,
-        listing: data.listings ? {
-          id: data.listings.id,
-          title: data.listings.title || "Unknown Property",
-          address: data.listings.address || null,
-          city: data.listings.city || "",
-          price: data.listings.price || data.amount,
-          description: data.listings.description || null,
-          rooms: data.listings.rooms || null,
-          media: mediaItems,
-          terms_text: data.listings.terms_text || null,
-          latitude: data.listings.latitude || null,
-          longitude: data.listings.longitude || null,
-          landlord: data.listings.landlord,
-          listing_type: data.listings.listing_type || null,
-        } : {
-          id: data.listing_id,
-          title: "Unknown Property",
-          address: null,
-          city: "",
-          price: data.amount,
-          description: null,
-          rooms: null,
-          media: null,
-          terms_text: null,
-          latitude: null,
-          longitude: null,
-          listing_type: null,
-        }
-      };
-
-      if (bookingData?.id) {
-        await AsyncStorage.setItem(
-          STORAGE_KEY_PREFIX + bookingId,
-          JSON.stringify({
-            data: bookingData,
-            timestamp: Date.now()
-          })
-        );
-      }
-
-      setBooking(bookingData);
-    } catch (err: any) {
-      setError(err.message || "Failed to fetch booking");
-
-      const cached = await AsyncStorage.getItem(STORAGE_KEY_PREFIX + bookingId);
-      if (cached) {
-        try {
-          const { data } = JSON.parse(cached);
-          if (data?.id) {
-            setBooking(data);
-            Alert.alert(t('bookings.offline_mode'), t('bookings.offline_msg'));
-          }
-        } catch {
-          // Silent fail
-        }
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  }, [bookingId, user?.id, t]);
-
+  // FETCH HISTORY & REAL-TIME SYNC
   useEffect(() => {
-    fetchBookingDetails(false);
-  }, [fetchBookingDetails]);
+    if (!user?.id) return;
 
-  const handleRefresh = () => {
-    setRefreshing(true);
-    fetchBookingDetails(true);
-  };
-
-  // ── Realtime listener ──────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!bookingId) return;
+    dispatch(fetchPayments(user.id));
 
     const channel = supabase
-      .channel('booking_details_realtime_' + bookingId)
+      .channel(`landlord-payments-${user.id}`)
       .on(
-        'postgres_changes',
+        "postgres_changes",
         {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'bookings',
-          filter: `id=eq.${bookingId}`,
+          event: "*",
+          schema: "public",
+          table: "payments",
+          filter: `payer_id=eq.${user.id}`,
         },
         (payload: any) => {
-          const updated = payload.new;
-          setBooking((prev: any) => {
-            if (!prev) return prev;
-            // Update booking state with new data from payload
-            const newBooking = { ...prev, ...updated };
-
-            // Sync with AsyncStorage to avoid stale cache on next load
-            AsyncStorage.setItem(
-              STORAGE_KEY_PREFIX + bookingId,
-              JSON.stringify({
-                data: newBooking,
-                timestamp: Date.now()
-              })
-            );
-
-            return newBooking;
-          });
-
-          if (updated.approval_status === 'rejected' || updated.status === 'cancelled') {
-            Alert.alert('Booking Update', 'Your booking status has changed.');
+          const row = payload.new as any;
+          if (row) {
+            const mapped: Payment = {
+              id: row.id,
+              transactionId: row.transaction_ref || row.id,
+              amount: parseFloat(row.amount),
+              sender: row.payer_id,
+              receiver: row.payee_id,
+              status: row.status as any,
+              date: row.created_at,
+              description: row.currency ? `${row.currency} Payment` : "Payment",
+            };
+            dispatch(upsertPayment(mapped));
           }
         }
       )
@@ -26109,1541 +21952,477 @@ export default function BookingDetails() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [bookingId]);
+  }, [user?.id]);
 
-  // Time remaining calculation
-  let rentTimeRemaining = '';
-  if (booking?.status === 'confirmed') {
-    const msLeft = new Date(booking.end_date).getTime() - Date.now();
-    if (msLeft > 0) {
-      const daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
-      if (daysLeft >= 30) {
-        rentTimeRemaining = `${Math.floor(daysLeft / 30)} Months left`;
-      } else {
-        rentTimeRemaining = `${daysLeft} Days left`;
-      }
-    } else {
-      rentTimeRemaining = 'Expired';
+  // Prefill if coming from BoostScreen or ListingDetailsScreen (verification)
+  useEffect(() => {
+    if (routeParams && 'reason' in routeParams) {
+      setActiveTab('send');
+      setAmount(String(routeParams.amount));
+      setDescription(routeParams.description);
+      return;
     }
-  }
-
-  const handlePayNow = () => {
-    if (!booking) return;
-
-    navigation.navigate('Payments', {
-      listingId: booking.listing_id,
-      bookingId: booking.id,
-      amount: Number(booking.total_amount ?? booking.amount),
-      description: `Booking payment for ${booking.listing?.title || "Property"}`,
-      receiverPhone: booking.listing?.landlord?.phone || "",
-      receiverName: booking.listing?.landlord?.full_name || "",
-      landlordId: booking.landlord_id,
-                  paymentType: 'initial',
-      listingType: booking.listing?.listing_type || 'Apartment',
-    });
-  };
-
-  const handleCompleteRent = () => {
-    if (!booking) return;
-    const caution = booking.caution_fee ?? 0;
-    const rentBalance = Number(booking.total_amount ?? booking.amount) - caution;
-
-    navigation.navigate('Payments', {
-      listingId: booking.listing_id,
-      bookingId: booking.id,
-      amount: rentBalance,
-      description: `Rent Completion Payment for ${booking.listing?.title || "Property"}`,
-      receiverPhone: booking.listing?.landlord?.phone || "",
-      receiverName: booking.listing?.landlord?.full_name || "",
-      landlordId: booking.landlord_id,
-      paymentType: 'rent_completion',
-      listingType: booking.listing?.listing_type || 'Apartment',
-    } as any);
-  };
-
-  // ── Renewal (Extend Lease) handler ──────────────────────────────────────
-  const RENEWAL_PROCESSING_FEE = 5000;
-  const handleRenewLease = () => {
-    if (!booking) return;
-    Alert.alert(
-      '🔄 Renew Your Lease',
-      `Tap "Proceed" to pay the XAF ${RENEWAL_PROCESSING_FEE.toLocaleString()} Rent Processing Fee. Once confirmed, your lease end date will be extended.`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Proceed to Payment',
-          onPress: () => {
-            navigation.navigate('Payments', {
-              listingId: booking.listing_id,
-              bookingId: booking.id,
-              amount: RENEWAL_PROCESSING_FEE,
-              description: `Rent Processing Fee — Renewal for ${booking.listing?.title || 'Property'}`,
-              receiverPhone: booking.listing?.landlord?.phone || '',
-              receiverName: booking.listing?.landlord?.full_name || '',
-              landlordId: booking.landlord_id,
-              paymentType: 'renewal',
-              isRenewal: true,
-              listingType: booking.listing?.listing_type || 'Apartment',
-            } as any);
-          },
-        },
-      ]
-    );
-  };
-
-  // ── Confirm Checkout handler ─────────────────────────────────────────────
-  const handleConfirmCheckout = () => {
-    Alert.alert(
-      '🚪 Confirm Move-Out',
-      'Are you sure you have vacated the property? The landlord will be notified to complete the handshake and release your caution.',
-      [
-        { text: 'Not Yet', style: 'cancel' },
-        {
-          text: 'Yes, I Have Moved Out',
-          style: 'destructive',
-          onPress: async () => {
-            setUpdating(true);
-            try {
-              const { error } = await supabase.rpc('confirm_handshake_side', {
-                p_booking_id: bookingId,
-                p_role: 'student'
-              });
-              if (error) throw error;
-              Alert.alert('Move-Out Requested', 'The landlord has been notified. Your caution refund is pending their confirmation.');
-              fetchBookingDetails(true);
-            } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to submit move-out.');
-            } finally {
-              setUpdating(false);
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleContactSupport = (type: 'call' | 'email') => {
-    if (type === 'call') {
-      Linking.openURL("tel:+237682366472");
-    } else {
-      Linking.openURL("mailto:info@diracmr.com");
+    if (boostParams) {
+      setActiveTab('send');
+      setAmount(boostParams.price.toString());
+      setDescription(`Boost Listing: ${boostParams.listingId}`);
     }
-  };
+  }, [boostParams, routeParams]);
 
-  const confirmMoveIn = () => {
+  // Success → reset form, switch to history
+  useEffect(() => {
+    if (!initiateData) return;
+    const numAmount = parseFloat(amount);
+    setAmount('');
+    setDescription('');
+    setActiveTab('history');
+    dispatch(clearInitiateState());
     Alert.alert(
-      "Confirm Move-In",
-      "Are you sure you have moved into the property? This confirms the start of your tenancy.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Yes, I'm In",
-          onPress: async () => {
-            setUpdating(true);
-            try {
-              const { error } = await supabase.rpc('confirm_handshake_side', {
-                p_booking_id: bookingId,
-                p_role: 'student'
-              });
-              if (error) throw error;
-              fetchBookingDetails();
-              Alert.alert('Confirmed', 'Enjoy your stay!');
-            } catch (err) {
-              console.error(err);
-              Alert.alert('Error', 'Failed to confirm move in.');
-            } finally {
-              setUpdating(false);
-            }
-          }
-        }
-      ]
+      'Payment Initiated ✅',
+      boostParams
+        ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
+        : `${formatCurrency(numAmount)} payment initiated.\nApprove the MoMo prompt on your phone to complete.`,
     );
-  };
+  }, [initiateData]);
 
-  const handleCancelBooking = () => {
-    Alert.alert(
-      t('bookings.cancel_booking'),
-      "Are you sure you want to cancel this booking? This action cannot be undone.",
-      [
-        { text: t('common.cancel'), style: "cancel" },
-        {
-          text: t('bookings.cancel_booking'),
-          style: "destructive",
-          onPress: async () => {
-            const { error } = await supabase.rpc('cancel_booking', {
-              p_booking_id: bookingId,
-              p_reason: 'User cancelled before payment'
-            });
-            if (error) {
-              Alert.alert('Error', error.message);
-            } else {
-              Alert.alert(t('common.success'), "Booking cancelled successfully");
-              triggerPushNotifications();
-              fetchBookingDetails(true);
-            }
-          }
-        }
-      ]
-    );
-  };
+  // Failure → show alert
+  useEffect(() => {
+    if (!initiateError) return;
+    Alert.alert('Payment Failed', initiateError);
+    dispatch(clearInitiateState());
+  }, [initiateError]);
 
-  const handleCancelAndRefund = async () => {
-    if (!cancellationReason) {
-      Alert.alert('Reason Required', 'Please select a reason for cancellation.');
+  // ---------- Payment Handler ----------
+  const handleSendPayment = async () => {
+    if (!amount) {
+      Alert.alert('Validation Error', 'Please enter an amount');
+      return;
+    }
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      Alert.alert('Validation Error', 'Enter a valid amount');
       return;
     }
 
-    setLoading(true);
-    const refundScheduledAt = new Date();
-    refundScheduledAt.setHours(refundScheduledAt.getHours() + 72);
+    if (!user?.id) {
+      Alert.alert('Error', 'User account details missing. Please sign in again.');
+      return;
+    }
 
-    const { error } = await supabase.rpc('cancel_booking', {
-      p_booking_id: bookingId,
-      p_reason: cancellationReason + (cancellationDetails ? ` - ${cancellationDetails}` : '')
+    if (verificationParams) {
+      let payerPhone = user.momo || user.phone;
+      if (!payerPhone) {
+        const { data } = await supabase
+          .from('users')
+          .select('momo, phone')
+          .eq('id', user.id)
+          .maybeSingle();
+        payerPhone = data?.momo || data?.phone || '';
+      }
+
+      if (!payerPhone) {
+        Alert.alert('Error', 'Add a mobile-money number to your profile before paying.');
+        return;
+      }
+
+      dispatch(initiateVerificationPayment({
+        payerPhone,
+        listingId: verificationParams.listingId,
+        payerId: user.id,
+      }));
+      return;
+    }
+
+    if (!user.phone) {
+      Alert.alert('Error', 'User account details missing. Please sign in again.');
+      return;
+    }
+
+    const reason = boostParams ? 'boosting' : 'landlord_subscription';
+    const planId = boostParams?.planId;
+    const tierId = reason === 'landlord_subscription' ? 'tier_monthly' : undefined;
+
+    dispatch(initiateCollection({
+      payerPhone: user.phone,
+      amount: String(numAmount),
+      reason,
+      planId,
+      tierId,
+      client: {
+        name: 'Dhub',
+        id: `col-${Date.now()}`,
+        payer_id: user.id,
+        listing_id: boostParams?.listingId ?? '',
+        plan_id: boostParams?.planId ?? null,   // ← needed by webhook to activate boost
+        idempotency_key: `dhub-col-${Date.now()}`,
+      },
+    }));
+  };
+  const handleViewReceipt = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setShowReceiptModal(true);
+  };
+
+  // ---------- Helpers ----------
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
     });
 
-    setLoading(false);
-    if (error) {
-      Alert.alert('Error', error.message);
-    } else {
-      setShowSurveyModal(false);
-      Alert.alert('Cancellation Submitted', 'Your cancellation has been received. Geo-Auditing will begin immediately.');
-      triggerPushNotifications();
-      fetchBookingDetails(true);
-
-      // Start Geo-Audit for 72 hours
-      await LocationService.startGeoAudit();
-    }
-  };
-
-  const handleConfirmMoveIn = () => {
-    Alert.alert(
-      "Confirm Move-In",
-      "Are you sure you have moved into the property? This will trigger the release of your caution fee from Escrow to the Landlord.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Confirm",
-          onPress: async () => {
-            setLoading(true);
-            const { error } = await supabase.rpc('confirm_handshake_side', {
-              p_booking_id: bookingId,
-              p_role: 'student'
-            });
-
-            setLoading(false);
-            if (error) {
-              Alert.alert('Error', error.message);
-            } else {
-              Alert.alert('Success', 'You have confirmed your move-in.');
-              triggerPushNotifications();
-              fetchBookingDetails(true);
-            }
-          }
-        }
-      ]
-    );
-  };
-
-  if (loading && !booking) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={COLORS.gold} />
-          <Text style={styles.loadingText}>{t('common.loading')}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (error && !booking) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
-        <View style={styles.center}>
-          <View style={styles.errorIconContainer}>
-            <Ionicons name="alert-circle-outline" size={64} color={COLORS.danger} />
-          </View>
-          <Text style={styles.errorTitle}>Unable to Load Booking</Text>
-          <Text style={styles.errorText}>{error}</Text>
-          <View style={styles.errorActions}>
-            <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
-              <Ionicons name="refresh" size={20} color={COLORS.white} />
-              <Text style={styles.retryButtonText}>Try Again</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
-              <Ionicons name="arrow-back" size={20} color={COLORS.gold} />
-              <Text style={styles.backButtonText}>{t('common.back')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!booking) return null;
-
-  const { listing } = booking;
-  const startDate = new Date(booking.start_date);
-  const endDate = new Date(booking.end_date);
-  const daysLeft = differenceInDays(endDate, new Date());
-  const isActive = daysLeft >= 0 && booking.status === "confirmed";
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'XAF' }).format(value);
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case "pending": return COLORS.warning;
-      case "confirmed": return COLORS.success;
-      case "cancelled": return COLORS.danger;
-      default: return COLORS.greyMedium;
+      case 'completed': return '#27AE60';
+      case 'pending': return '#F39C12';
+      case 'failed': return '#E74C3C';
+      default: return '#7F8C8D';
     }
   };
 
-  const getPaymentColor = (status: string) => {
+  const getStatusText = (status: string) => {
     switch (status) {
-      case "pending": return COLORS.orange;
-      case "completed": return COLORS.success;
-      case "failed": return COLORS.danger;
-      default: return COLORS.greyMedium;
+      case 'completed': return 'Completed';
+      case 'pending': return 'Pending';
+      case 'failed': return 'Failed';
+      default: return status;
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "confirmed": return "checkmark-circle";
-      case "pending": return "time";
-      case "cancelled": return "close-circle";
-      default: return "information-circle";
+  const generateQRData = (payment: Payment) =>
+    JSON.stringify({
+      transactionId: payment.transactionId,
+      amount: payment.amount,
+      sender: payment.sender,
+      receiver: payment.receiver,
+      date: payment.date,
+      status: payment.status,
+      description: payment.description,
+    });
+
+  const generatePDF = async (payment: Payment) => {
+    setPdfLoading(true);
+    try {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Receipt - ${payment.transactionId}</title>
+        <style>
+          body{font-family:Arial,sans-serif;margin:40px;color:#2C3E50}
+          .header{text-align:center;color:#D4AF37;border-bottom:2px solid #D4AF37;padding-bottom:20px;margin-bottom:30px}
+          .section{margin-bottom:25px}
+          .section-title{color:#D4AF37;font-size:18px;font-weight:bold;margin-bottom:15px;border-bottom:1px solid #EAECEF;padding-bottom:5px}
+          .row{display:flex;justify-content:space-between;margin-bottom:8px;padding:5px 0}
+          .label{color:#7F8C8D;font-weight:500}
+          .value{color:#2C3E50;font-weight:600;text-align:right}
+          .total-row{border-top:2px solid #EAECEF;padding-top:10px;margin-top:10px;font-weight:bold}
+          .footer{text-align:center;margin-top:40px;color:#7F8C8D;font-size:12px;border-top:1px solid #EAECEF;padding-top:20px}
+        </style></head><body>
+        <div class="header"><h1>DHUB Payment Receipt</h1><p>Transaction ID: ${payment.transactionId}</p></div>
+        <div class="section">
+          <div class="section-title">Transaction Details</div>
+          <div class="row"><span class="label">Transaction ID:</span><span class="value">${payment.transactionId}</span></div>
+          <div class="row"><span class="label">Description:</span><span class="value">${payment.description}</span></div>
+          <div class="row"><span class="label">Date:</span><span class="value">${formatDate(payment.date)}</span></div>
+          <div class="row"><span class="label">Status:</span><span class="value">${getStatusText(payment.status)}</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title">Amount Details</div>
+          <div class="row"><span class="label">Amount:</span><span class="value">${formatCurrency(payment.amount)}</span></div>
+          <div class="row"><span class="label">Fee:</span><span class="value">${formatCurrency(payment.fee || 0)}</span></div>
+          <div class="row total-row"><span class="label">Net Amount:</span><span class="value">${formatCurrency(payment.netAmount || 0)}</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title">Parties</div>
+          <div class="row"><span class="label">From:</span><span class="value">${payment.sender}</span></div>
+          <div class="row"><span class="label">To:</span><span class="value">${RECEIVER_NAME} (${payment.receiver})</span></div>
+        </div>
+        <div class="footer"><p>Generated by DHUB App on ${new Date().toLocaleDateString()}</p></div>
+        </body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Receipt' });
+      } else {
+        Alert.alert('Saved', `PDF saved to: ${uri}`);
+      }
+    } catch {
+      Alert.alert('Error', 'Failed to generate PDF');
+    } finally {
+      setPdfLoading(false);
     }
   };
 
+  // ---------- Render ----------
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
-
+    <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={handleGoBack} style={styles.headerButton}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
+        <Text style={styles.headerTitle}>Payments</Text>
+      </View>
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
+          onPress={() => setActiveTab('history')}
+        >
+          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
+            Payment History
+          </Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('bookings.details_title')}</Text>
-        <TouchableOpacity onPress={handleRefresh} style={styles.headerButton}>
-          <Ionicons name="refresh" size={22} color={COLORS.greyDark} />
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'send' && styles.activeTab]}
+          onPress={() => setActiveTab('send')}
+        >
+          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>
+            Send Payment
+          </Text>
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {listing?.media?.length ? (
-          <View style={styles.gallerySection}>
-            <ScrollView
-              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
-              onMomentumScrollEnd={(e) => {
-                const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
-                setActiveImageIndex(newIndex);
-              }}
-            >
-              {listing.media.map((item, idx) => {
-                const hasRealThumb =
-                  item.type === 'video' &&
-                  item.thumbUrl &&
-                  item.thumbUrl !== item.url &&
-                  !item.thumbUrl.endsWith('.mp4');
-
-                return (
-                  <TouchableOpacity
-                    key={idx}
-                    onPress={() => setFullscreenMedia(item)}
-                    activeOpacity={0.9}
-                  >
-                    {item.type === 'image' ? (
-                      <Image source={{ uri: item.url }} style={styles.listingImage} />
-                    ) : (
-                      <View style={styles.videoContainer}>
-                        {hasRealThumb ? (
-                          <Image source={{ uri: item.thumbUrl }} style={styles.listingImage} />
-                        ) : (
-                          <View style={[styles.listingImage, styles.videoFallback]}>
-                            <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
-                            <Text style={styles.videoFallbackText}>Video</Text>
-                          </View>
-                        )}
-                        <View style={styles.playButton}>
-                          <Ionicons name="play-circle" size={48} color={COLORS.white} />
-                        </View>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                );
-              })}
-            </ScrollView>
-
-            {listing.media.length > 1 && (
-              <View style={styles.paginationDots}>
-                {listing.media.map((_, idx) => (
-                  <View
-                    key={idx}
-                    style={[
-                      styles.paginationDot,
-                      idx === activeImageIndex && styles.paginationDotActive,
-                    ]}
-                  />
-                ))}
-              </View>
-            )}
-
-            <View style={styles.imageCount}>
-              <Ionicons name="images" size={14} color={COLORS.white} />
-              <Text style={styles.imageCountText}>{listing.media.length}</Text>
-            </View>
-          </View>
-        ) : (
-          <View style={styles.noImageContainer}>
-            <Ionicons name="image-outline" size={48} color={COLORS.greyLight} />
-            <Text style={styles.noImageText}>{t('listing.no_media')}</Text>
-          </View>
-        )}
-
-        <View style={styles.content}>
-
-          {/* ── Temporal Watchdog Action Banner ─────────────────────────── */}
-          {booking.status === 'confirmed' && (() => {
-            const endDate = new Date(booking.end_date);
-            const daysToEnd = Math.ceil((endDate.getTime() - Date.now()) / 86400_000);
-            const isGrace = booking.contract_status === 'grace' || (daysToEnd < 0 && daysToEnd >= -14);
-            const showBanner = daysToEnd <= 30;
-
-            if (!showBanner) return null;
-
-            const bannerBg = isGrace ? '#C0392B' : COLORS.gold;
-            const bannerText = isGrace ? '#FFFFFF' : '#1A1000';
-            const daysOver = Math.abs(daysToEnd);
-
-            const title = isGrace
-              ? `🔴 Lease Expired ${daysOver} Day${daysOver !== 1 ? 's' : ''} Ago`
-              : `📅 Lease Ends in ${daysToEnd} Day${daysToEnd !== 1 ? 's' : ''}`;
-
-            const subtitle = isGrace
-              ? `Pay the XAF 5,000 Rent Processing Fee to renew, or confirm your move-out now. Auto-termination in ${14 - daysOver} day${14 - daysOver !== 1 ? 's' : ''}.`
-              : 'Your lease is ending soon. Choose to extend your stay or plan your move-out.';
-
-            const canExtend = !booking.is_renewal_active && booking.contract_status !== 'terminated';
-
-            return (
-              <View style={[
-                {
-                  backgroundColor: bannerBg,
-                  borderRadius: 12,
-                  padding: 16,
-                  marginBottom: 16,
-                  shadowColor: '#000',
-                  shadowOpacity: 0.15,
-                  shadowRadius: 6,
-                  elevation: 4,
-                }
-              ]}>
-                <Text style={{ color: bannerText, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
-                  {title}
-                </Text>
-                <Text style={{ color: bannerText, fontSize: 13, marginBottom: 14, opacity: 0.9 }}>
-                  {subtitle}
-                </Text>
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  {canExtend && (
-                    <TouchableOpacity
-                      onPress={handleRenewLease}
-                      disabled={updating}
-                      style={{
-                        flex: 1, backgroundColor: isGrace ? '#FFFFFF' : '#1A1000',
-                        borderRadius: 8, paddingVertical: 10, alignItems: 'center',
-                        flexDirection: 'row', justifyContent: 'center', gap: 6,
-                      }}
-                    >
-                      <Ionicons name="refresh-circle" size={18} color={isGrace ? '#C0392B' : COLORS.gold} />
-                      <Text style={{ color: isGrace ? '#C0392B' : COLORS.gold, fontWeight: '700', fontSize: 14 }}>Extend Stay</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity
-                    onPress={handleConfirmCheckout}
-                    disabled={updating}
-                    style={{
-                      flex: 1, backgroundColor: isGrace ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
-                      borderRadius: 8, paddingVertical: 10, alignItems: 'center',
-                      flexDirection: 'row', justifyContent: 'center', gap: 6,
-                      borderWidth: 1, borderColor: bannerText,
-                    }}
-                  >
-                    <Ionicons name="exit-outline" size={18} color={bannerText} />
-                    <Text style={{ color: bannerText, fontWeight: '600', fontSize: 14 }}>Confirm Checkout</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            );
-          })()}
-
-          <View style={styles.titleSection}>
-            <View style={styles.titleRow}>
-              <Text style={styles.title}>{listing?.title ?? "Unknown Property"}</Text>
-              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
-                <Ionicons name={getStatusIcon(booking.status)} size={12} color={COLORS.white} />
-                <Text style={styles.statusBadgeText}>{t(`bookings.${booking.status}`)}</Text>
-              </View>
-            </View>
-            <Text style={styles.subtitle}>
-              {listing?.address ? `${listing.address}, ` : ""}{listing?.city}
-            </Text>
-          </View>
-
-          <View style={styles.statsGrid}>
-            <View style={styles.statCard}>
-              <Ionicons name="calendar-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.statValue}>{daysLeft >= 0 ? daysLeft : 0}</Text>
-              <Text style={styles.statLabel}>{t('bookings.days_left_label')}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="cash-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.statValue}>{Number(booking.amount).toLocaleString()}</Text>
-              <Text style={styles.statLabel}>{t('bookings.amount_label')}</Text>
-            </View>
-            <View style={styles.statCard}>
-              <Ionicons name="bed-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.statValue}>{listing.rooms ?? "—"}</Text>
-              <Text style={styles.statLabel}>{t('bookings.rooms_label')}</Text>
-            </View>
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.cardTitle}>{t('bookings.info_title')}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="calendar" size={16} color={COLORS.gold} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>{t('bookings.check_in')}</Text>
-                <Text style={styles.infoValue}>{format(startDate, "EEEE, MMMM dd, yyyy")}</Text>
-                <Text style={styles.infoSubvalue}>{format(startDate, "h:mm a")}</Text>
-              </View>
-            </View>
-
-            <View style={styles.infoDivider}>
-              <Ionicons name="arrow-down" size={16} color={COLORS.greyMedium} />
-            </View>
-
-            <View style={styles.infoRow}>
-              <View style={styles.infoIcon}>
-                <Ionicons name="calendar" size={16} color={COLORS.gold} />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={styles.infoLabel}>{t('bookings.check_out')}</Text>
-                <Text style={styles.infoValue}>{format(endDate, "EEEE, MMMM dd, yyyy")}</Text>
-                <Text style={styles.infoSubvalue}>{format(endDate, "h:mm a")}</Text>
-              </View>
-            </View>
-
-            {booking.status === "confirmed" && (
-              <>
-                <View style={styles.divider} />
-                <View style={styles.paymentRow}>
-                  <View style={styles.paymentItem}>
-                    <Text style={styles.paymentLabel}>{t('bookings.payment_status_label')}</Text>
-                    <View style={[styles.paymentBadge, { backgroundColor: getPaymentColor(booking.payment_status) }]}>
-                      <Text style={styles.paymentBadgeText}>{t(`bookings.${booking.payment_status === 'completed' ? 'paid' : booking.payment_status}`)}</Text>
-                    </View>
-                  </View>
-                  <View style={styles.paymentItem}>
-                    <Text style={styles.paymentLabel}>{t('bookings.agreed_to_terms')}</Text>
-                    <Ionicons
-                      name={booking.agreed_to_terms ? "checkmark-circle" : "close-circle"}
-                      size={24}
-                      color={booking.agreed_to_terms ? COLORS.success : COLORS.danger}
-                    />
-                  </View>
-                </View>
-              </>
-            )}
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="home-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.cardTitle}>{t('bookings.property_details')}</Text>
-            </View>
-
-            {listing.description && (
-              <Text style={styles.description}>{listing.description}</Text>
-            )}
-
-            <View style={styles.detailsGrid}>
-              <View style={styles.detailItem}>
-                <Ionicons name="resize-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Size</Text>
-                <Text style={styles.detailValue}>Not specified</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Ionicons name="water-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Utilities</Text>
-                <Text style={styles.detailValue}>Included</Text>
-              </View>
-              <View style={styles.detailItem}>
-                <Ionicons name="car-outline" size={16} color={COLORS.gold} />
-                <Text style={styles.detailLabel}>Parking</Text>
-                <Text style={styles.detailValue}>Available</Text>
-              </View>
-            </View>
-            <View style={styles.detailItem}>
-              <Text style={styles.detailLabel}>Duration:</Text>
-              <Text style={styles.detailValue}>
-                {booking.duration_type === 'daily'
-                  ? `${Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24))} Days`
-                  : booking.duration_type === 'yearly'
-                    ? '1 Year'
-                    : 'Unknown'}
-              </Text>
-            </View>
-            {rentTimeRemaining ? (
-              <View style={[styles.detailItem, { backgroundColor: COLORS.gold + '15', padding: 8, borderRadius: 8, marginTop: 10 }]}>
-                <Text style={[styles.detailLabel, { color: COLORS.gold }]}>Time Remaining:</Text>
-                <Text style={[styles.detailValue, { color: COLORS.gold, fontWeight: 'bold' }]}>{rentTimeRemaining}</Text>
-              </View>
-            ) : null}
-          </View>
-
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.cardTitle}>{t('bookings.property_details')}</Text>
-            </View>
-            <View style={styles.termsBox}>
-              <Text style={styles.termsText}>
-                {listing.terms_text && listing.terms_text.trim()
-                  ? listing.terms_text
-                  : t('booking.default_terms_template')}
-              </Text>
-            </View>
-          </View>
-
-          {/* Location & Landlord (Revealed only if paid) */}
-          <View style={styles.card}>
-            <View style={styles.cardHeader}>
-              <Ionicons name="map-outline" size={20} color={COLORS.gold} />
-              <Text style={styles.cardTitle}>Location & Landlord</Text>
-            </View>
-
-            {booking.payment_status === 'completed' ? (
-              <>
-                <View style={styles.mapContainer}>
-                  {listing.latitude && listing.longitude ? (
-                    <MapView
-                      style={StyleSheet.absoluteFillObject}
-                      region={{ latitude: listing.latitude, longitude: listing.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
-                      scrollEnabled={false}
-                      zoomEnabled={false}
-                      pitchEnabled={false}
-                      rotateEnabled={false}
-                    />
-                  ) : (
-                    <View style={[styles.center, { backgroundColor: COLORS.greyLight }]}>
-                      <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
-                      <Text style={{ color: COLORS.greyMedium, marginTop: 8 }}>Location not available</Text>
-                    </View>
-                  )}
-                </View>
-
-                {listing.landlord && (
-                  <View style={styles.landlordCard}>
-                    <View style={styles.landlordAvatar}>
-                      <Text style={styles.landlordInitials}>
-                        {listing.landlord.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'L'}
-                      </Text>
-                    </View>
-                    <View style={styles.landlordInfo}>
-                      <Text style={styles.landlordName}>{listing.landlord.full_name}</Text>
-                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${listing.landlord?.phone}`)} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
-                        <Ionicons name="call" size={14} color={COLORS.gold} />
-                        <Text style={{ color: COLORS.gold, marginLeft: 6 }}>{listing.landlord.phone}</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                )}
-              </>
-            ) : (
-              <View style={styles.lockedContainer}>
-                <Ionicons name="lock-closed" size={32} color={COLORS.greyMedium} />
-                <Text style={styles.lockedTitle}>Information Locked</Text>
-                <Text style={styles.lockedText}>
-                  Complete your booking to reveal the exact coordinates and landlord contact details.
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {(booking.status === "confirmed" || booking.status === "pending" || booking.status === "completed") && (
-            <View style={styles.card}>
-              <View style={styles.cardHeader}>
-                <Ionicons name="options-outline" size={20} color={COLORS.gold} />
-                <Text style={styles.cardTitle}>{t('bookings.actions')}</Text>
-              </View>
-
-              {isActive && (
-                <TouchableOpacity
-                  style={styles.cancelButton}
-                  onPress={handleCancelBooking}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close-circle-outline" size={20} color={COLORS.white} />
-                  <Text style={styles.cancelButtonText}>{t('bookings.cancel_booking')}</Text>
-                </TouchableOpacity>
-              )}
-
-              {booking.payment_status === 'completed' && !booking.tenant_confirmation && (
-                <TouchableOpacity
-                  style={[styles.actionButton, { backgroundColor: COLORS.success, borderColor: COLORS.success }]}
-                  onPress={handleConfirmMoveIn}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="checkmark-done-circle-outline" size={20} color={COLORS.white} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.white }]}>Confirm I Have Moved In</Text>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.white} style={styles.actionArrow} />
-                </TouchableOpacity>
-              )}
-
-              {booking.tenant_confirmation && (
-                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>Move-In Confirmed by You</Text>
-                </View>
-              )}
-
-              {/* Entry Picture: only visible for pending or confirmed bookings */}
-              {(booking.status === 'pending' || booking.status === 'confirmed') && (
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUploadMedia('entry')}
-                  activeOpacity={0.7}
-                  disabled={uploadingMedia}
-                >
-                  {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
-                  <Text style={styles.actionButtonText}>Take Entry Picture</Text>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
-                </TouchableOpacity>
-              )}
-              {booking.entry_media && booking.entry_media.length > 0 && (
-                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>✓ Entry Picture Captured</Text>
-                </View>
-              )}
-
-              {/* Exit Picture: only visible for completed/expired bookings AND no exit photo yet */}
-              {(booking.status === 'completed' || (booking.status === 'confirmed' && daysLeft < 0)) && !(booking.exit_media && booking.exit_media.length > 0) && (
-                <TouchableOpacity
-                  style={styles.actionButton}
-                  onPress={() => handleUploadMedia('exit')}
-                  activeOpacity={0.7}
-                  disabled={uploadingMedia}
-                >
-                  {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
-                  <Text style={styles.actionButtonText}>Take Exit Picture</Text>
-                  <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
-                </TouchableOpacity>
-              )}
-              {booking.exit_media && booking.exit_media.length > 0 && (
-                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
-                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>✓ Exit Picture Captured</Text>
-                </View>
-              )}
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => navigation.navigate("ListingReview", { listing_id: listing.id })}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="star-outline" size={20} color={COLORS.gold} />
-                <Text style={styles.actionButtonText}>{t('bookings.rate_property')}</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => Alert.alert("Report", "This feature will be available soon")}
-                activeOpacity={0.7}
-              >
-                <Ionicons name="flag-outline" size={20} color={COLORS.gold} />
-                <Text style={styles.actionButtonText}>{t('bookings.report_issue')}</Text>
-                <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
-              </TouchableOpacity>
-            </View>
-          )}
-
-          <View style={styles.helpSection}>
-            <Text style={styles.helpTitle}>{t('bookings.help_title')}</Text>
-            <View style={styles.helpButtons}>
-              <TouchableOpacity onPress={() => handleContactSupport('call')} style={styles.helpButton}>
-                <Ionicons name="call-outline" size={18} color={COLORS.gold} />
-                <Text style={styles.helpButtonText}>{t('bookings.call_support')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity onPress={() => handleContactSupport('email')} style={styles.helpButton}>
-                <Ionicons name="mail-outline" size={18} color={COLORS.gold} />
-                <Text style={styles.helpButtonText}>{t('bookings.email_support')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* ── Waiting for Landlord Approval Banner ── */}
-      {(!booking.approval_status || booking.approval_status === 'pending') && (
-        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
-          <Ionicons name="hourglass-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>Awaiting Landlord Approval</Text>
-          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
-            The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking.
-          </Text>
-        </View>
-      )}
-
-      {/* ── Sticky Pay Button (Initial or Rent Completion) ── */}
-      {booking.approval_status === 'approved' && booking.payment_status === 'pending' && (
-        <View style={styles.footer}>
-          <View style={styles.footerInfo}>
-            <Text style={styles.footerLabel}>Initial Deposit (Caution + 5000 XAF processing fee)</Text>
-            <Text style={styles.footerAmount}>
-              FCFA {((booking.caution_fee ?? 0) + 5000).toLocaleString()}
-            </Text>
-          </View>
-          <TouchableOpacity
-            style={styles.payButton}
-            onPress={handlePayNow}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="card-outline" size={20} color={COLORS.white} />
-            <Text style={styles.payButtonText}>{t('bookings.pay_now')}</Text>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Post-Payment Choice: Complete Rent vs Cancel */}
-      {booking.payment_status === 'completed' && booking.status === 'confirmed' && !(booking as any).student_confirmation && (
-        <View style={[styles.footer, { flexDirection: 'column', gap: 12, borderTopWidth: 1, borderColor: '#eee' }]}>
-          <TouchableOpacity
-            style={[styles.payButton, { width: '100%', backgroundColor: '#27AE60' }]}
-            onPress={confirmMoveIn}
-          >
-            <Text style={styles.payButtonText}>I Have Moved In ✓</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {booking.payment_status === 'completed' && booking.status === 'confirmed' && (booking as any).rent_payment_status !== 'completed' && !['refund_pending', 'refund_queued', 'refund_paused'].includes(booking.caution_status as string) && (
-        <View style={[styles.footer, { flexDirection: 'column', gap: 12 }]}>
-          <TouchableOpacity
-            style={[styles.payButton, { width: '100%' }]}
-            onPress={handleCompleteRent}
-            activeOpacity={0.8}
-          >
-            <Ionicons name="card-outline" size={20} color={COLORS.white} />
-            <Text style={styles.payButtonText}>Complete Rent Payment</Text>
-            <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.cancelButton, { width: '100%', marginBottom: 0, backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.danger }]}
-            onPress={() => setShowSurveyModal(true)}
-            activeOpacity={0.8}
-          >
-            <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>Cancel Booking & Refund Caution</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Refund Processing Banner (72 hrs) */}
-      {booking.caution_status === 'refund_queued' && (
-        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
-          <Ionicons name="time-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>Refund Processing</Text>
-          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
-            For security reasons and to protect our landlords, DHUB takes up to 72 hours to verify and process caution refunds.
-            Your money (minus 3% platform fee) will be sent to your Mobile Money account soon.
-          </Text>
-        </View>
-      )}
-
-      {/* Refund Paused Banner */}
-      {booking.caution_status === 'refund_paused' && (
-        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: '#FADBD8' }]}>
-          <Ionicons name="alert-circle-outline" size={24} color="#C0392B" style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: "#C0392B", textAlign: 'center' }}>Refund Paused</Text>
-          <Text style={{ fontSize: 13, color: "#C0392B", textAlign: 'center', marginTop: 4 }}>
-            Your caution refund has been placed on hold by DHUB for manual review. Please contact support at support@dhubcmr.com for assistance.
-          </Text>
-        </View>
-      )}
-
-      {/* Fullscreen Media Modal */}
-      <Modal
-        visible={fullscreenMedia !== null}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setFullscreenMedia(null)}
-      >
-        {fullscreenMedia?.type === 'video' ? (
-          <FullVideoPlayer
-            url={fullscreenMedia.url}
-            onClose={() => setFullscreenMedia(null)}
-            processingStatus={fullscreenMedia.processing_status as 'processing' | 'ready' | 'failed' | undefined}
-          />
-        ) : (
-          <View style={styles.fullscreenModal}>
+      {activeTab === 'history' ? (
+        <ScrollView style={styles.historyContainer}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.sectionTitle}>Recent Transactions</Text>
             <TouchableOpacity
-              style={styles.fullscreenClose}
-              onPress={() => setFullscreenMedia(null)}
+              onPress={() => user?.id && dispatch(fetchPayments(user.id))}
+              disabled={fetchingHistory}
             >
-              <Ionicons name="close" size={30} color={COLORS.white} />
+              <Text style={[styles.refreshText, fetchingHistory && styles.disabledText]}>
+                {fetchingHistory ? "Refreshing..." : "Refresh"}
+              </Text>
             </TouchableOpacity>
-            <Image
-              source={{ uri: fullscreenMedia?.url }}
-              style={styles.fullscreenImage}
-              resizeMode="contain"
+          </View>
+
+          {fetchingHistory ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#D4AF37" />
+              <Text style={styles.loadingText}>Loading history...</Text>
+            </View>
+          ) : fetchError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{fetchError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => user?.id && dispatch(fetchPayments(user.id))}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          ) : payments.length === 0 ? (
+            <Text style={styles.emptyText}>No payment history yet.</Text>
+          ) : (
+            payments.map((payment: any) => (
+              <TouchableOpacity
+                key={payment.id}
+                style={styles.paymentCard}
+                onPress={() => handleViewReceipt(payment)}
+              >
+                <View style={styles.paymentHeader}>
+                  <Text style={styles.paymentDescription}>{payment.description}</Text>
+                  <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
+                </View>
+                <View style={styles.paymentDetails}>
+                  <Text style={styles.paymentDate}>{formatDate(payment.date)}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
+                    <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
+                  </View>
+                </View>
+                <View style={styles.paymentFooter}>
+                  <Text style={styles.transactionId}>ID: {payment.transactionId}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.sendContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Amount (XAF) *</Text>
+            <TextInput
+              style={styles.input}
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              editable={!initiating && !verificationParams}
+              placeholder="Enter amount"
             />
           </View>
-        )}
-      </Modal>
 
-      {/* Survey Modal */}
-      <Modal
-        visible={showSurveyModal}
-        transparent={true}
-        animationType="slide"
-        onRequestClose={() => setShowSurveyModal(false)}
-      >
-        <View style={styles.fullscreenModal}>
-          <View style={{ width: '90%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 16 }}>Cancellation Reason</Text>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Receiver</Text>
+            <TextInput style={[styles.input, styles.disabledInput]} value={RECEIVER_NAME} editable={false} />
+          </View>
 
-            {[
-              "The house doesn't look like the pictures.",
-              "Basic things are missing (e.g., no water, no electricity).",
-              "The landlord is asking for more money.",
-              "The area feels unsafe.",
-              "Other"
-            ].map(reason => (
-              <TouchableOpacity
-                key={reason}
-                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}
-                onPress={() => setCancellationReason(reason)}
-              >
-                <Ionicons name={cancellationReason === reason ? "radio-button-on" : "radio-button-off"} size={24} color={cancellationReason === reason ? COLORS.gold : COLORS.greyMedium} />
-                <Text style={{ marginLeft: 12, fontSize: 15, color: COLORS.greyDark, flex: 1 }}>{reason}</Text>
-              </TouchableOpacity>
-            ))}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Description</Text>
+            <TextInput
+              style={[styles.input, styles.textArea, (boostParams || verificationParams) && styles.disabledInput]}
+              value={boostParams ? 'Boost Listing' : description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              editable={!boostParams && !verificationParams && !initiating}
+            />
+          </View>
 
-            {cancellationReason === "Other" && (
-              <View style={{ marginTop: 12 }}>
-                <Text style={{ fontSize: 13, color: COLORS.greyMedium, marginBottom: 4 }}>Please specify:</Text>
-                <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12 }}>
-                  <Text style={{ color: COLORS.greyDark }}>{cancellationDetails || "Tap here to type..."}</Text>
+          <TouchableOpacity
+            style={[styles.sendButton, initiating && styles.buttonDisabled]}
+            onPress={handleSendPayment}
+            disabled={initiating}
+          >
+            {initiating
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.sendButtonText}>Send Payment</Text>
+            }
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* Receipt Modal */}
+      <Modal visible={showReceiptModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Payment Receipt</Text>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+          </View>
+
+          {selectedPayment && (
+            <ScrollView style={styles.receiptContent}>
+              <View style={styles.qrContainer}>
+                <QRCode value={generateQRData(selectedPayment)} size={200} color="#000" backgroundColor="#fff" />
+                <Text style={styles.qrHelpText}>Scan to verify transaction</Text>
+              </View>
+
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>Transaction Details</Text>
+                {[
+                  ['Transaction ID', selectedPayment.transactionId],
+                  ['Description', selectedPayment.description],
+                  ['Date', formatDate(selectedPayment.date)],
+                  ['Status', getStatusText(selectedPayment.status)],
+                ].map(([label, value]) => (
+                  <View key={label} style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>{label}:</Text>
+                    <Text style={styles.receiptValue}>{value}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>Amount Details</Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Amount:</Text>
+                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.amount)}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Fee:</Text>
+                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.fee || 0)}</Text>
+                </View>
+                <View style={[styles.receiptRow, styles.totalRow]}>
+                  <Text style={styles.totalLabel}>Net Amount:</Text>
+                  <Text style={styles.totalValue}>{formatCurrency(selectedPayment.netAmount || 0)}</Text>
                 </View>
               </View>
-            )}
 
-            <View style={{ flexDirection: 'row', marginTop: 24, gap: 12 }}>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }}
-                onPress={() => setShowSurveyModal(false)}
-              >
-                <Text style={{ color: COLORS.greyDark, fontWeight: '600' }}>Back</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: COLORS.danger }}
-                onPress={handleCancelAndRefund}
-              >
-                <Text style={{ color: COLORS.white, fontWeight: '600' }}>Submit & Cancel</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>Parties</Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>From:</Text>
+                  <Text style={styles.receiptValue}>{selectedPayment.sender}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>To:</Text>
+                  <Text style={styles.receiptValue}>{RECEIVER_NAME}</Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptActions}>
+                <TouchableOpacity
+                  style={[styles.downloadButton, pdfLoading && styles.buttonDisabled]}
+                  onPress={() => generatePDF(selectedPayment)}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.downloadButtonText}>Download PDF</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.closeReceiptButton} onPress={() => setShowReceiptModal(false)}>
+                  <Text style={styles.closeReceiptText}>Close</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
       </Modal>
     </SafeAreaView>
   );
-}
+};
 
-const getStyles = (COLORS: any) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  center: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 20,
-  },
-  loadingText: {
-    marginTop: 12,
-    fontSize: 16,
-    color: COLORS.greyMedium,
-  },
-  errorIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: COLORS.goldLight,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  errorTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: COLORS.greyDark,
-    marginBottom: 8,
-    textAlign: "center",
-  },
-  errorText: {
-    fontSize: 14,
-    color: COLORS.greyMedium,
-    textAlign: "center",
-    marginBottom: 24,
-    paddingHorizontal: 20,
-  },
-  errorActions: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  scrollContent: {
-    paddingBottom: 20,
-    flexGrow: 1,
-  },
-  retryButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.gold,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  retryButtonText: {
-    color: COLORS.white,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  backButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.white,
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-    borderWidth: 1,
-    borderColor: COLORS.gold,
-  },
-  backButtonText: {
-    color: COLORS.gold,
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  headerButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.offWhite,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: COLORS.greyDark,
-  },
-  gallerySection: {
-    position: "relative",
-    height: 220,
-  },
-  listingImage: {
-    width,
-    height: 220,
-    resizeMode: "cover",
-  },
-  paginationDots: {
-    flexDirection: "row",
-    position: "absolute",
-    bottom: 16,
-    alignSelf: "center",
-    gap: 8,
-  },
-  paginationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.white,
-    opacity: 0.5,
-  },
-  paginationDotActive: {
-    width: 20,
-    backgroundColor: COLORS.gold,
-    opacity: 1,
-  },
-  imageCount: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.gold,
-  },
-  imageCountText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "600",
-  },
-  noImageContainer: {
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: COLORS.greyLight,
-  },
-  noImageText: {
-    marginTop: 12,
-    color: COLORS.greyMedium,
-    fontSize: 16,
-  },
-  footer: {
-    padding: 20,
-    backgroundColor: COLORS.white,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.05,
-    shadowRadius: 10,
-    elevation: 20,
-  },
-  footerInfo: {
-    flex: 1,
-  },
-  footerLabel: {
-    fontSize: 12,
-    color: COLORS.greyMedium,
-  },
-  footerAmount: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.gold,
-  },
-  payButton: {
-    backgroundColor: COLORS.gold,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 24,
-    paddingVertical: 14,
-    borderRadius: 14,
-    gap: 8,
-    shadowColor: COLORS.gold,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  payButtonText: {
-    color: COLORS.white,
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  content: {
-    padding: 20,
-  },
-  titleSection: {
-    marginBottom: 20,
-  },
-  titleRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 4,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: "700",
-    color: COLORS.greyDark,
-    flex: 1,
-    marginRight: 12,
-  },
-  statusBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 4,
-  },
-  statusBadgeText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  subtitle: {
-    fontSize: 15,
-    color: COLORS.greyMedium,
-  },
-  statsGrid: {
-    flexDirection: "row",
-    gap: 12,
-    marginBottom: 24,
-  },
-  statCard: {
-    flex: 1,
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 16,
-    padding: 16,
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  statValue: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: COLORS.greyDark,
-    marginTop: 8,
-    marginBottom: 2,
-  },
-  statLabel: {
-    fontSize: 12,
-    color: COLORS.greyMedium,
-  },
-  card: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 16,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.greyDark,
-  },
-  infoRow: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  infoIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: COLORS.goldLight,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  infoContent: {
-    flex: 1,
-  },
-  infoLabel: {
-    fontSize: 13,
-    color: COLORS.greyMedium,
-    marginBottom: 2,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.greyDark,
-    marginBottom: 2,
-  },
-  infoSubvalue: {
-    fontSize: 13,
-    color: COLORS.greyMedium,
-  },
-  infoDivider: {
-    alignItems: "center",
-    paddingVertical: 8,
-    marginLeft: 16,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: COLORS.border,
-    marginVertical: 16,
-  },
-  paymentRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-  },
-  paymentItem: {
-    flex: 1,
-    alignItems: "center",
-    gap: 8,
-  },
-  paymentLabel: {
-    fontSize: 13,
-    color: COLORS.greyMedium,
-  },
-  paymentBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-  },
-  paymentBadgeText: {
-    color: COLORS.white,
-    fontSize: 12,
-    fontWeight: "700",
-    textTransform: "uppercase",
-  },
-  description: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.greyMedium,
-    marginBottom: 16,
-  },
-  detailsGrid: {
-    flexDirection: "row",
-    justifyContent: "space-around",
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 16,
-    padding: 16,
-  },
-  detailItem: {
-    alignItems: "center",
-    gap: 4,
-  },
-  detailLabel: {
-    fontSize: 12,
-    color: COLORS.greyMedium,
-    marginTop: 4,
-  },
-  detailValue: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: COLORS.greyDark,
-  },
-  termsBox: {
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 12,
-    padding: 16,
-  },
-  termsText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.greyMedium,
-  },
-  cancelButton: {
-    backgroundColor: COLORS.danger,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 12,
-    marginBottom: 12,
-  },
-  cancelButtonText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: "600",
-  },
-  actionButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: COLORS.offWhite,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  actionButtonText: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "500",
-    color: COLORS.greyDark,
-    marginLeft: 12,
-  },
-  actionArrow: {
-    opacity: 0.5,
-  },
-  helpSection: {
-    marginTop: 8,
-    marginBottom: 20,
-    padding: 20,
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 20,
-    alignItems: "center",
-  },
-  helpTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: COLORS.greyDark,
-    marginBottom: 16,
-  },
-  helpButtons: {
-    flexDirection: "row",
-    gap: 12,
-  },
-  helpButton: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: COLORS.white,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  helpButtonText: {
-    fontSize: 14,
-    color: COLORS.greyDark,
-  },
-  videoContainer: {
-    width,
-    height: 220,
-    position: 'relative',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoFallback: {
-    backgroundColor: COLORS.offWhite,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  videoFallbackText: {
-    color: COLORS.greyMedium,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  playButton: {
-    position: 'absolute',
-    alignSelf: 'center',
-  },
-  fullscreenContainer: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenClose: {
-    position: 'absolute',
-    top: 50,
-    right: 20,
-    zIndex: 10,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenMedia: {
-    width,
-    height: '100%',
-  },
-  fullscreenModal: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  fullscreenImage: {
-    width: '100%',
-    height: '100%',
-  },
-  mapContainer: {
-    height: 160,
-    borderRadius: 12,
-    overflow: 'hidden',
-    marginBottom: 16,
-    backgroundColor: COLORS.offWhite,
-  },
-  landlordCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 12,
-    padding: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  landlordAvatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.goldLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 12,
-  },
-  landlordInitials: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.gold,
-  },
-  landlordInfo: {
-    flex: 1,
-  },
-  landlordName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.greyDark,
-  },
-  lockedContainer: {
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  lockedTitle: {
-    color: COLORS.greyDark,
-    fontWeight: '600',
-    marginTop: 12,
-    fontSize: 16,
-  },
-  lockedText: {
-    color: COLORS.greyMedium,
-    textAlign: 'center',
-    marginTop: 6,
-    fontSize: 14,
-    lineHeight: 20,
-  },
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  header: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#D4AF37', textAlign: 'center' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#D4AF37' },
+  tabText: { fontSize: 16, fontWeight: '600', color: '#7F8C8D' },
+  activeTabText: { color: '#D4AF37' },
+  historyContainer: { flex: 1, padding: 20 },
+  sendContainer: { flex: 1, padding: 20 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 20 },
+  emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 40, fontSize: 16 },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  refreshText: { color: '#D4AF37', fontWeight: '600', fontSize: 14 },
+  disabledText: { color: '#BDC3C7' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#7F8C8D' },
+  errorContainer: { backgroundColor: '#FDEDED', padding: 16, borderRadius: 8, marginTop: 20, borderLeftWidth: 4, borderLeftColor: '#E74C3C' },
+  errorText: { color: '#C0392B', fontSize: 14 },
+  retryButton: { marginTop: 16, backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, alignSelf: 'center' },
+  retryButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
+  inputGroup: { marginBottom: 16 },
+  disabledInput: { backgroundColor: '#e0e0e0', color: '#7f7f7f' },
+  label: { fontSize: 16, fontWeight: '600', color: '#2C3E50', marginBottom: 8 },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCDFE4', borderRadius: 8, padding: 12, fontSize: 16, color: '#2C3E50' },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  sendButton: { backgroundColor: '#D4AF37', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  buttonDisabled: { opacity: 0.6 },
+  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  paymentCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  paymentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  paymentDescription: { fontSize: 16, fontWeight: '600', color: '#2C3E50', flex: 1, marginRight: 10 },
+  paymentAmount: { fontSize: 18, fontWeight: 'bold', color: '#D4AF37' },
+  paymentDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  paymentDate: { fontSize: 14, color: '#7F8C8D' },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  paymentFooter: { borderTopWidth: 1, borderTopColor: '#EAECEF', paddingTop: 8 },
+  transactionId: { fontSize: 12, color: '#95A5A6', fontFamily: 'monospace' },
+  modalContainer: { flex: 1, backgroundColor: '#F8F9FA' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50' },
+  closeButton: { padding: 4 },
+  closeButtonText: { fontSize: 24, color: '#7F8C8D', fontWeight: 'bold' },
+  receiptContent: { flex: 1, padding: 20 },
+  qrContainer: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 12 },
+  qrHelpText: { marginTop: 10, fontSize: 14, color: '#7F8C8D', textAlign: 'center' },
+  receiptSection: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 16 },
+  receiptSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EAECEF', paddingBottom: 8 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
+  receiptLabel: { fontSize: 14, color: '#7F8C8D', fontWeight: '500' },
+  receiptValue: { fontSize: 14, color: '#2C3E50', fontWeight: '600', flex: 1, textAlign: 'right' },
+  totalRow: { borderTopWidth: 2, borderTopColor: '#EAECEF', paddingTop: 10, marginTop: 4 },
+  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
+  totalValue: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37' },
+  receiptActions: { flexDirection: 'row', gap: 12, marginBottom: 30 },
+  downloadButton: { flex: 1, backgroundColor: '#D4AF37', padding: 14, borderRadius: 8, alignItems: 'center' },
+  downloadButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  closeReceiptButton: { flex: 1, backgroundColor: '#FFFFFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#DCDFE4' },
+  closeReceiptText: { color: '#2C3E50', fontSize: 14, fontWeight: 'bold' },
 });
+
+export default PaymentsScreen;
 </file>
 
 <file path="src/screens/student/BookingScreen.tsx">
@@ -29085,570 +23864,6 @@ const getStyles = (COLORS: any) => StyleSheet.create({
 export default BookingScreen;
 </file>
 
-<file path="src/screens/student/HomeScreen.tsx">
-// src/screens/student/HomeScreen.tsx
-import { Ionicons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
-import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { DiraBranding } from '../../components/DiraBranding';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../hooks/useAuth';
-import { supabase } from '../../utils/supabaseClient';
-
-import ListingCard from '../../components/ListingCard';
-import { NetworkDisconnectedScreen } from '../../components/NetworkDisconnectedScreen';
-import { fetchListings, ListingFilters, ListingSummary } from '../../utils/listings';
-
-export type UserLocation = { lat: number; lng: number };
-
-import { useTranslation } from 'react-i18next';
-
-const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
-  const { t } = useTranslation();
-  const { user } = useAuth();
-  const { colors, isDark } = useTheme();
-  /* ---------------- STATE ---------------- */
-  const [search, setSearch] = useState('');
-  const [listings, setListings] = useState<ListingSummary[]>([]);
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [errorMsg, setErrorMsg] = useState('');
-  const [filterModalVisible, setFilterModalVisible] = useState(false);
-
-  const [requestModalVisible, setRequestModalVisible] = useState(false);
-  const [requestLocation, setRequestLocation] = useState('');
-  const [requestBudget, setRequestBudget] = useState('');
-  const [requestDetails, setRequestDetails] = useState('');
-  const [submittingRequest, setSubmittingRequest] = useState(false);
-
-  const [offset, setOffset] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-
-  // Filters
-  const [selectedCity, setSelectedCity] = useState('All');
-  const [selectedRooms, setSelectedRooms] = useState<'All' | '5+' | string>('All');
-  const [selectedPrice, setSelectedPrice] = useState('All');
-  const [selectedListingType, setSelectedListingType] = useState<'All' | 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel'>('All');
-  const [selectedStayType, setSelectedStayType] = useState<'All' | 'short_term' | 'long_term' | 'both'>('All');
-
-  // Distance/Radius filter
-  const [distanceOption, setDistanceOption] = useState<'All' | 'Near me' | '500m' | '1km' | '5km' | '10km' | '20km' | '100km'>('All');
-  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
-  const [radiusMeters, setRadiusMeters] = useState<number | undefined>(undefined);
-
-  const flatListRef = useRef<FlatList<ListingSummary>>(null);
-
-  /* ---------------- FILTER OPTIONS ---------------- */
-  const cities = ['All', 'Buea', 'Douala', 'Yaoundé', 'Limbe', 'Bamenda'];
-  const roomOptions = ['All', '1', '2', '3', '4', '5+'];
-  const priceRanges = ['All', '0-50,000', '50,000-100,000', '100,000-200,000', '200,000-500,000', '500,000+'];
-  const listingTypes = ['All', 'room', 'studio', 'apartment', 'house', 'guest_house', 'hotel'];
-  const stayTypes = ['All', 'short_term', 'long_term', 'both'];
-  const distanceOptions = ['All', 'Near me', '500m', '1km', '5km', '10km', '20km', '100km'];
-
-  /* ---------------- LOCATION ---------------- */
-  async function requestUserLocation(): Promise<UserLocation | null> {
-    try {
-      const { status } = await Location.getForegroundPermissionsAsync();
-      let finalStatus = status;
-      if (status !== 'granted') {
-        const req = await Location.requestForegroundPermissionsAsync();
-        finalStatus = req.status;
-      }
-      if (finalStatus !== 'granted') {
-        if (Platform.OS === 'ios') Linking.openURL('app-settings:');
-        else Linking.openSettings();
-        return null;
-      }
-      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
-    } catch (err) {
-      console.warn('Location error:', err);
-      return null;
-    }
-  }
-
-  /* ---------------- FETCH LOGIC ---------------- */
-  useEffect(() => {
-    if (!user) return;
-
-    const fetchUnread = async () => {
-      const { count } = await supabase
-        .from('notifications')
-        .select('*', { count: 'exact', head: true })
-        .eq('recipient_id', user.id)
-        .eq('is_read', false);
-      setUnreadCount(count || 0);
-    };
-
-    fetchUnread();
-
-// ✅ CORRECT – add listener before subscribe
-    const channel = supabase
-      .channel(`student_notifs_${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, fetchUnread)
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [user]);
-
-  useEffect(() => {
-    const debounce = setTimeout(() => resetListings(), 300);
-    return () => clearTimeout(debounce);
-  }, [search, selectedCity, selectedRooms, selectedPrice, selectedListingType, selectedStayType, radiusMeters]);
-
-  async function resetListings() {
-    setOffset(0);
-    setHasMore(true);
-    setListings([]);
-    await loadListings(true);
-  }
-
-  async function loadListings(reset: boolean = false) {
-    if ((loading && reset) || (!hasMore && !reset) || loadingMore) return;
-
-    try {
-      reset ? setLoading(true) : setLoadingMore(true);
-
-      // Convert distanceOption to meters
-      let radius: number | undefined;
-      if (distanceOption !== 'All') {
-        if (!userLocation && distanceOption === 'Near me') {
-          const loc = await requestUserLocation();
-          if (!loc) {
-            setRadiusMeters(undefined);
-            setUserLocation(null);
-          } else setUserLocation(loc);
-        }
-
-        switch (distanceOption) {
-          case 'Near me': radius = 500; break;
-          case '500m': radius = 500; break;
-          case '1km': radius = 1000; break;
-          case '5km': radius = 5000; break;
-          case '10km': radius = 10000; break;
-          case '20km': radius = 20000; break;
-          case '100km': radius = 100000; break;
-          default: radius = undefined;
-        }
-      }
-
-      const priceFilter = parsePriceRange(selectedPrice);
-
-      const filters: ListingFilters = {
-        search,
-        city: selectedCity !== 'All' ? selectedCity : undefined,
-        rooms: selectedRooms === 'All' ? undefined : selectedRooms === '5+' ? '5+' : Number(selectedRooms),
-        minPrice: priceFilter?.min,
-        maxPrice: priceFilter?.max,
-        availableOnly: true,
-        boostedFirst: true,
-        limit: 50,
-        offset,
-        listing_type: selectedListingType !== 'All' ? selectedListingType : undefined,
-        stay_type: selectedStayType !== 'All' ? selectedStayType : undefined,
-        lat: userLocation?.lat,
-        lng: userLocation?.lng,
-        radius_m: radius,
-      };
-
-      if (reset) {
-        logSearchAnalytics(filters);
-      }
-
-      const data = await fetchListings(filters);
-
-      if (reset) setListings(data);
-      else setListings(prev => {
-        const ids = new Set(prev.map(l => l.id));
-        return [...prev, ...data.filter(l => !ids.has(l.id))];
-      });
-
-      if (data.length < 50) setHasMore(false);
-      else setOffset(prev => prev + data.length);
-
-    } catch (err) {
-      console.error('Error loading listings:', err);
-      if (reset) setListings([]);
-      setErrorMsg('Unable to load listings. Check your connection.');
-    } finally {
-      setLoading(false);
-      setLoadingMore(false);
-    }
-  }
-
-  /* ---------------- HELPERS ---------------- */
-  function parsePriceRange(range: string) {
-    if (range === 'All') return null;
-    if (range === '500,000+') return { min: 500000 };
-    const [min, max] = range.split('-').map(v => Number(v.replace(/,/g, '')));
-    return { min, max };
-  }
-
-  function resetFilters() {
-    setSelectedCity('All');
-    setSelectedRooms('All');
-    setSelectedPrice('All');
-    setSelectedListingType('All');
-    setSelectedStayType('All');
-    setDistanceOption('All');
-    setRadiusMeters(undefined);
-    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-    resetListings();
-  }
-
-  const logSearchAnalytics = async (filtersToLog: any) => {
-    try {
-      await supabase.from('search_analytics').insert({
-        user_id: user?.id,
-        search_text: filtersToLog.search || null,
-        city: filtersToLog.city || null,
-        rooms: filtersToLog.rooms ? String(filtersToLog.rooms) : null,
-        price_range: selectedPrice !== 'All' ? selectedPrice : null,
-        listing_type: filtersToLog.listing_type || null,
-        stay_type: filtersToLog.stay_type || null,
-      });
-    } catch (err) {
-      console.warn('Failed to log search analytics:', err);
-    }
-  };
-
-  const submitHousingRequest = async () => {
-    if (!requestLocation.trim() || !requestDetails.trim()) {
-      Alert.alert('Missing Details', 'Please provide a location and requirements.');
-      return;
-    }
-    setSubmittingRequest(true);
-    try {
-      const { error } = await supabase.from('housing_requests').insert({
-        user_id: user?.id,
-        location: requestLocation,
-        budget: requestBudget,
-        details: requestDetails,
-      });
-      if (error) throw error;
-      Alert.alert('Request Sent', 'We have received your request and will notify you when a matching property becomes available!');
-      setRequestModalVisible(false);
-      setRequestLocation('');
-      setRequestBudget('');
-      setRequestDetails('');
-    } catch (err) {
-      console.error(err);
-      Alert.alert('Error', 'Failed to submit request. Please try again.');
-    } finally {
-      setSubmittingRequest(false);
-    }
-  };
-
-  function handleListingPress(id: string) {
-    navigation.navigate('ListingDetails', { listingId: id });
-  }
-
-  function resultsText() {
-    if (loading) return t('common.loading');
-    if (!listings.length) return t('home.no_listings');
-    return `${listings.length} ${t('home.listings_available')}`;
-  }
-
-  /* ---------------- RENDER ---------------- */
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('home.title')}</Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{t('home.subtitle')}</Text>
-        </View>
-        <TouchableOpacity
-          style={styles.notificationBtn}
-          onPress={() => navigation.navigate('Notifications')}
-        >
-          <Ionicons name="notifications-outline" size={28} color={colors.primary} />
-          {unreadCount > 0 && <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]} />}
-        </TouchableOpacity>
-      </View>
-
-      {/* Search */}
-      <View style={styles.searchContainer}>
-        <View style={[styles.searchInputContainer, { backgroundColor: colors.card }]}>
-          <TextInput
-            style={[styles.searchInput, { color: colors.text }]}
-            placeholder={t('home.search_placeholder')}
-            value={search}
-            onChangeText={setSearch}
-            placeholderTextColor={colors.textSecondary}
-          />
-        </View>
-        <TouchableOpacity style={[styles.filterButton, { backgroundColor: colors.primary }]} onPress={() => setFilterModalVisible(true)}>
-          <Text style={styles.filterButtonText}>{t('home.filter_title')}</Text>
-        </TouchableOpacity>
-      </View>
-
-
-      {/* Results */}
-      <View style={styles.resultsContainer}>
-        <Text style={[styles.resultsText, { color: colors.textSecondary }]}>{resultsText()}</Text>
-      </View>
-
-      {/* Listings */}
-      {loading ? (
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color={colors.primary} />
-        </View>
-      ) : errorMsg ? (
-        <View style={styles.emptyState}>
-          {errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('fetch') ? (
-            <NetworkDisconnectedScreen onRefresh={() => loadListings(true)} refreshing={loading} fullScreen={false} />
-          ) : (
-            <Text style={[styles.emptyStateText, { color: colors.textSecondary, marginBottom: 20 }]}>{errorMsg}</Text>
-          )}
-          <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary, paddingHorizontal: 20 }]} onPress={() => setRequestModalVisible(true)}>
-            <Ionicons name="home-outline" size={18} color={colors.primary} />
-            <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        <FlatList
-          ref={flatListRef}
-          data={listings}
-          keyExtractor={item => item.id}
-          renderItem={({ item }) => (
-            <ListingCard listing={item} role="student" onPress={() => handleListingPress(item.id)} />
-          )}
-          refreshControl={
-            <RefreshControl
-              refreshing={loading && listings.length > 0}
-              onRefresh={() => loadListings(true)}
-              colors={[colors.primary]}
-              tintColor={colors.primary}
-            />
-          }
-          contentContainerStyle={styles.listingsContainer}
-          showsVerticalScrollIndicator={false}
-          onEndReached={() => hasMore && loadListings(false)}
-          onEndReachedThreshold={0.6}
-          ListFooterComponent={
-            <View style={{ paddingBottom: 20 }}>
-              <View style={[styles.requestContainer, { marginBottom: 24, marginTop: 12 }]}>
-                <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary }]} onPress={() => setRequestModalVisible(true)}>
-                  <Ionicons name="home-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
-                </TouchableOpacity>
-              </View>
-              {loadingMore && <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />}
-              <DiraBranding />
-            </View>
-          }
-        />
-      )}
-
-      {/* Filter Modal */}
-      <Modal visible={filterModalVisible} transparent animationType="slide">
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
-            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('home.filter_title')}</Text>
-
-            <FilterRow label={t('listing.city')} options={cities} value={selectedCity} onSelect={setSelectedCity} t={t} colors={colors} />
-            <FilterRow label={t('listing.rooms')} options={roomOptions} value={selectedRooms} onSelect={setSelectedRooms} t={t} colors={colors} />
-            <FilterRow label={t('home.price_range')} options={priceRanges} value={selectedPrice} onSelect={setSelectedPrice} t={t} colors={colors} />
-            <FilterRow label={t('home.listing_type')} options={listingTypes} value={selectedListingType} onSelect={setSelectedListingType} t={t} colors={colors} />
-            <FilterRow label={t('home.stay_type')} options={stayTypes} value={selectedStayType} onSelect={setSelectedStayType} t={t} colors={colors} />
-            <FilterRow label={t('home.distance')} options={distanceOptions} value={distanceOption} onSelect={setDistanceOption} t={t} colors={colors} />
-
-            <View style={styles.modalActions}>
-              <TouchableOpacity style={[styles.resetButton, { backgroundColor: colors.card }]} onPress={resetFilters}>
-                <Text style={[styles.resetButtonText, { color: colors.text }]}>{t('home.reset')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.applyButton, { backgroundColor: colors.primary }]}
-                onPress={() => {
-                  setFilterModalVisible(false);
-                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
-                  resetListings();
-                }}
-              >
-                <Text style={styles.applyButtonText}>{t('home.apply_filters')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Housing Request Modal */}
-      <Modal visible={requestModalVisible} transparent animationType="slide">
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'position'}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-        >
-          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
-            <ScrollView
-              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
-              keyboardShouldPersistTaps="handled"
-              showsVerticalScrollIndicator={false}
-            >
-              <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: 40 }]}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Notify Me</Text>
-                  <TouchableOpacity onPress={() => setRequestModalVisible(false)}>
-                    <Ionicons name="close" size={24} color={colors.textSecondary} />
-                  </TouchableOpacity>
-                </View>
-                <Text style={{ color: colors.textSecondary, marginBottom: 20, fontSize: 15, lineHeight: 22 }}>
-                  Fill out the details of the property you need. We'll search for it and notify you as soon as it's available!
-                </Text>
-
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Preferred Location</Text>
-                <TextInput
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
-                  placeholder="e.g., Molyko, Buea"
-                  placeholderTextColor={colors.textSecondary}
-                  value={requestLocation}
-                  onChangeText={setRequestLocation}
-                />
-
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Budget (FCFA)</Text>
-                <TextInput
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
-                  placeholder="e.g., 20,000 - 40,000 per month"
-                  placeholderTextColor={colors.textSecondary}
-                  value={requestBudget}
-                  onChangeText={setRequestBudget}
-                  keyboardType="numeric"
-                />
-
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Specific Requirements</Text>
-                <TextInput
-                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border, height: 100 }]}
-                  placeholder="e.g., 2 bedrooms, close to campus, water included..."
-                  placeholderTextColor={colors.textSecondary}
-                  multiline
-                  textAlignVertical="top"
-                  value={requestDetails}
-                  onChangeText={setRequestDetails}
-                />
-
-                <TouchableOpacity
-                  style={[styles.applyButton, { backgroundColor: colors.primary, marginTop: 12 }]}
-                  onPress={submitHousingRequest}
-                  disabled={submittingRequest}
-                >
-                  {submittingRequest ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={styles.applyButtonText}>Submit Request</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </SafeAreaView>
-  );
-};
-
-/* ---------------- FILTER ROW ---------------- */
-const FilterRow = ({ label, options, value, onSelect, t, colors }: any) => (
-  <View style={{ marginBottom: 24 }}>
-    <Text style={[styles.filterLabel, { color: colors.text }]}>{label}</Text>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      {options.map((o: string) => {
-        // Localize option labels if they match known keys
-        let displayValue = o;
-        if (o === 'All') displayValue = t('common.all');
-        else if (o === 'Near me') displayValue = t('home.near_me');
-        else if (['room', 'studio', 'apartment', 'house', 'guest_house', 'hotel'].includes(o)) displayValue = t(`home.types.${o}`);
-        else if (['short_term', 'long_term', 'both'].includes(o)) displayValue = t(`home.stays.${o}`);
-
-        return (
-          <TouchableOpacity
-            key={o}
-            style={[styles.filterOption, { backgroundColor: colors.card }, value === o && { backgroundColor: colors.primary }]}
-            onPress={() => onSelect(o)}
-          >
-            <Text style={[styles.filterOptionText, { color: colors.textSecondary }, value === o && styles.filterOptionTextSelected]}>
-              {displayValue}
-            </Text>
-          </TouchableOpacity>
-        );
-      })}
-    </ScrollView>
-  </View>
-);
-
-/* ---------------- STYLES ---------------- */
-const styles = StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: '#fff' },
-  header: { padding: 24, flexDirection: 'row', alignItems: 'center' },
-  headerTitle: { fontSize: 28, fontWeight: '700', color: '#1a1a1a' },
-  headerSubtitle: { fontSize: 16, color: '#666', marginTop: 6 },
-  notificationBtn: { padding: 4, position: 'relative' },
-  badge: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: '#FF4444',
-    borderWidth: 2,
-    borderColor: '#FFF',
-  },
-  searchContainer: { flexDirection: 'row', paddingHorizontal: 24, gap: 12 },
-  searchInputContainer: { flex: 1, backgroundColor: '#f8f9fa', borderRadius: 12 },
-  searchInput: { padding: 14, fontSize: 16 },
-  filterButton: { backgroundColor: '#B8860B', padding: 14, borderRadius: 12 },
-  filterButtonText: { color: '#fff', fontWeight: '600' },
-  resultsContainer: { paddingHorizontal: 24, paddingVertical: 12 },
-  resultsText: { color: '#666' },
-  listingsContainer: { paddingHorizontal: 24, paddingBottom: 24 },
-  loadingContainer: { flex: 1, justifyContent: 'center' },
-  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  emptyStateText: { color: '#666' },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
-  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
-  modalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
-  filterLabel: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
-  filterOption: { padding: 10, borderRadius: 20, backgroundColor: '#f8f9fa', marginRight: 8 },
-  filterOptionSelected: { backgroundColor: '#B8860B' },
-  filterOptionText: { color: '#666' },
-  filterOptionTextSelected: { color: '#fff' },
-  modalActions: { flexDirection: 'row', gap: 12 },
-  resetButton: { flex: 1, padding: 14, backgroundColor: '#eee', borderRadius: 12 },
-  resetButtonText: { textAlign: 'center' },
-  applyButton: { flex: 1, padding: 14, backgroundColor: '#B8860B', borderRadius: 12 },
-  applyButtonText: { color: '#fff', textAlign: 'center', fontWeight: '700', fontSize: 16 },
-  requestContainer: { paddingHorizontal: 24, marginTop: 16 },
-  requestButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed' },
-  requestButtonText: { fontWeight: '600', fontSize: 14 },
-  modalInput: { borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 16, fontSize: 16 },
-});
-
-export default HomeScreen;
-</file>
-
 <file path="src/screens/student/PaymentScreen.tsx">
 // src/screens/student/PaymentScreen.tsx
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -30630,6 +24845,2410 @@ By electronically signing below, the tenant confirms they have read and accepted
 }
 </file>
 
+<file path="src/utils/listings.ts">
+// src/utils/listings.ts
+import * as Location from 'expo-location';
+import { Linking, Platform } from 'react-native';
+import { supabase } from '../utils/supabaseClient';
+
+import {
+  Landlord,
+  ListingDetails,
+  ListingFilters,
+  ListingSummary,
+  MediaItem,
+  Review
+} from '../types';
+
+/* ======================================================
+   USER LOCATION HELPER
+   ====================================================== */
+
+export type UserLocation = {
+  lat: number;
+  lng: number;
+};
+
+// other helper types, exported so they do not conflict in HomeScreen
+export type { ListingFilters, ListingSummary };
+
+/**
+ * getUserLocation
+ * - Requests foreground permission
+ * - Redirects to settings if denied
+ * - Returns null safely
+ */
+export async function getUserLocation(): Promise<UserLocation | null> {
+  try {
+    const { status } = await Location.getForegroundPermissionsAsync();
+    let finalStatus = status;
+
+    if (status !== 'granted') {
+      const req = await Location.requestForegroundPermissionsAsync();
+      finalStatus = req.status;
+    }
+
+    if (finalStatus !== 'granted') {
+      if (Platform.OS === 'ios') {
+        Linking.openURL('app-settings:');
+      } else {
+        Linking.openSettings();
+      }
+      return null;
+    }
+
+    const position = await Location.getCurrentPositionAsync({
+      accuracy: Location.Accuracy.Balanced,
+    });
+
+    return {
+      lat: position.coords.latitude,
+      lng: position.coords.longitude,
+    };
+  } catch (err) {
+    console.warn('getUserLocation failed:', err);
+    return null;
+  }
+}
+
+/* ======================================================
+   FETCH LISTINGS (SERVER-SIDE FILTERING)
+   ====================================================== */
+
+export async function fetchListings(
+  filters: ListingFilters
+): Promise<ListingSummary[]> {
+  try {
+    const {
+      search,
+      city,
+      rooms,
+      minPrice,
+      maxPrice,
+      availableOnly = true,
+      boostedFirst = true,
+      limit = 20,
+      offset = 0,
+      listing_type,
+      stay_type,
+      lat,
+      lng,
+      radius_m,
+    } = filters;
+
+    const isGeoSearch =
+      lat != null && lng != null && radius_m != null;
+
+    let query;
+
+    if (isGeoSearch) {
+      // ===== REAL GEO SEARCH (RPC) =====
+      query = supabase
+        .rpc('listings_within_radius', {
+          lat,
+          lng,
+          radius_m,
+        })
+        .select(`
+          id,
+          title,
+          price,
+          city,
+          rooms,
+          media,
+          avg_rating,
+          rating_count,
+          landlord_id,
+          available,
+          boost_until,
+          created_at,
+          listing_type,
+          stay_type,
+          price_unit,
+          processing_status,
+          description,
+          is_verified
+        `);
+    } else {
+      // ===== MASKED VIEW QUERY =====
+      query = supabase
+        .rpc('get_masked_listings')
+        .select(`
+          id,
+          title,
+          price,
+          city,
+          rooms,
+          media,
+          avg_rating,
+          rating_count,
+          landlord_id,
+          available,
+          boost_until,
+          created_at,
+          listing_type,
+          stay_type,
+          price_unit,
+          processing_status,
+          description,
+          is_verified
+        `);
+    }
+
+    // --------------------------------------------------
+    // COMMON FILTERS (APPLY TO BOTH PATHS)
+    // --------------------------------------------------
+
+    if (search) {
+      const ilike = `%${search.trim()}%`;
+      query = query.or(`title.ilike.${ilike},city.ilike.${ilike}`);
+    }
+
+    if (city) query = query.eq('city', city);
+    if (availableOnly) query = query.eq('available', true);
+
+    if (typeof rooms === 'number') query = query.eq('rooms', rooms);
+    if (rooms === '5+') query = query.gte('rooms', 5);
+
+    if (minPrice != null) query = query.gte('price', minPrice);
+    if (maxPrice != null) query = query.lte('price', maxPrice);
+
+    if (listing_type) query = query.eq('listing_type', listing_type);
+    if (stay_type) query = query.eq('stay_type', stay_type);
+
+    if (boostedFirst) {
+      query = query.order('boost_until', { ascending: false });
+    }
+
+    query = query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1);
+
+    const { data, error } = await query;
+    if (error) {
+      console.error('[fetchListings] RPC error:', JSON.stringify(error));
+      return [];
+    }
+    if (!Array.isArray(data)) {
+      console.warn('[fetchListings] Unexpected data shape:', typeof data, data);
+      return [];
+    }
+
+    return data.map(row => {
+      const imagesArray = Array.isArray(row.media)
+        ? row.media
+            .filter((m: any) => m.type === 'image') // only images
+            .map((m: any) => {
+              const base = m.thumbUrl || m.url;
+              if (base && base.startsWith('/media/')) {
+                const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
+                return `${MEDIA_BASE_URL}${base}`;
+              }
+              return base;
+            })
+        : [];
+
+      return {
+        id: String(row.id),
+        title: row.title ?? '',
+        price: Number(row.price ?? 0),
+        city: row.city ?? '',
+        rooms: row.rooms ?? null,
+        landlord_id: row.landlord_id ?? '',
+        image_url: imagesArray[0] || 'https://via.placeholder.com/400x250?text=No+Image',
+        images: imagesArray.length ? imagesArray : ['https://via.placeholder.com/400x250?text=No+Image'],
+        avg_rating: row.avg_rating ?? null,
+        rating_count: row.rating_count ?? null,
+        available: row.available ?? null,
+        boosted: Boolean(row.boost_until),
+        created_at: row.created_at,
+        listing_type: row.listing_type,
+        stay_type: row.stay_type,
+        price_unit: row.price_unit,
+        processing_status: (row as any).processing_status ?? 'ready',
+        description: row.description ?? null,
+        is_verified: row.is_verified ?? null,
+      };
+    });
+  } catch (err) {
+    console.error('fetchListings error:', err);
+    return [];
+  }
+}
+
+/* ======================================================
+   FETCH LISTING DETAILS
+   ====================================================== */
+
+export async function fetchListingDetails(
+  id: string
+): Promise<ListingDetails | null> {
+  try {
+    const select = `
+      id,
+      title,
+      description,
+      price,
+      city,
+      latitude,
+      longitude,
+      media,
+      rooms,
+      available,
+      boost_until,
+      avg_rating,
+      rating_count,
+      created_at,
+      updated_at,
+      landlord_id,
+      processing_status,
+      landlord:users!listings_landlord_id_fkey(
+        id,
+        full_name,
+        email,
+        phone,
+        profile_pic,
+        created_at
+      )
+    `;
+
+    const { data: row, error } = await supabase
+      .from('listings')
+      .select(select)
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error || !row) return null;
+
+    // ─────────────────────────────────────────────────────────────────────────
+    // LANDLORD PARSING — CRITICAL FIX
+    //
+    // Supabase PostgREST returns a *to-one* foreign key join as a plain
+    // object, NOT an array:
+    //
+    //   row.landlord = { id: '...', full_name: '...', phone: '...', ... }
+    //
+    // The previous code did:
+    //   const landlordArray = (row.landlord ?? []) as any[];
+    //   if (landlordArray.length > 0)  ← length of an object is undefined → falsy
+    //
+    // So landlord was ALWAYS set to `undefined`, which made listing.landlord
+    // null in the UI, hiding the Call button (no phone) and breaking handleChat.
+    //
+    // Fix: normalise both shapes (object OR array) into a single object.
+    // ─────────────────────────────────────────────────────────────────────────
+    const landlordRaw = row.landlord as any;
+    let landlord: Landlord | undefined;
+
+    if (landlordRaw) {
+      // to-one join → plain object; to-many (edge case) → array
+      const obj: any = Array.isArray(landlordRaw) ? landlordRaw[0] : landlordRaw;
+
+      if (obj?.id) {
+        landlord = {
+          id: obj.id,
+          full_name: obj.full_name ?? '',
+          email: obj.email ?? null,
+          phone: obj.phone ?? null,
+          profile_pic: obj.profile_pic ?? null,
+          created_at: obj.created_at,
+        };
+      }
+    }
+
+    // If the join silently failed (RLS, missing select, etc.) fall back to a
+    // separate direct query so the screen always has at minimum the landlord id.
+    if (!landlord && row.landlord_id) {
+      const { data: fallbackUser } = await supabase
+        .from('users')
+        .select('id, full_name, email, phone, profile_pic, created_at')
+        .eq('id', row.landlord_id)
+        .maybeSingle();
+
+      if (fallbackUser) {
+        landlord = {
+          id: fallbackUser.id,
+          full_name: fallbackUser.full_name ?? '',
+          email: fallbackUser.email ?? null,
+          phone: fallbackUser.phone ?? null,
+          profile_pic: fallbackUser.profile_pic ?? null,
+          created_at: fallbackUser.created_at,
+        };
+      }
+    }
+
+    // Convert media — filter items that have both url and type
+    const media: MediaItem[] = Array.isArray(row.media)
+      ? row.media
+          .filter((m: any) => m?.url && m?.type)
+          .map((m: any) => {
+            const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
+            return {
+              ...m,
+              url: m.url.startsWith('/media/') ? `${MEDIA_BASE_URL}${m.url}` : m.url,
+              thumbUrl: m.thumbUrl && m.thumbUrl.startsWith('/media/') 
+                ? `${MEDIA_BASE_URL}${m.thumbUrl}` 
+                : m.thumbUrl,
+            };
+          })
+      : [];
+    // console.log('[fetchListingDetails] media data loaded');
+    // Fetch ratings
+    const { data: ratingsData } = await supabase
+      .from('ratings')
+      .select(`
+        id,
+        score,
+        comment,
+        created_at,
+        reviewer:users(id, full_name, profile_pic)
+      `)
+      .eq('listing_id', id)
+      .order('created_at', { ascending: false });
+
+    const ratings: Review[] = Array.isArray(ratingsData)
+      ? ratingsData.map((r: any) => {
+          // reviewer join is also a to-one → object, not array
+          const reviewerRaw = r.reviewer;
+          const reviewer = Array.isArray(reviewerRaw) ? reviewerRaw[0] : reviewerRaw;
+          return {
+            id: r.id,
+            score: r.score,
+            comment: r.comment ?? null,
+            created_at: r.created_at,
+            reviewer: {
+              id: reviewer?.id ?? '',
+              full_name: reviewer?.full_name ?? 'Unknown',
+              profile_pic: reviewer?.profile_pic ?? null,
+            },
+          };
+        })
+      : [];
+
+    // Return TS-safe ListingDetails
+    return {
+      id: row.id,
+      title: row.title,
+      description: row.description ?? null,
+      price: Number(row.price ?? 0),
+      city: row.city,
+      latitude: row.latitude ?? null,
+      longitude: row.longitude ?? null,
+      media,
+      rooms: row.rooms ?? null,
+      avg_rating: row.avg_rating ?? null,
+      rating_count: row.rating_count ?? null,
+      available: row.available ?? null,
+      boost_until: row.boost_until ?? null,
+      created_at: row.created_at,
+      updated_at: row.updated_at ?? undefined,
+      landlord_id: row.landlord_id,
+      landlord,       // ✅ now correctly populated
+      ratings,
+      processing_status: (row as any).processing_status ?? 'ready',
+    };
+
+  } catch (err) {
+    console.error('fetchListingDetails error:', err);
+    return null;
+  }
+}
+</file>
+
+<file path="src/utils/supabaseClient.ts">
+// src/utild/supabaseClient.ts
+
+import { createClient } from '@supabase/supabase-js';
+import { storage } from './storage';
+
+
+const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || '').trim();
+const supabaseKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '').trim();
+
+console.log("[Supabase] Initializing client...", { 
+  hasUrl: !!supabaseUrl, 
+  hasKey: !!supabaseKey 
+});
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("[Supabase] CRITICAL: Missing environment variables!");
+  // In release, we don't want a silent failure that crashes later
+  // We throw a clear error here that our App-level catch can see
+  throw new Error(
+    'Missing Supabase environment variables. Check eas.json or app.config.js.'
+  );
+}
+
+export const supabase = createClient(supabaseUrl, supabaseKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: false,
+    storage: storage, 
+    flowType: 'pkce',// ✅ Platform-specific storage
+  },
+});
+</file>
+
+<file path="src/utils/upload.ts">
+// src/utils/upload.ts
+import { Platform } from 'react-native';
+
+let uploadImpl: any;
+
+if (Platform.OS === 'web') {
+  // Use the web implementation
+  uploadImpl = require('./upload.web');
+} else {
+  // Use the native implementation
+  uploadImpl = require('./upload.native');
+}
+
+export const uploadListingMedia = uploadImpl.uploadListingMedia;
+export const abortUpload = uploadImpl.abortUpload;
+</file>
+
+<file path="src/types.ts">
+// src/types.ts
+import { BottomTabNavigationProp, BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+
+/* ===========================
+   Domain / Model Types 
+=========================== */
+
+export type Role = 'student' | 'landlord' | 'mover' | 'admin';
+
+export interface Listing {
+  id: string;
+  title: string;
+  description?: string | null;
+  price: number;
+  city: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  terms_marker?: string | null;
+  media: MediaItem[];
+  rooms?: number | null;
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  available?: boolean | null;
+  boost_until?: string | null;
+  created_at: string;
+  updated_at?: string;
+  landlord_id: string;
+  processing_status?: 'processing' | 'ready' | 'failed';
+  is_verified?: boolean | null;
+  verification_expires_at?: string | null;
+  cite_id?: string | null;
+  listing_type?: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel' | null;
+  stay_type?: 'short_term' | 'long_term' | 'both' | null;
+  price_unit?: 'per_month' | 'per_night' | null;
+}
+
+export interface Landlord {
+  id: string;
+  full_name: string;
+  email: string;
+   momo?: string | null;
+  phone?: string | null;
+  profile_pic?: string | null;
+  created_at: string;
+}
+
+export interface Cite {
+  id: string;
+  landlord_id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Booking {
+  id: string;
+  listing_id: string;
+  student_id: string;
+  landlord_id: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  payment_status: 'pending' | 'completed' | 'failed';
+  amount: number;
+  total_amount?: number | null;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  updated_at?: string;
+  agreed_to_terms?: boolean;
+  contract_status?: 'draft' | 'signed' | 'enforced' | 'expired' | 'cancelled';
+  agreement_id?: string | null;
+  agreement_hash?: string | null;
+  signature_method?: string | null;
+  signature_text?: string | null;
+  signed_at?: string | null;
+  agreement_device_info?: Record<string, any> | null;
+  terms_version?: string | null;
+  approval_status?: string;
+  duration_type?: string;
+  caution_fee?: number;
+  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed';
+  entry_media?: MediaItem[];
+  exit_media?: MediaItem[];
+}
+
+export interface Review {
+  id: string;
+  score: number;
+  comment?: string | null;
+  created_at: string;
+  reviewer: {
+    id: string;
+    full_name: string;
+    profile_pic?: string | null;
+  };
+}
+
+export type MediaType = 'image' | 'video';
+
+export interface MediaDBItem {
+  key: string;
+  type: MediaType;
+  thumbKey?: string;
+}
+
+export interface MediaItem {
+  url: string;
+  type: MediaType;
+  thumbUrl?: string;
+  processing_status?: 'processing' | 'ready' | 'failed';
+  mimeType?: string;
+}
+
+export interface ListingDetails extends Listing {
+  landlord?: Landlord | null;
+  terms_text?: string | null;
+  ratings: Review[];
+}
+
+export interface ListingSummary {
+  id: string;
+  title: string;
+  price: number;
+  city: string;
+  rooms: number | null;
+  landlord_id: string;
+  image_url: string;
+  avg_rating: number | null;
+  rating_count: number | null;
+  available?: boolean | null;
+  boosted?: boolean;
+  created_at: string;
+  listing_type: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel';
+  stay_type: 'short_term' | 'long_term' | 'both';
+  price_unit: 'per_night' | 'per_week' | 'per_month' | 'per_stay';
+  processing_status?: 'processing' | 'ready' | 'failed';
+  is_verified?: boolean | null;
+  description?: string | null;
+}
+
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  recipient_role: Role;
+  title: string;
+  body: string;
+  type: NotificationType;
+  listing_id?: string | null;
+  booking_id?: string | null;
+  data?: Record<string, any> | null;
+  is_read: boolean;
+  push_sent: boolean;
+  push_sent_at?: string | null;
+  created_at: string;
+}
+
+export type NotificationType =
+  | 'favorite_available'
+  | 'booking_update'
+  | 'rent_reminder'
+  | 'system_announcement'
+  | 'chat_message';
+
+// Support types (used by SupportScreen & supportService)
+export interface Ticket {
+  id: string;
+  user_id: string;
+  status: 'open' | 'closed' | 'pending';
+  priority: 'low' | 'normal' | 'high';
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Chat {
+  id: string;
+  ticket_id: string;
+  sender_id: string;
+  receiver_id?: string | null;
+  message: string;
+  read: boolean;
+  sender_type: 'user' | 'bot' | 'agent';
+  chat_type?: string;
+  is_complaint?: boolean;
+  is_faq_candidate?: boolean;
+  created_at: string;
+}
+
+export interface FAQ {
+  id: string;
+  question: string;
+  answer?: string | null;
+  created_at?: string;
+}
+
+export interface ListingFilters {
+  search?: string;
+  city?: string;
+  rooms?: number | '5+';
+  minPrice?: number;
+  maxPrice?: number;
+  availableOnly?: boolean;
+  boostedFirst?: boolean;
+  limit?: number;
+  offset?: number;
+  listing_type?: string;
+  stay_type?: string;
+  lat?: number;
+  lng?: number;
+  radius_m?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  senderId: string;
+  receiverId: string | null;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  receiver_id?: string | null;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ThreadDto {
+  threadId: string;
+  participants: User[];
+  lastMessage: string | null;
+  lastMessageTime: string | null;
+  unreadCount: number;
+}
+
+export interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  role: Role;
+  phone?: string;
+  momo?: string;
+}
+
+/* ===========================
+   Navigation Param Lists
+=========================== */
+
+export type StudentTabParamList = {
+  Home: undefined;
+  Favorites: undefined;
+  Chat: { threadId?: string } | undefined;
+  Bookings: undefined;
+  Profile: undefined;
+};
+
+export type LandlordTabParamList = {
+  Dashboard: undefined;
+  ManageListings: undefined;
+  Chat: { threadId?: string } | undefined;
+  Payments:
+    | {
+        listingId: string;
+        planId: string;
+        durationDays: number;
+        price: number;
+        purpose: string;
+      }
+    | {
+        listingId: string;
+        amount: number;
+        description: string;
+        reason: 'verification';
+      }
+    | undefined;
+  Profile: undefined; 
+};
+
+export type StudentStackParamList = {
+  StudentTabs: NavigatorScreenParams<StudentTabParamList> | undefined;
+  ListingDetails: { listingId: string };
+  BookingScreen: { listingId: string };
+  Payments: {
+    listingId: string;
+    listingType?: string;
+    amount: number;
+    description: string;
+    receiverPhone: string;
+    receiverName: string;
+    bookingId?: string;
+    landlordId?: string;
+    paymentType?: 'initial' | 'rent_completion' | 'renewal';
+    isRenewal?: boolean;
+    reason?: 'rent' | 'boosting' | 'landlord_subscription';
+  };
+  Support: { currentUserId: string };
+  Legal: undefined;
+  ViewBookingsScreen: undefined;
+  BookingDetails: { bookingId: string };
+  PendingScreen: { bookingId: string };
+  ListingReview: { listing_id: string };
+  ReportUser: undefined;
+  ReportBug: undefined;
+  Notifications: undefined;
+};
+
+export type LandlordStackParamList = {
+  Tabs: NavigatorScreenParams<LandlordTabParamList> | undefined;
+  Bookings: undefined;
+  Notifications: undefined;
+  KYCVerification: undefined;
+  UploadListing: undefined;
+  EditListing: { listingId: string };
+  ListingDetails: { listingId: string };
+  BoostScreen: { listingId: string };
+  ApprovalScreen: { bookingId: string };
+  Legal: undefined;
+  SignIn: undefined;
+  ReportUser: undefined;
+  ReportBug: undefined;
+  Support: { currentUserId: string };
+};
+
+export type AuthStackParamList = {
+  SignIn: undefined;
+  SignUp: undefined;
+  VerifyOtp: {
+    whatsappNumber: string;
+    mode: 'signup' | 'login' | 'reset';
+    fullName?: string;
+    password?: string;
+    role?: 'student' | 'landlord';
+    email?: string;
+    mobileMoney?: string;
+    age?: string;
+    address?: string;
+    language?: 'en' | 'fr' | 'pcm';
+  };
+  ForgotPassword: { email?: string; phone?: string };
+  ResetPassword: { phone: string; mode: 'reset' };
+  EmailVerification: { email: string; mode: 'signup' | 'recovery' };
+  AuthCallback: undefined; // new
+};
+
+export type RootStackParamList = {
+  AuthStack: NavigatorScreenParams<AuthStackParamList> | undefined;
+  StudentStack: NavigatorScreenParams<StudentStackParamList> | undefined;
+  LandlordStack: NavigatorScreenParams<LandlordStackParamList> | undefined;
+  ListingDetails: { listingId: string } | undefined;
+  UpdatePassword: undefined;
+};
+
+/* ===========================
+   Screen & Navigation Props
+=========================== */
+
+export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;
+export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<AuthStackParamList, T>;
+export type StudentStackScreenProps<T extends keyof StudentStackParamList> = NativeStackScreenProps<StudentStackParamList, T>;
+export type LandlordStackScreenProps<T extends keyof LandlordStackParamList> = NativeStackScreenProps<LandlordStackParamList, T>;
+export type StudentTabScreenProps<T extends keyof StudentTabParamList> = BottomTabScreenProps<StudentTabParamList, T>;
+export type LandlordTabScreenProps<T extends keyof LandlordTabParamList> = BottomTabScreenProps<LandlordTabParamList, T>;
+
+export type RootNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
+export type StudentStackNavigationProp = NativeStackNavigationProp<StudentStackParamList>;
+export type LandlordStackNavigationProp = NativeStackNavigationProp<LandlordStackParamList>;
+export type StudentTabNavigationProp = BottomTabNavigationProp<StudentTabParamList>;
+export type LandlordTabNavigationProp = BottomTabNavigationProp<LandlordTabParamList>;
+
+export type RootRouteProp<T extends keyof RootStackParamList> = RouteProp<RootStackParamList, T>;
+export type AuthRouteProp<T extends keyof AuthStackParamList> = RouteProp<AuthStackParamList, T>;
+export type StudentStackRouteProp<T extends keyof StudentStackParamList> = RouteProp<StudentStackParamList, T>;
+export type LandlordStackRouteProp<T extends keyof LandlordStackParamList> = RouteProp<LandlordStackParamList, T>;
+export type StudentTabRouteProp<T extends keyof StudentTabParamList> = RouteProp<StudentTabParamList, T>;
+export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RouteProp<LandlordTabParamList, T>;
+</file>
+
+<file path="eas.json">
+{
+  "cli": {
+    "version": ">= 16.28.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "env": {
+        "NPM_CONFIG_LEGACY_PEER_DEPS": "true"
+      }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+</file>
+
+<file path="metro.config.js">
+const { getDefaultConfig } = require('expo/metro-config');
+const { resolve } = require('metro-resolver');
+const path = require('path');
+const fs = require('fs');
+
+const config = getDefaultConfig(__dirname);
+
+config.resolver.resolverMainFields = ['react-native', 'browser', 'main'];
+
+// 1. Tell Metro to ignore .wasm files
+config.resolver.assetExts.push('wasm');
+
+// 2. Create a mock file for expo-sqlite on web
+const mockExpoSQLite = path.resolve(__dirname, 'src/mocks/expo-sqlite.ts');
+const mockDir = path.resolve(__dirname, 'src/mocks');
+if (!fs.existsSync(mockDir)) fs.mkdirSync(mockDir, { recursive: true });
+if (!fs.existsSync(mockExpoSQLite)) {
+  fs.writeFileSync(mockExpoSQLite, `
+export const openDatabase = () => ({
+  execute: () => Promise.resolve(),
+  close: () => {},
+});
+export default { openDatabase };
+`);
+}
+
+// 3. Redirect expo-sqlite to the mock on web
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (platform === 'web' && moduleName === 'expo-sqlite') {
+    const newContext = { ...context, filePath: mockExpoSQLite };
+    return resolve(newContext, mockExpoSQLite, platform);
+  }
+
+  if (platform === 'web' && moduleName === 'react-native-maps') {
+    const webMapPath = path.resolve(__dirname, 'src/components/MapView.web.tsx');
+    const newContext = { ...context, filePath: webMapPath };
+    return resolve(newContext, webMapPath, platform);
+  }
+
+  return resolve(context, moduleName, platform);
+};
+
+module.exports = config;
+</file>
+
+<file path="src/components/MapView.web.tsx">
+// src/components/MapView.web.tsx
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+
+// Load Google Maps Script
+let googleMapsPromise: Promise<void> | null = null;
+const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
+  if (typeof window === 'undefined') return Promise.resolve();
+  if ((window as any).google && (window as any).google.maps) return Promise.resolve();
+  if (googleMapsPromise) return googleMapsPromise;
+
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script');
+    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}`;
+    script.async = true;
+    script.defer = true;
+    script.onload = () => resolve();
+    script.onerror = (e) => reject(e);
+    document.head.appendChild(script);
+  });
+  return googleMapsPromise;
+};
+
+const MapContext = createContext<any>(null);
+
+interface MapViewProps {
+  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  initialRegion?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  liteMode?: boolean;
+  mapType?: 'standard' | 'satellite' | 'hybrid' | 'terrain';
+  customMapStyle?: any[];
+  children?: React.ReactNode;
+  style?: any;
+  showsUserLocation?: boolean;
+  followsUserLocation?: boolean;
+  onPress?: (e: any) => void;
+  onRegionChangeComplete?: (region: any) => void;
+  scrollEnabled?: boolean;   // map to gestureHandling
+  zoomEnabled?: boolean;     // map to gestureHandling
+  rotateEnabled?: boolean;   // map to gestureHandling
+  pitchEnabled?: boolean;    // map to gestureHandling
+}
+
+export const MapView: React.FC<MapViewProps> = ({
+  region,
+  initialRegion,
+  mapType = 'standard',
+  children,
+  style,
+  onRegionChangeComplete,
+  onPress,
+  scrollEnabled = true,
+  zoomEnabled = true,
+  rotateEnabled = true,
+  pitchEnabled = true,
+}) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null);
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
+                 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;// fallback
+
+  useEffect(() => {
+    let isMounted = true;
+    loadGoogleMapsScript(apiKey).then(() => {
+      if (!isMounted || !mapRef.current) return;
+      const center = region || initialRegion;
+      if (!center) return;
+
+      // Determine gesture handling
+      const gestureHandling = (!scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled)
+        ? 'none'
+        : 'auto';
+
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: center.latitude, lng: center.longitude },
+        zoom: 10,
+        mapTypeId: mapType === 'satellite' ? 'satellite' : mapType === 'hybrid' ? 'hybrid' : mapType === 'terrain' ? 'terrain' : 'roadmap',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        gestureHandling: gestureHandling,
+        zoomControl: zoomEnabled,
+        rotateControl: rotateEnabled,
+        tilt: pitchEnabled ? 45 : 0,
+      });
+
+      setMapInstance(map);
+
+      if (onPress) {
+        map.addListener('click', (e: any) => {
+          if (e.latLng) {
+            onPress({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+          }
+        });
+      }
+
+      if (onRegionChangeComplete) {
+        map.addListener('idle', () => {
+          const newCenter = map.getCenter();
+          if (newCenter) {
+            onRegionChangeComplete({
+              latitude: newCenter.lat(),
+              longitude: newCenter.lng(),
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            });
+          }
+        });
+      }
+    });
+
+    return () => { isMounted = false; };
+  }, [apiKey, region, initialRegion, mapType, scrollEnabled, zoomEnabled, rotateEnabled, pitchEnabled]);
+
+  // Update map center when region prop changes
+  useEffect(() => {
+    if (mapInstance && region) {
+      mapInstance.panTo({ lat: region.latitude, lng: region.longitude });
+    }
+  }, [mapInstance, region]);
+
+  return (
+    <View style={[styles.container, style]}>
+      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+      <MapContext.Provider value={mapInstance}>
+        {mapInstance && children}
+      </MapContext.Provider>
+    </View>
+  );
+};
+
+export const Marker: React.FC<{ 
+  coordinate: { latitude: number; longitude: number };
+  title?: string;
+  description?: string;
+  pinColor?: string;
+  onPress?: () => void;
+  draggable?: boolean;
+  onDragEnd?: (e: any) => void;
+}> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd, draggable }) => {
+  const map = useContext(MapContext);
+  useEffect(() => {
+    if (!map) return;
+    const marker = new window.google.maps.Marker({
+      position: { lat: coordinate.latitude, lng: coordinate.longitude },
+      map: map,
+      title: title,
+      draggable: draggable || false,
+      icon: pinColor === 'gold' ? 'http://maps.google.com/mapfiles/ms/icons/yellow-dot.png' : undefined,
+    });
+    if (onPress) marker.addListener('click', onPress);
+    if (onDragEnd) {
+      marker.addListener('dragend', (e: any) => {
+        if (e.latLng) {
+          onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+        }
+      });
+    }
+    return () => { marker.setMap(null); };
+  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor, draggable]);
+  return null;
+};
+
+export const Polyline: React.FC<{
+  coordinates: { latitude: number; longitude: number }[];
+  strokeColor?: string;
+  strokeWidth?: number;
+}> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
+  const map = useContext(MapContext);
+  useEffect(() => {
+    if (!map || coordinates.length === 0) return;
+    const path = coordinates.map(c => ({ lat: c.latitude, lng: c.longitude }));
+    const polyline = new window.google.maps.Polyline({
+      path: path,
+      strokeColor: strokeColor,
+      strokeWeight: strokeWidth,
+      map: map,
+    });
+    return () => { polyline.setMap(null); };
+  }, [map, coordinates, strokeColor, strokeWidth]);
+  return null;
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, width: '100%', height: '100%' },
+});
+
+export default MapView;
+</file>
+
+<file path="src/screens/landlord/BoostScreen.tsx">
+// src/screens/landlord/BoostScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
+import { CompositeNavigationProp, useNavigation, useRoute } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { useDispatch } from 'react-redux';
+import { useTheme } from '../../context/ThemeContext';
+import { setBoost } from '../../store/boostSlice';
+import { LandlordStackParamList, LandlordStackRouteProp, LandlordTabParamList } from '../../types';
+
+import { supabase } from '../../utils/supabaseClient';
+
+interface BoostPlan {
+  id: string;
+  label: string;
+  durationDays: number;
+  price: number;
+}
+
+type BoostScreenNavigationProp = CompositeNavigationProp<
+  NativeStackNavigationProp<LandlordStackParamList, 'BoostScreen'>,
+  BottomTabNavigationProp<LandlordTabParamList>
+>;
+
+const BoostScreen: React.FC = () => {
+  const navigation = useNavigation<BoostScreenNavigationProp>();
+  const route = useRoute<LandlordStackRouteProp<'BoostScreen'>>();
+  const dispatch = useDispatch();
+
+  const listingId = route.params.listingId;
+
+  const [boostPlans, setBoostPlans] = useState<BoostPlan[]>([]);
+  const [selectedPlan, setSelectedPlan] = useState<BoostPlan | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [fetchingPlans, setFetchingPlans] = useState(true);
+
+  React.useEffect(() => {
+    const fetchPlans = async () => {
+      setFetchingPlans(true);
+      const { data, error } = await supabase
+        .from('boost_plans')
+        .select('*')
+        .eq('active', true)
+        .order('duration_days', { ascending: true });
+        
+      if (!error && data) {
+        setBoostPlans(data.map(p => ({
+          id: p.id,
+          label: p.label,
+          durationDays: p.duration_days,
+          price: Number(p.price)
+        })));
+      }
+      setFetchingPlans(false);
+    };
+    fetchPlans();
+  }, []);
+
+  const { colors, isDark } = useTheme();
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+
+  const handlePay = () => {
+    if (!selectedPlan) {
+      Alert.alert('Select Plan', 'Please select a boost plan to continue.');
+      return;
+    }
+
+    setLoading(true);
+
+    // Save boost data in Redux
+    dispatch(setBoost({
+      listingId,
+      planId: selectedPlan.id,
+      durationDays: selectedPlan.durationDays,
+      price: selectedPlan.price,
+      purpose: 'boost',
+    }));
+
+    // Navigate directly to Payments tab and pass prefill params
+    navigation.navigate('Tabs', {
+      screen: 'Payments',
+      params: {
+        listingId,
+        planId: selectedPlan.id,
+        durationDays: selectedPlan.durationDays,
+        price: selectedPlan.price,
+        purpose: 'boosting',
+      },
+    });
+    setLoading(false);
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Boost Listing</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.content}>
+        {/* Boost Plans */}
+        <Text style={styles.sectionTitle}>Choose a Boost Plan</Text>
+        {fetchingPlans ? (
+          <ActivityIndicator color={colors.primary} />
+        ) : (
+          boostPlans.map(plan => (
+            <TouchableOpacity
+              key={plan.id}
+              style={[
+                styles.planCard,
+                selectedPlan?.id === plan.id && styles.planCardSelected,
+              ]}
+              onPress={() => setSelectedPlan(plan)}
+            >
+              <Text style={styles.planLabel}>{plan.label}</Text>
+              <Text style={styles.planPrice}>{plan.price.toLocaleString()} FCFA</Text>
+            </TouchableOpacity>
+          ))
+        )}
+
+        {/* Summary */}
+        <View style={styles.summary}>
+          <Text style={styles.summaryText}>
+            Selected Plan:{' '}
+            {selectedPlan
+              ? `${selectedPlan.label} - ${selectedPlan.price.toLocaleString()} FCFA`
+              : 'None'}
+          </Text>
+        </View>
+
+        {/* Pay Button */}
+        <TouchableOpacity
+          style={[styles.payButton, loading && styles.payButtonDisabled]}
+          onPress={handlePay}
+          disabled={loading}
+        >
+          {loading ? (
+            <ActivityIndicator color={isDark ? '#1A1A1A' : '#FFFFFF'} />
+          ) : (
+            <Text style={styles.payButtonText}>Pay & Boost</Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Why Boost Section */}
+        <View style={styles.whyBoostContainer}>
+          <Text style={styles.whyBoostTitle}>Why Boost?</Text>
+          <Text style={styles.whyBoostText}>
+            Boosting your listing makes it appear first in search results and highlights it for maximum visibility.
+            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make!
+          </Text>
+        </View>
+      </ScrollView>
+    </View>
+  );
+};
+
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { flex: 1, backgroundColor: colors.background },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  headerTitle: { color: colors.text, fontSize: 18, fontWeight: 'bold' },
+  content: { padding: 20 },
+  sectionTitle: { color: colors.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 20 },
+  planCard: {
+    backgroundColor: colors.card,
+    padding: 20,
+    borderRadius: 12,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  planCardSelected: {
+    borderColor: colors.primary,
+    backgroundColor: isDark ? '#2D2510' : '#FFF8E1',
+  },
+  planLabel: { color: colors.text, fontSize: 16, fontWeight: '600' },
+  planPrice: { color: colors.primary, fontSize: 16, fontWeight: '700' },
+  summary: { marginTop: 24 },
+  summaryText: { color: colors.text, fontSize: 14 },
+  payButton: {
+    backgroundColor: colors.primary,
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 30,
+  },
+  payButtonDisabled: { opacity: 0.6 },
+  payButtonText: { color: isDark ? '#1A1A1A' : '#FFFFFF', fontSize: 16, fontWeight: 'bold' },
+  whyBoostContainer: { marginTop: 40, backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border },
+  whyBoostTitle: { color: colors.primary, fontSize: 16, fontWeight: 'bold', marginBottom: 8 },
+  whyBoostText: { color: colors.text, fontSize: 14, lineHeight: 20 },
+});
+
+export default BoostScreen;
+</file>
+
+<file path="src/screens/student/HomeScreen.tsx">
+// src/screens/student/HomeScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import * as Location from 'expo-location';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  FlatList,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  RefreshControl,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { DiraBranding } from '../../components/DiraBranding';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { usePaymentSuccessNotifier } from '../../hooks/usePaymentSuccessNotifier';
+import { supabase } from '../../utils/supabaseClient';
+
+import ListingCard from '../../components/ListingCard';
+import { NetworkDisconnectedScreen } from '../../components/NetworkDisconnectedScreen';
+import { fetchListings, ListingFilters, ListingSummary } from '../../utils/listings';
+
+export type UserLocation = { lat: number; lng: number };
+
+import { useTranslation } from 'react-i18next';
+
+const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
+  const { t } = useTranslation();
+  const { user } = useAuth();
+  const { colors, isDark } = useTheme();
+
+  // ── Pop an in-app Alert the instant a booking payment is confirmed ──────
+  usePaymentSuccessNotifier(navigation);
+
+  /* ---------------- STATE ---------------- */
+  const [search, setSearch] = useState('');
+  const [listings, setListings] = useState<ListingSummary[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [errorMsg, setErrorMsg] = useState('');
+  const [filterModalVisible, setFilterModalVisible] = useState(false);
+
+  const [requestModalVisible, setRequestModalVisible] = useState(false);
+  const [requestLocation, setRequestLocation] = useState('');
+  const [requestBudget, setRequestBudget] = useState('');
+  const [requestDetails, setRequestDetails] = useState('');
+  const [submittingRequest, setSubmittingRequest] = useState(false);
+
+  const [offset, setOffset] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+
+  // Filters
+  const [selectedCity, setSelectedCity] = useState('All');
+  const [selectedRooms, setSelectedRooms] = useState<'All' | '5+' | string>('All');
+  const [selectedPrice, setSelectedPrice] = useState('All');
+  const [selectedListingType, setSelectedListingType] = useState<'All' | 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel'>('All');
+  const [selectedStayType, setSelectedStayType] = useState<'All' | 'short_term' | 'long_term' | 'both'>('All');
+
+  // Distance/Radius filter
+  const [distanceOption, setDistanceOption] = useState<'All' | 'Near me' | '500m' | '1km' | '5km' | '10km' | '20km' | '100km'>('All');
+  const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
+  const [radiusMeters, setRadiusMeters] = useState<number | undefined>(undefined);
+
+  const flatListRef = useRef<FlatList<ListingSummary>>(null);
+
+  /* ---------------- FILTER OPTIONS ---------------- */
+  const cities = ['All', 'Buea', 'Douala', 'Yaoundé', 'Limbe', 'Bamenda'];
+  const roomOptions = ['All', '1', '2', '3', '4', '5+'];
+  const priceRanges = ['All', '0-50,000', '50,000-100,000', '100,000-200,000', '200,000-500,000', '500,000+'];
+  const listingTypes = ['All', 'room', 'studio', 'apartment', 'house', 'guest_house', 'hotel'];
+  const stayTypes = ['All', 'short_term', 'long_term', 'both'];
+  const distanceOptions = ['All', 'Near me', '500m', '1km', '5km', '10km', '20km', '100km'];
+
+  /* ---------------- LOCATION ---------------- */
+  async function requestUserLocation(): Promise<UserLocation | null> {
+    try {
+      const { status } = await Location.getForegroundPermissionsAsync();
+      let finalStatus = status;
+      if (status !== 'granted') {
+        const req = await Location.requestForegroundPermissionsAsync();
+        finalStatus = req.status;
+      }
+      if (finalStatus !== 'granted') {
+        if (Platform.OS === 'ios') Linking.openURL('app-settings:');
+        else Linking.openSettings();
+        return null;
+      }
+      const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+      return { lat: pos.coords.latitude, lng: pos.coords.longitude };
+    } catch (err) {
+      console.warn('Location error:', err);
+      return null;
+    }
+  }
+
+  /* ---------------- FETCH LOGIC ---------------- */
+  useEffect(() => {
+    if (!user) return;
+
+    const fetchUnread = async () => {
+      const { count } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('recipient_id', user.id)
+        .eq('is_read', false);
+      setUnreadCount(count || 0);
+    };
+
+    fetchUnread();
+
+// ✅ CORRECT – add listener before subscribe
+    const channel = supabase
+      .channel(`student_notifs_${user.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, fetchUnread)
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [user]);
+
+  useEffect(() => {
+    const debounce = setTimeout(() => resetListings(), 300);
+    return () => clearTimeout(debounce);
+  }, [search, selectedCity, selectedRooms, selectedPrice, selectedListingType, selectedStayType, radiusMeters]);
+
+  async function resetListings() {
+    setOffset(0);
+    setHasMore(true);
+    setListings([]);
+    await loadListings(true);
+  }
+
+  async function loadListings(reset: boolean = false) {
+    if ((loading && reset) || (!hasMore && !reset) || loadingMore) return;
+
+    try {
+      reset ? setLoading(true) : setLoadingMore(true);
+
+      // Convert distanceOption to meters
+      let radius: number | undefined;
+      if (distanceOption !== 'All') {
+        if (!userLocation && distanceOption === 'Near me') {
+          const loc = await requestUserLocation();
+          if (!loc) {
+            setRadiusMeters(undefined);
+            setUserLocation(null);
+          } else setUserLocation(loc);
+        }
+
+        switch (distanceOption) {
+          case 'Near me': radius = 500; break;
+          case '500m': radius = 500; break;
+          case '1km': radius = 1000; break;
+          case '5km': radius = 5000; break;
+          case '10km': radius = 10000; break;
+          case '20km': radius = 20000; break;
+          case '100km': radius = 100000; break;
+          default: radius = undefined;
+        }
+      }
+
+      const priceFilter = parsePriceRange(selectedPrice);
+
+      const filters: ListingFilters = {
+        search,
+        city: selectedCity !== 'All' ? selectedCity : undefined,
+        rooms: selectedRooms === 'All' ? undefined : selectedRooms === '5+' ? '5+' : Number(selectedRooms),
+        minPrice: priceFilter?.min,
+        maxPrice: priceFilter?.max,
+        availableOnly: true,
+        boostedFirst: true,
+        limit: 50,
+        offset,
+        listing_type: selectedListingType !== 'All' ? selectedListingType : undefined,
+        stay_type: selectedStayType !== 'All' ? selectedStayType : undefined,
+        lat: userLocation?.lat,
+        lng: userLocation?.lng,
+        radius_m: radius,
+      };
+
+      if (reset) {
+        logSearchAnalytics(filters);
+      }
+
+      const data = await fetchListings(filters);
+
+      if (reset) setListings(data);
+      else setListings(prev => {
+        const ids = new Set(prev.map(l => l.id));
+        return [...prev, ...data.filter(l => !ids.has(l.id))];
+      });
+
+      if (data.length < 50) setHasMore(false);
+      else setOffset(prev => prev + data.length);
+
+    } catch (err) {
+      console.error('Error loading listings:', err);
+      if (reset) setListings([]);
+      setErrorMsg('Unable to load listings. Check your connection.');
+    } finally {
+      setLoading(false);
+      setLoadingMore(false);
+    }
+  }
+
+  /* ---------------- HELPERS ---------------- */
+  function parsePriceRange(range: string) {
+    if (range === 'All') return null;
+    if (range === '500,000+') return { min: 500000 };
+    const [min, max] = range.split('-').map(v => Number(v.replace(/,/g, '')));
+    return { min, max };
+  }
+
+  function resetFilters() {
+    setSelectedCity('All');
+    setSelectedRooms('All');
+    setSelectedPrice('All');
+    setSelectedListingType('All');
+    setSelectedStayType('All');
+    setDistanceOption('All');
+    setRadiusMeters(undefined);
+    flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+    resetListings();
+  }
+
+  const logSearchAnalytics = async (filtersToLog: any) => {
+    try {
+      await supabase.from('search_analytics').insert({
+        user_id: user?.id,
+        search_text: filtersToLog.search || null,
+        city: filtersToLog.city || null,
+        rooms: filtersToLog.rooms ? String(filtersToLog.rooms) : null,
+        price_range: selectedPrice !== 'All' ? selectedPrice : null,
+        listing_type: filtersToLog.listing_type || null,
+        stay_type: filtersToLog.stay_type || null,
+      });
+    } catch (err) {
+      console.warn('Failed to log search analytics:', err);
+    }
+  };
+
+  const submitHousingRequest = async () => {
+    if (!requestLocation.trim() || !requestDetails.trim()) {
+      Alert.alert('Missing Details', 'Please provide a location and requirements.');
+      return;
+    }
+    setSubmittingRequest(true);
+    try {
+      const { error } = await supabase.from('housing_requests').insert({
+        user_id: user?.id,
+        location: requestLocation,
+        budget: requestBudget,
+        details: requestDetails,
+      });
+      if (error) throw error;
+      Alert.alert('Request Sent', 'We have received your request and will notify you when a matching property becomes available!');
+      setRequestModalVisible(false);
+      setRequestLocation('');
+      setRequestBudget('');
+      setRequestDetails('');
+    } catch (err) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to submit request. Please try again.');
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
+  function handleListingPress(id: string) {
+    navigation.navigate('ListingDetails', { listingId: id });
+  }
+
+  function resultsText() {
+    if (loading) return t('common.loading');
+    if (!listings.length) return t('home.no_listings');
+    return `${listings.length} ${t('home.listings_available')}`;
+  }
+
+  /* ---------------- RENDER ---------------- */
+  return (
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+
+      {/* Header */}
+      <View style={styles.header}>
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>{t('home.title')}</Text>
+          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>{t('home.subtitle')}</Text>
+        </View>
+        <TouchableOpacity
+          style={styles.notificationBtn}
+          onPress={() => navigation.navigate('Notifications')}
+        >
+          <Ionicons name="notifications-outline" size={28} color={colors.primary} />
+          {unreadCount > 0 && <View style={[styles.badge, { backgroundColor: colors.error, borderColor: colors.background }]} />}
+        </TouchableOpacity>
+      </View>
+
+      {/* Search */}
+      <View style={styles.searchContainer}>
+        <View style={[styles.searchInputContainer, { backgroundColor: colors.card }]}>
+          <TextInput
+            style={[styles.searchInput, { color: colors.text }]}
+            placeholder={t('home.search_placeholder')}
+            value={search}
+            onChangeText={setSearch}
+            placeholderTextColor={colors.textSecondary}
+          />
+        </View>
+        <TouchableOpacity style={[styles.filterButton, { backgroundColor: colors.primary }]} onPress={() => setFilterModalVisible(true)}>
+          <Text style={styles.filterButtonText}>{t('home.filter_title')}</Text>
+        </TouchableOpacity>
+      </View>
+
+
+      {/* Results */}
+      <View style={styles.resultsContainer}>
+        <Text style={[styles.resultsText, { color: colors.textSecondary }]}>{resultsText()}</Text>
+      </View>
+
+      {/* Listings */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={colors.primary} />
+        </View>
+      ) : errorMsg ? (
+        <View style={styles.emptyState}>
+          {errorMsg.includes('connection') || errorMsg.includes('network') || errorMsg.includes('fetch') ? (
+            <NetworkDisconnectedScreen onRefresh={() => loadListings(true)} refreshing={loading} fullScreen={false} />
+          ) : (
+            <Text style={[styles.emptyStateText, { color: colors.textSecondary, marginBottom: 20 }]}>{errorMsg}</Text>
+          )}
+          <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary, paddingHorizontal: 20 }]} onPress={() => setRequestModalVisible(true)}>
+            <Ionicons name="home-outline" size={18} color={colors.primary} />
+            <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
+          </TouchableOpacity>
+        </View>
+      ) : (
+        <FlatList
+          ref={flatListRef}
+          data={listings}
+          keyExtractor={item => item.id}
+          renderItem={({ item }) => (
+            <ListingCard listing={item} role="student" onPress={() => handleListingPress(item.id)} />
+          )}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading && listings.length > 0}
+              onRefresh={() => loadListings(true)}
+              colors={[colors.primary]}
+              tintColor={colors.primary}
+            />
+          }
+          contentContainerStyle={styles.listingsContainer}
+          showsVerticalScrollIndicator={false}
+          onEndReached={() => hasMore && loadListings(false)}
+          onEndReachedThreshold={0.6}
+          ListFooterComponent={
+            <View style={{ paddingBottom: 20 }}>
+              <View style={[styles.requestContainer, { marginBottom: 24, marginTop: 12 }]}>
+                <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary }]} onPress={() => setRequestModalVisible(true)}>
+                  <Ionicons name="home-outline" size={18} color={colors.primary} />
+                  <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
+                </TouchableOpacity>
+              </View>
+              {loadingMore && <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />}
+              <DiraBranding />
+            </View>
+          }
+        />
+      )}
+
+      {/* Filter Modal */}
+      <Modal visible={filterModalVisible} transparent animationType="slide">
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>
+            <Text style={[styles.modalTitle, { color: colors.text }]}>{t('home.filter_title')}</Text>
+
+            <FilterRow label={t('listing.city')} options={cities} value={selectedCity} onSelect={setSelectedCity} t={t} colors={colors} />
+            <FilterRow label={t('listing.rooms')} options={roomOptions} value={selectedRooms} onSelect={setSelectedRooms} t={t} colors={colors} />
+            <FilterRow label={t('home.price_range')} options={priceRanges} value={selectedPrice} onSelect={setSelectedPrice} t={t} colors={colors} />
+            <FilterRow label={t('home.listing_type')} options={listingTypes} value={selectedListingType} onSelect={setSelectedListingType} t={t} colors={colors} />
+            <FilterRow label={t('home.stay_type')} options={stayTypes} value={selectedStayType} onSelect={setSelectedStayType} t={t} colors={colors} />
+            <FilterRow label={t('home.distance')} options={distanceOptions} value={distanceOption} onSelect={setDistanceOption} t={t} colors={colors} />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={[styles.resetButton, { backgroundColor: colors.card }]} onPress={resetFilters}>
+                <Text style={[styles.resetButtonText, { color: colors.text }]}>{t('home.reset')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.applyButton, { backgroundColor: colors.primary }]}
+                onPress={() => {
+                  setFilterModalVisible(false);
+                  flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
+                  resetListings();
+                }}
+              >
+                <Text style={styles.applyButtonText}>{t('home.apply_filters')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Housing Request Modal */}
+      <Modal visible={requestModalVisible} transparent animationType="slide">
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'position'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          <View style={[styles.modalOverlay, { backgroundColor: 'rgba(0,0,0,0.6)' }]}>
+            <ScrollView
+              contentContainerStyle={{ flexGrow: 1, justifyContent: 'flex-end' }}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={false}
+            >
+              <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: 40 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Notify Me</Text>
+                  <TouchableOpacity onPress={() => setRequestModalVisible(false)}>
+                    <Ionicons name="close" size={24} color={colors.textSecondary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={{ color: colors.textSecondary, marginBottom: 20, fontSize: 15, lineHeight: 22 }}>
+                  Fill out the details of the property you need. We'll search for it and notify you as soon as it's available!
+                </Text>
+
+                <Text style={[styles.filterLabel, { color: colors.text }]}>Preferred Location</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
+                  placeholder="e.g., Molyko, Buea"
+                  placeholderTextColor={colors.textSecondary}
+                  value={requestLocation}
+                  onChangeText={setRequestLocation}
+                />
+
+                <Text style={[styles.filterLabel, { color: colors.text }]}>Budget (FCFA)</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
+                  placeholder="e.g., 20,000 - 40,000 per month"
+                  placeholderTextColor={colors.textSecondary}
+                  value={requestBudget}
+                  onChangeText={setRequestBudget}
+                  keyboardType="numeric"
+                />
+
+                <Text style={[styles.filterLabel, { color: colors.text }]}>Specific Requirements</Text>
+                <TextInput
+                  style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border, height: 100 }]}
+                  placeholder="e.g., 2 bedrooms, close to campus, water included..."
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  textAlignVertical="top"
+                  value={requestDetails}
+                  onChangeText={setRequestDetails}
+                />
+
+                <TouchableOpacity
+                  style={[styles.applyButton, { backgroundColor: colors.primary, marginTop: 12 }]}
+                  onPress={submitHousingRequest}
+                  disabled={submittingRequest}
+                >
+                  {submittingRequest ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={styles.applyButtonText}>Submit Request</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+/* ---------------- FILTER ROW ---------------- */
+const FilterRow = ({ label, options, value, onSelect, t, colors }: any) => (
+  <View style={{ marginBottom: 24 }}>
+    <Text style={[styles.filterLabel, { color: colors.text }]}>{label}</Text>
+    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+      {options.map((o: string) => {
+        // Localize option labels if they match known keys
+        let displayValue = o;
+        if (o === 'All') displayValue = t('common.all');
+        else if (o === 'Near me') displayValue = t('home.near_me');
+        else if (['room', 'studio', 'apartment', 'house', 'guest_house', 'hotel'].includes(o)) displayValue = t(`home.types.${o}`);
+        else if (['short_term', 'long_term', 'both'].includes(o)) displayValue = t(`home.stays.${o}`);
+
+        return (
+          <TouchableOpacity
+            key={o}
+            style={[styles.filterOption, { backgroundColor: colors.card }, value === o && { backgroundColor: colors.primary }]}
+            onPress={() => onSelect(o)}
+          >
+            <Text style={[styles.filterOptionText, { color: colors.textSecondary }, value === o && styles.filterOptionTextSelected]}>
+              {displayValue}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </ScrollView>
+  </View>
+);
+
+/* ---------------- STYLES ---------------- */
+const styles = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: '#fff' },
+  header: { 
+    padding: Platform.OS === 'web' ? 12 : 24, 
+    flexDirection: 'row', 
+    alignItems: 'center' 
+  },
+  headerTitle: { 
+    fontSize: Platform.OS === 'web' ? 22 : 28, 
+    fontWeight: '700', 
+    color: '#1a1a1a' 
+  },
+  headerSubtitle: { 
+    fontSize: Platform.OS === 'web' ? 14 : 16, 
+    color: '#666', 
+    marginTop: 6 
+  },
+  notificationBtn: { padding: 4, position: 'relative' },
+  badge: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FF4444',
+    borderWidth: 2,
+    borderColor: '#FFF',
+  },
+  searchContainer: { flexDirection: 'row', paddingHorizontal: 24, gap: 12 },
+  searchInputContainer: { flex: 1, backgroundColor: '#f8f9fa', borderRadius: 12 },
+  searchInput: { padding: 14, fontSize: 16 },
+  filterButton: { backgroundColor: '#B8860B', padding: 14, borderRadius: 12 },
+  filterButtonText: { color: '#fff', fontWeight: '600' },
+  resultsContainer: { paddingHorizontal: 24, paddingVertical: 12 },
+  resultsText: { color: '#666' },
+  listingsContainer: { paddingHorizontal: 24, paddingBottom: 24 },
+  loadingContainer: { flex: 1, justifyContent: 'center' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  emptyStateText: { color: '#666' },
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
+  modalContent: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 24 },
+  modalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 24, textAlign: 'center' },
+  filterLabel: { fontSize: 16, fontWeight: '600', marginBottom: 12 },
+  filterOption: { padding: 10, borderRadius: 20, backgroundColor: '#f8f9fa', marginRight: 8 },
+  filterOptionSelected: { backgroundColor: '#B8860B' },
+  filterOptionText: { color: '#666' },
+  filterOptionTextSelected: { color: '#fff' },
+  modalActions: { flexDirection: 'row', gap: 12 },
+  resetButton: { flex: 1, padding: 14, backgroundColor: '#eee', borderRadius: 12 },
+  resetButtonText: { textAlign: 'center' },
+  applyButton: { flex: 1, padding: 14, backgroundColor: '#B8860B', borderRadius: 12 },
+  applyButtonText: { color: '#fff', textAlign: 'center', fontWeight: '700', fontSize: 16 },
+  requestContainer: { paddingHorizontal: 24, marginTop: 16 },
+  requestButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, padding: 12, borderRadius: 12, borderWidth: 1, borderStyle: 'dashed' },
+  requestButtonText: { fontWeight: '600', fontSize: 14 },
+  modalInput: { borderWidth: 1, borderRadius: 12, padding: 14, marginBottom: 16, fontSize: 16 },
+});
+
+export default HomeScreen;
+</file>
+
+<file path="src/screens/student/ProfileScreen.tsx">
+// src/screens/student/ProfileScreen.tsx
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useNavigation } from "@react-navigation/native";
+import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  Alert,
+  KeyboardAvoidingView,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from "react-native";
+import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../hooks/useAuth";
+import { supabase } from '../../utils/supabaseClient';
+
+export default function ProfileScreen() {
+  const navigation = useNavigation();
+  const { user, signOut } = useAuth();
+  const { t, i18n } = useTranslation();
+  const { mode, setThemeMode, colors } = useTheme();
+  const [loading, setLoading] = useState(false);
+
+  const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [momo, setMomo] = useState("");
+  const [age, setAge] = useState("");
+  const [profession, setProfession] = useState("");
+  const [language, setLanguage] = useState<"eng" | "fren" | "pidgin">("eng");
+
+  const [changePasswordVisible, setChangePasswordVisible] = useState(false);
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+
+  const fetchUserData = async () => {
+    if (!user) return;
+    setLoading(true);
+    const { data, error } = await supabase
+      .from("users")
+      .select("*")
+      .eq("id", user.id)
+      .single();
+
+    setLoading(false);
+    if (error) return Alert.alert(t('common.error'), error.message);
+
+    setFullName(data.full_name ?? "");
+    setEmail(data.email ?? "");
+    setPhone(data.phone ?? "");
+    setMomo(data.momo ?? "");
+    const savedLang = (data.preferred_language as "eng" | "fren" | "pidgin") ?? "eng";
+    setLanguage(savedLang);
+    // Fetch student profile details
+    const { data: studentData } = await supabase
+      .from("student_profiles")
+      .select("*")
+      .eq("user_id", user.id)
+      .single();
+
+    if (studentData) {
+      setAge(studentData.age ? String(studentData.age) : "");
+      setProfession(studentData.profession ?? "");
+    }
+
+    // Sync i18n with stored preference on load
+    if (i18n.language !== savedLang) {
+      i18n.changeLanguage(savedLang);
+    }
+  };
+
+  useEffect(() => {
+    fetchUserData();
+  }, [user]);
+
+  const validateEmail = (e: string) =>
+    /^(([^<>()[\]\\.,;:\s@"]+(.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i.test(e);
+  const validateMomo = (m: string) => /^\d{9}$/.test(m);
+
+  const handleLanguageToggle = async (next: "eng" | "fren" | "pidgin") => {
+    setLanguage(next);
+    i18n.changeLanguage(next);
+  };
+
+  const handleSaveProfile = async () => {
+    if (!fullName.trim()) return Alert.alert(t('common.error'), t('profile.full_name') + " is required");
+    if (email && !validateEmail(email)) return Alert.alert(t('common.error'), "Invalid email format");
+    if (!validateMomo(momo)) return Alert.alert(t('common.error'), "Momo must be 9 digits");
+    if (!age || isNaN(Number(age))) return Alert.alert(t('common.error'), "Valid Age is required for verification");
+    if (!profession.trim()) return Alert.alert(t('common.error'), "Profession/Level is required for verification");
+    if (!user) return Alert.alert(t('common.error'), "User session missing");
+
+    setLoading(true);
+
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      setLoading(false);
+      return Alert.alert(t('profile.session_missing'), t('profile.session_missing_msg'));
+    }
+
+    if (email !== user.email) {
+      const { error: authError } = await supabase.auth.updateUser({ email });
+      if (authError) {
+        setLoading(false);
+        return Alert.alert(t('common.error'), authError.message);
+      }
+      Alert.alert(
+        t('profile.verification_required'),
+        t('profile.verification_msg'),
+        [
+          { text: t('common.cancel'), style: "cancel" },
+          { text: t('profile.open_gmail'), onPress: () => Linking.openURL('googlegmail://').catch(() => Linking.openURL('mailto:')) }
+        ]
+      );
+    }
+
+    const { error } = await supabase
+      .from("users")
+      .update({
+        full_name: fullName,
+        email: email || null,
+        momo,
+        preferred_language: language,
+      })
+      .eq("id", user.id);
+
+    const { error: studentError } = await supabase
+      .from("student_profiles")
+      .upsert({
+        user_id: user.id,
+        age: parseInt(age, 10),
+        profession,
+        contact_number: momo
+      });
+
+    if (!error && !studentError) {
+      await AsyncStorage.setItem("appLanguage", language);
+    }
+
+    setLoading(false);
+    if (error) return Alert.alert(t('common.error'), error.message);
+    if (studentError) return Alert.alert(t('common.error'), studentError.message);
+
+    Alert.alert(t('common.success'), t('profile.saved'));
+    fetchUserData();
+  };
+
+  const handleLogout = async () => {
+    try {
+      setLoading(true);
+      await signOut();
+    } catch {
+      Alert.alert(t('common.error'), "Logout failed. Please try again.");
+      setLoading(false);
+    }
+  };
+
+  const handleUpdatePassword = async () => {
+    if (!newPassword || !confirmPassword) return Alert.alert(t('common.error'), "Please fill in all fields");
+    if (newPassword !== confirmPassword) return Alert.alert(t('common.error'), "Passwords do not match");
+    if (newPassword.length < 6) return Alert.alert(t('common.error'), "Password must be at least 6 characters");
+
+    setLoading(true);
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert(t('common.error'), error.message);
+    } else {
+      Alert.alert(t('common.success'), "Password updated successfully");
+      setChangePasswordVisible(false);
+      setNewPassword("");
+      setConfirmPassword("");
+    }
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      t('profile.delete_confirm_title'),
+      t('profile.delete_confirm_msg'),
+      [
+        { text: t('common.cancel'), style: "cancel" },
+        {
+          text: t('profile.delete'),
+          style: "destructive",
+          onPress: async () => {
+            if (!user) return;
+            setLoading(true);
+            const { error } = await supabase.from('users').update({ is_active: false }).eq('id', user.id);
+            if (error) {
+              setLoading(false);
+              return Alert.alert(t('common.error'), error.message);
+            }
+            await signOut();
+          }
+        }
+      ]
+    );
+  };
+
+  const langOptions: { code: "eng" | "fren" | "pidgin"; label: string }[] = [
+    { code: "eng", label: "EN" },
+    { code: "fren", label: "FR" },
+    { code: "pidgin", label: "PCM" },
+  ];
+
+  const themeOptions: { code: "light" | "dark" | "system"; label: string }[] = [
+    { code: "light", label: "Light" },
+    { code: "dark", label: "Dark" },
+    { code: "system", label: "System" },
+  ];
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: colors.background }}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
+    >
+      <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.full_name')}</Text>
+          <TextInput value={fullName} onChangeText={setFullName} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textSecondary} />
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.email')}</Text>
+          <TextInput value={email} onChangeText={setEmail} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="email-address" placeholderTextColor={colors.textSecondary} />
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.phone')}</Text>
+          <TextInput value={phone} style={[styles.input, { backgroundColor: colors.border, borderColor: colors.border, color: colors.textSecondary }]} editable={false} />
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.momo')}</Text>
+          <TextInput value={momo} onChangeText={setMomo} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={9} placeholderTextColor={colors.textSecondary} />
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Age</Text>
+          <TextInput value={age} onChangeText={setAge} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={2} placeholder="e.g. 22" placeholderTextColor={colors.textSecondary} />
+
+          <Text style={[styles.label, { color: colors.textSecondary }]}>Profession / Level of Study</Text>
+          <TextInput value={profession} onChangeText={setProfession} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="e.g. Level 300 Software Eng" placeholderTextColor={colors.textSecondary} />
+
+          <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]} onPress={handleSaveProfile} disabled={loading}>
+            <Text style={styles.saveText}>{loading ? t('common.loading') : t('common.save')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Language Selector */}
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.language_label')}</Text>
+          <View style={styles.langRow}>
+            {langOptions.map((lang) => (
+              <TouchableOpacity
+                key={lang.code}
+                style={[styles.langBtn, { backgroundColor: colors.background, borderColor: colors.border }, language === lang.code && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                onPress={() => handleLanguageToggle(lang.code)}
+              >
+                <Text style={[styles.langText, { color: colors.textSecondary }, language === lang.code && styles.langTextActive]}>
+                  {lang.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Theme Selector */}
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.theme_label', 'Theme')}</Text>
+          <View style={styles.langRow}>
+            {themeOptions.map((tOpt) => (
+              <TouchableOpacity
+                key={tOpt.code}
+                style={[styles.langBtn, { backgroundColor: colors.background, borderColor: colors.border }, mode === tOpt.code && { backgroundColor: colors.primary, borderColor: colors.primary }]}
+                onPress={() => setThemeMode(tOpt.code as "light" | "dark" | "system")}
+              >
+                <Text style={[styles.langText, { color: colors.textSecondary }, mode === tOpt.code && styles.langTextActive]}>
+                  {tOpt.label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
+        {/* Quick Actions */}
+        <View style={[styles.section, { backgroundColor: colors.card }]}>
+          <ProfileButton icon="calendar" label={t('profile.view_bookings')} onPress={() => navigation.navigate("ViewBookingsScreen" as never)} colors={colors} />
+          <ProfileButton icon="card" label="My Payments" onPress={() => navigation.navigate("Payments" as never)} colors={colors} />
+          <ProfileButton icon="notifications" label={t('common.notifications')} onPress={() => navigation.navigate("Notifications" as never)} colors={colors} />
+          {/* ✅ Added Terms & Privacy Policy button */}
+          <ProfileButton icon="document-text" label={t('profile.terms')} onPress={() => navigation.navigate("Legal" as never)} colors={colors} />
+          <ProfileButton icon="lock-closed" label={t('profile.change_password')} onPress={() => setChangePasswordVisible(true)} colors={colors} />
+          <ProfileButton icon="warning" label="Report a Landlord" onPress={() => navigation.navigate("ReportUser" as never)} colors={colors} />
+          <ProfileButton icon="bug" label={t('profile.report_bug')} onPress={() => navigation.navigate("ReportBug" as never)} colors={colors} />
+          <ProfileButton icon="trash" label={t('profile.delete_account')} danger onPress={handleDeleteAccount} disabled={loading} colors={colors} />
+          <ProfileButton icon="log-out" label={t('common.logout')} onPress={handleLogout} disabled={loading} colors={colors} />
+        </View>
+      </ScrollView>
+
+      {/* Change Password Modal */}
+      <Modal visible={changePasswordVisible} transparent animationType="slide">
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.modalContent, { backgroundColor: colors.card }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>{t('profile.change_password')}</Text>
+              <TouchableOpacity onPress={() => setChangePasswordVisible(false)}>
+                <Ionicons name="close" size={24} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.new_password')}</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder={t('profile.enter_new_password')} placeholderTextColor={colors.textSecondary} />
+            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.confirm_password')}</Text>
+            <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} placeholder={t('profile.reenter_password')} placeholderTextColor={colors.textSecondary} />
+            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]} onPress={handleUpdatePassword} disabled={loading}>
+              <Text style={styles.saveText}>{loading ? t('common.updating') : t('profile.update_password')}</Text>
+            </TouchableOpacity>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+    </KeyboardAvoidingView>
+  );
+}
+
+function ProfileButton({
+  icon, label, onPress, danger, disabled, colors
+}: {
+  icon: any; label: string; onPress: () => void; danger?: boolean; disabled?: boolean; colors: any;
+}) {
+  return (
+    <TouchableOpacity
+      style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, danger && { backgroundColor: colors.error }, disabled && { opacity: 0.6 }]}
+      onPress={onPress}
+      disabled={disabled}
+    >
+      <Ionicons name={icon} size={22} color={danger ? "#fff" : colors.primary} />
+      <Text style={[styles.actionText, { color: colors.text }, danger && { color: "#fff" }]}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
+const styles = StyleSheet.create({
+  scrollContainer: { paddingHorizontal: 20, paddingBottom: 40, padding: 12 },
+  title: { fontSize: 26, fontWeight: "700", color: "#333", marginVertical: 20, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 10 },
+  section: { backgroundColor: "#f7f7f7", borderRadius: 12, padding: 16, marginBottom: 20 },
+  label: { color: "#777", marginTop: 12, marginBottom: 4 },
+  input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, fontSize: 16 },
+  saveBtn: { marginTop: 16, backgroundColor: "#D4AF37", padding: 14, borderRadius: 10, alignItems: "center" },
+  saveText: { color: "#000", fontWeight: "700", fontSize: 16 },
+  langRow: { flexDirection: "row", gap: 10, marginTop: 8 },
+  langBtn: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee" },
+  langBtnActive: { backgroundColor: "#D4AF37", borderColor: "#D4AF37" },
+  langText: { fontSize: 13, fontWeight: "bold", color: "#999" },
+  langTextActive: { color: "#fff" },
+  actionBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", paddingVertical: 14, paddingHorizontal: 16, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: "#e5e5e5" },
+  actionText: { marginLeft: 12, fontSize: 16, color: "#333" },
+  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
+  modalContent: { width: "90%", backgroundColor: "#fff", borderRadius: 16, padding: 20, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
+  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  modalTitle: { fontSize: 20, fontWeight: "700", color: "#333" },
+});
+</file>
+
+<file path="src/services/supportService.ts">
+// src/services/supportService.ts
+import { Chat, FAQ, Ticket } from '../types';
+import { supabase } from '../utils/supabaseClient';
+
+const EDGE_FUNCTION_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/support-bot';
+
+// =========================
+// TICKETS
+// =========================
+export async function fetchLatestTicket(userId: string): Promise<Ticket | null> {
+  const { data, error } = await supabase
+    .from('tickets')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0] ?? null;
+}
+
+export async function createTicket(userId: string): Promise<Ticket> {
+  const { data, error } = await supabase
+    .from('tickets')
+    .insert([{ user_id: userId, status: 'open', priority: 'normal' }])
+    .select()
+    .maybeSingle();
+
+  if (error) throw error;
+  return data as Ticket;
+}
+
+// =========================
+// CHATS
+// =========================
+export async function fetchChats(ticketId: string): Promise<Chat[]> {
+  const { data, error } = await supabase
+    .from('chats')
+    .select('*')
+    .eq('ticket_id', ticketId)
+    .order('created_at', { ascending: true });
+
+  if (error) throw error;
+  return (data || []) as Chat[];
+}
+
+/**
+ * Sends a chat message AND calls Edge Function to get bot reply/options.
+ * Returns both the user message and optional bot reply.
+ */
+export async function sendChatMessageWithBot(payload: {
+  ticket_id: string;
+  sender_id: string;
+  message: string;
+}): Promise<{ userMessage: Chat; botReply?: Chat; options?: string[] }> {
+  // 1️⃣ Persist user message
+  const { data: userMessage, error: userError } = await supabase
+    .from('chats')
+    .insert([
+      {
+        ticket_id: payload.ticket_id,
+        sender_id: payload.sender_id,
+        receiver_id: null,
+        message: payload.message,
+        read: false,
+        sender_type: 'user',
+        chat_type: 'support',
+        is_complaint: false,
+        is_faq_candidate: false,
+      },
+    ])
+    .select()
+    .single();
+
+  if (userError || !userMessage) throw userError ?? new Error('Failed to insert user message');
+
+  let botReply: Chat | undefined;
+  let options: string[] | undefined;
+
+  try {
+    // 2️⃣ Call Edge Function for instant bot response
+    const res = await fetch(EDGE_FUNCTION_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ticket_id: payload.ticket_id,
+        user_id: payload.sender_id,
+        message: payload.message,
+      }),
+    });
+
+    const data = await res.json();
+    if (data?.botData) {
+      botReply = data.botData as Chat;
+    }
+    if (data?.options) {
+      options = data.options as string[];
+    }
+  } catch (err) {
+    console.error('Edge function error:', err);
+  }
+
+  return { userMessage: userMessage as Chat, botReply, options };
+}
+
+// =========================
+// FAQ CACHE
+// =========================
+export async function fetchFaqs(limit = 10): Promise<FAQ[]> {
+  const { data, error } = await supabase
+    .from('faq_cache')
+    .select('*')
+    .limit(limit);
+
+  if (error) throw error;
+  return (data || []) as FAQ[];
+}
+</file>
+
 <file path="src/utils/login.ts">
 // src/utils/login.ts
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -30711,8 +27330,7 @@ export const loginWithPhone = async (
     }
 
     const backendUrl =
-      process.env.EXPO_PUBLIC_API_URL ||
-      'https://dhub-gxid.onrender.com';
+      process.env.EXPO_PUBLIC_API_URL ;
 
     console.log(`[${STEP}] [${requestId}] Backend URL:`, backendUrl);
     authLogger.log(STEP, `[${requestId}] Backend URL`, {
@@ -31225,444 +27843,305 @@ export default {
 };
 </file>
 
-<file path="src/utils/supabaseClient.ts">
-// src/utild/supabaseClient.ts
+<file path="supabase/functions/listing-og/index.ts">
+import { serve } from 'https://deno.land/std@0.177.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-import { createClient } from '@supabase/supabase-js';
-import { storage } from './storage';
+const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+const mediaBase = Deno.env.get('MEDIA_BASE_URL') || 'https://listings.frunjimbong.workers.dev';
 
+// NOTE: Update APP_STORE_URL when DHUB is live on App Store
+const APP_STORE_URL = 'https://apps.apple.com/app/dhub/id000000000';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diracmr.dhub';
+const WEB_BASE_URL = 'https://dhubweb.diracmr.com';
+const SUPABASE_PROJECT_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co';
 
-const supabaseUrl = (process.env.EXPO_PUBLIC_SUPABASE_URL || '').trim();
-const supabaseKey = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || '').trim();
-
-console.log("[Supabase] Initializing client...", { 
-  hasUrl: !!supabaseUrl, 
-  hasKey: !!supabaseKey 
-});
-
-if (!supabaseUrl || !supabaseKey) {
-  console.error("[Supabase] CRITICAL: Missing environment variables!");
-  // In release, we don't want a silent failure that crashes later
-  // We throw a clear error here that our App-level catch can see
-  throw new Error(
-    'Missing Supabase environment variables. Check eas.json or app.config.js.'
-  );
+/** XSS-safe HTML attribute/text escaping */
+function esc(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: false,
-    storage: storage, 
-    flowType: 'pkce',// ✅ Platform-specific storage
-  },
+// ── Professional inline SVG icons ──────────────────────────────────────────
+const ICON_LOCATION = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/><circle cx="12" cy="9" r="2.5"/></svg>`;
+
+const ICON_ANDROID = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341 14.67 9.2l2.855-5.223a.5.5 0 0 0-.88-.48L13.82 8.66a8.28 8.28 0 0 0-3.64 0L7.355 3.497a.5.5 0 0 0-.88.48L9.33 9.2 6.477 15.34A3 3 0 0 0 6 17a6 6 0 0 0 12 0 3 3 0 0 0-.477-1.659zM9.5 19a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm5 0a1 1 0 1 1 0-2 1 1 0 0 1 0 2z"/></svg>`;
+
+const ICON_APPLE = `<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.37 2.83zM13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>`;
+
+const ICON_GLOBE = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>`;
+
+const ICON_HOME = `<svg width="52" height="52" viewBox="0 0 24 24" fill="none" stroke="rgba(212,175,55,0.35)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>`;
+
+serve(async (req) => {
+  const url = new URL(req.url);
+  const listingId = url.searchParams.get('id');
+  if (!listingId) return new Response('Missing listing ID', { status: 400 });
+
+  const supabase = createClient(supabaseUrl, supabaseKey);
+  const { data: listing, error } = await supabase
+    .from('listings')
+    .select('title, price, city, media, description, price_unit, location')
+    .eq('id', listingId)
+    .single();
+
+  if (error || !listing) return new Response('Listing not found', { status: 404 });
+
+  // ── Image URL ────────────────────────────────────────────────────────────
+  let imageUrl = '';
+  if (listing.media && Array.isArray(listing.media)) {
+    const firstImage = listing.media.find((m: any) => m.type === 'image');
+    if (firstImage) {
+      const imgUrl = firstImage.thumbUrl || firstImage.url;
+      imageUrl = imgUrl?.startsWith('/media/') ? mediaBase + imgUrl : imgUrl || '';
+    }
+  }
+  const fallbackImage = WEB_BASE_URL + '/icon.png';
+  if (!imageUrl) imageUrl = fallbackImage;
+
+  const title = listing.title || 'DHUB Listing';
+  const priceUnit = listing.price_unit === 'per_night' ? 'night' : 'month';
+  const priceDisplay = listing.price
+    ? listing.price.toLocaleString('en-US') + ' FCFA/' + priceUnit
+    : 'Price on request';
+  const city = listing.city || listing.location || '';
+  const ogDescription = city ? city + ' \u2022 ' + priceDisplay : priceDisplay;
+  const shortDesc = listing.description
+    ? listing.description.substring(0, 180) + '...'
+    : 'Find your perfect home on DHUB.';
+
+  const deepLink = 'dhub://listing/' + listingId;
+  const webLink = WEB_BASE_URL + '/listing/' + listingId;
+  // This edge function URL IS the canonical share URL — bots always crawl it and get OG tags
+  const canonicalUrl = SUPABASE_PROJECT_URL + '/functions/v1/listing-og?id=' + listingId;
+
+  const hasHeroImage = imageUrl && imageUrl !== fallbackImage;
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${esc(title)} - DHUB</title>
+
+<!-- Open Graph: WhatsApp, Facebook, LinkedIn, Telegram, Discord, Slack -->
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="DHUB">
+<meta property="og:title" content="${esc(title)}">
+<meta property="og:description" content="${esc(ogDescription)}">
+<meta property="og:image" content="${imageUrl}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:url" content="${canonicalUrl}">
+
+<!-- Twitter / X -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(ogDescription)}">
+<meta name="twitter:image" content="${imageUrl}">
+
+<!-- iOS Smart App Banner -->
+<meta name="apple-itunes-app" content="app-id=000000000, app-argument=${deepLink}">
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --gold: #D4AF37;
+  --gold-dark: #b8962e;
+  --bg: #09090f;
+  --surface: #13131a;
+  --surface2: #1c1c27;
+  --text: #f0f0f5;
+  --muted: #888899;
+  --radius: 16px;
+}
+body {
+  font-family: Inter, system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.card {
+  width: 100%;
+  max-width: 480px;
+  background: var(--surface);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: 0 24px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.055);
+}
+.hero { width: 100%; height: 260px; object-fit: cover; display: block; }
+.hero-placeholder {
+  width: 100%; height: 260px;
+  background: linear-gradient(135deg, #1c1c27 0%, #272738 100%);
+  display: flex; align-items: center; justify-content: center;
+}
+.body { padding: 24px; }
+.badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(212,175,55,.1); color: var(--gold);
+  font-size: 10px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase;
+  padding: 4px 10px; border-radius: 999px; margin-bottom: 12px;
+  border: 1px solid rgba(212,175,55,.18);
+}
+.badge-dot { width: 5px; height: 5px; border-radius: 50%; background: var(--gold); }
+h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
+.location {
+  font-size: 13px; color: var(--muted); margin-bottom: 14px;
+  display: flex; align-items: center; gap: 5px;
+}
+.price { font-size: 30px; font-weight: 800; color: var(--gold); margin-bottom: 10px; letter-spacing: -.5px; }
+.desc { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 28px; }
+.divider { height: 1px; background: rgba(255,255,255,.07); margin-bottom: 22px; }
+.cta-label { font-size: 13px; color: var(--muted); text-align: center; margin-bottom: 14px; font-weight: 500; }
+.btn-download {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; background: var(--gold); color: #000;
+  font-size: 15px; font-weight: 700; padding: 15px;
+  border-radius: 12px; text-decoration: none; margin-bottom: 10px;
+  transition: background .2s, transform .12s;
+}
+.btn-download:hover { background: var(--gold-dark); transform: translateY(-1px); }
+.btn-download:active { transform: translateY(0); }
+.btn-download svg { flex-shrink: 0; }
+.btn-web {
+  display: flex; align-items: center; justify-content: center; gap: 6px;
+  font-size: 11px; color: rgba(255,255,255,.18); text-decoration: none;
+  padding: 10px; transition: color .2s; letter-spacing: .02em;
+}
+.btn-web:hover { color: rgba(255,255,255,.4); }
+.brand { text-align: center; margin-top: 24px; font-size: 12px; color: rgba(255,255,255,.12); letter-spacing: .05em; }
+.brand strong { color: var(--gold); opacity: .6; }
+</style>
+
+<!-- Attempt to open the native app silently before page renders -->
+<script>
+(function() {
+  if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
+    window.location.href = '${deepLink}';
+  }
+})();
+</script>
+</head>
+<body>
+<div class="card">
+  ${hasHeroImage
+    ? `<img class="hero" src="${imageUrl}" alt="${esc(title)}" loading="eager">`
+    : `<div class="hero-placeholder">${ICON_HOME}</div>`}
+  <div class="body">
+    <div class="badge"><span class="badge-dot"></span>DHUB Rental</div>
+    <h1>${esc(title)}</h1>
+    ${city ? `<p class="location">${ICON_LOCATION} ${esc(city)}</p>` : ''}
+    <p class="price">${esc(priceDisplay)}</p>
+    <p class="desc">${esc(shortDesc)}</p>
+
+    <div class="divider"></div>
+    <p class="cta-label">View this listing on the DHUB app</p>
+
+    <a class="btn-download" href="${PLAY_STORE_URL}" id="btn-android">
+      ${ICON_ANDROID} Get on Android
+    </a>
+    <a class="btn-download" href="${APP_STORE_URL}" id="btn-ios">
+      ${ICON_APPLE} Get on iPhone / iPad
+    </a>
+    <a class="btn-web" href="${webLink}" id="btn-web">
+      ${ICON_GLOBE} continue on web
+    </a>
+  </div>
+</div>
+<p class="brand">Powered by <strong>DHUB</strong></p>
+
+<script>
+(function() {
+  var ua = navigator.userAgent;
+  var isIos = /iPhone|iPad|iPod/i.test(ua);
+  var isAndroid = /Android/i.test(ua);
+  var btnIos = document.getElementById('btn-ios');
+  var btnAndroid = document.getElementById('btn-android');
+  if (isIos && btnAndroid) btnAndroid.style.display = 'none';
+  if (isAndroid && btnIos) btnIos.style.display = 'none';
+})();
+</script>
+</body>
+</html>`;
+
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=UTF-8',
+      'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=604800',
+    },
+  });
 });
 </file>
 
-<file path="src/utils/upload.ts">
-// src/utils/upload.ts
-import { Platform } from 'react-native';
+<file path=".gitignore">
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
 
-let uploadImpl: any;
+# dependencies
+node_modules/
 
-if (Platform.OS === 'web') {
-  // Use the web implementation
-  uploadImpl = require('./upload.web');
-} else {
-  // Use the native implementation
-  uploadImpl = require('./upload.native');
-}
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
 
-export const uploadListingMedia = uploadImpl.uploadListingMedia;
-export const abortUpload = uploadImpl.abortUpload;
-</file>
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
 
-<file path="src/types.ts">
-// src/types.ts
-import { BottomTabNavigationProp, BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+# Metro
+.metro-health-check*
 
-/* ===========================
-   Domain / Model Types 
-=========================== */
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
 
-export type Role = 'student' | 'landlord' | 'mover' | 'admin';
+# macOS
+.DS_Store
+*.pem
 
-export interface Listing {
-  id: string;
-  title: string;
-  description?: string | null;
-  price: number;
-  city: string;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  terms_marker?: string | null;
-  media: MediaItem[];
-  rooms?: number | null;
-  avg_rating?: number | null;
-  rating_count?: number | null;
-  available?: boolean | null;
-  boost_until?: string | null;
-  created_at: string;
-  updated_at?: string;
-  landlord_id: string;
-  processing_status?: 'processing' | 'ready' | 'failed';
-  is_verified?: boolean | null;
-  verification_expires_at?: string | null;
-  cite_id?: string | null;
-  listing_type?: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel' | null;
-  stay_type?: 'short_term' | 'long_term' | 'both' | null;
-  price_unit?: 'per_month' | 'per_night' | null;
-}
+# local env files
+.env
+.env*.local
+src/lib/.env
 
-export interface Landlord {
-  id: string;
-  full_name: string;
-  email: string;
-   momo?: string | null;
-  phone?: string | null;
-  profile_pic?: string | null;
-  created_at: string;
-}
+# typescript
+*.tsbuildinfo
 
-export interface Cite {
-  id: string;
-  landlord_id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  created_at: string;
-  updated_at?: string;
-}
+app-example
+*.sql
 
-export interface Booking {
-  id: string;
-  listing_id: string;
-  student_id: string;
-  landlord_id: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  payment_status: 'pending' | 'completed' | 'failed';
-  amount: number;
-  total_amount?: number | null;
-  start_date: string;
-  end_date: string;
-  created_at: string;
-  updated_at?: string;
-  agreed_to_terms?: boolean;
-  contract_status?: 'draft' | 'signed' | 'enforced' | 'expired' | 'cancelled';
-  agreement_id?: string | null;
-  agreement_hash?: string | null;
-  signature_method?: string | null;
-  signature_text?: string | null;
-  signed_at?: string | null;
-  agreement_device_info?: Record<string, any> | null;
-  terms_version?: string | null;
-  approval_status?: string;
-  duration_type?: string;
-  caution_fee?: number;
-  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed';
-  entry_media?: MediaItem[];
-  exit_media?: MediaItem[];
-}
+# generated native folders
+/ios
+/android
+client_secret_450420597510-6h67rqutdshr7dm96v0pqr0ga2busmur.apps.googleusercontent.com.json
 
-export interface Review {
-  id: string;
-  score: number;
-  comment?: string | null;
-  created_at: string;
-  reviewer: {
-    id: string;
-    full_name: string;
-    profile_pic?: string | null;
-  };
-}
-
-export type MediaType = 'image' | 'video';
-
-export interface MediaDBItem {
-  key: string;
-  type: MediaType;
-  thumbKey?: string;
-}
-
-export interface MediaItem {
-  url: string;
-  type: MediaType;
-  thumbUrl?: string;
-  processing_status?: 'processing' | 'ready' | 'failed';
-  mimeType?: string;
-}
-
-export interface ListingDetails extends Listing {
-  landlord?: Landlord | null;
-  terms_text?: string | null;
-  ratings: Review[];
-}
-
-export interface ListingSummary {
-  id: string;
-  title: string;
-  price: number;
-  city: string;
-  rooms: number | null;
-  landlord_id: string;
-  image_url: string;
-  avg_rating: number | null;
-  rating_count: number | null;
-  available?: boolean | null;
-  boosted?: boolean;
-  created_at: string;
-  listing_type: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel';
-  stay_type: 'short_term' | 'long_term' | 'both';
-  price_unit: 'per_night' | 'per_week' | 'per_month' | 'per_stay';
-  processing_status?: 'processing' | 'ready' | 'failed';
-  is_verified?: boolean | null;
-  description?: string | null;
-}
-
-export interface AppNotification {
-  id: string;
-  recipient_id: string;
-  recipient_role: Role;
-  title: string;
-  body: string;
-  type: NotificationType;
-  listing_id?: string | null;
-  booking_id?: string | null;
-  data?: Record<string, any> | null;
-  is_read: boolean;
-  push_sent: boolean;
-  push_sent_at?: string | null;
-  created_at: string;
-}
-
-export type NotificationType =
-  | 'favorite_available'
-  | 'booking_update'
-  | 'rent_reminder'
-  | 'system_announcement'
-  | 'chat_message';
-
-// Support types (used by SupportScreen & supportService)
-export interface Ticket {
-  id: string;
-  user_id: string;
-  status: 'open' | 'closed' | 'pending';
-  priority: 'low' | 'normal' | 'high';
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface Chat {
-  id: string;
-  ticket_id: string;
-  sender_id: string;
-  receiver_id?: string | null;
-  message: string;
-  read: boolean;
-  sender_type: 'user' | 'bot' | 'agent';
-  chat_type?: string;
-  is_complaint?: boolean;
-  is_faq_candidate?: boolean;
-  created_at: string;
-}
-
-export interface FAQ {
-  id: string;
-  question: string;
-  answer?: string | null;
-  created_at?: string;
-}
-
-export interface ListingFilters {
-  search?: string;
-  city?: string;
-  rooms?: number | '5+';
-  minPrice?: number;
-  maxPrice?: number;
-  availableOnly?: boolean;
-  boostedFirst?: boolean;
-  limit?: number;
-  offset?: number;
-  listing_type?: string;
-  stay_type?: string;
-  lat?: number;
-  lng?: number;
-  radius_m?: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  threadId: string;
-  senderId: string;
-  receiverId: string | null;
-  message: string;
-  read: boolean;
-  created_at: string;
-}
-
-export interface ChatMessageDto {
-  id: string;
-  thread_id: string;
-  sender_id: string;
-  receiver_id?: string | null;
-  body: string;
-  is_read: boolean;
-  created_at: string;
-}
-
-export interface ThreadDto {
-  threadId: string;
-  participants: User[];
-  lastMessage: string | null;
-  lastMessageTime: string | null;
-  unreadCount: number;
-}
-
-export interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  role: Role;
-  phone?: string;
-  momo?: string;
-}
-
-/* ===========================
-   Navigation Param Lists
-=========================== */
-
-export type StudentTabParamList = {
-  Home: undefined;
-  Favorites: undefined;
-  Chat: { threadId?: string } | undefined;
-  Bookings: undefined;
-  Profile: undefined;
-};
-
-export type LandlordTabParamList = {
-  Dashboard: undefined;
-  ManageListings: undefined;
-  Chat: { threadId?: string } | undefined;
-  Payments:
-    | {
-        listingId: string;
-        planId: string;
-        durationDays: number;
-        price: number;
-        purpose: string;
-      }
-    | {
-        listingId: string;
-        amount: number;
-        description: string;
-        reason: 'verification';
-      }
-    | undefined;
-  Profile: undefined; 
-};
-
-export type StudentStackParamList = {
-  StudentTabs: NavigatorScreenParams<StudentTabParamList> | undefined;
-  ListingDetails: { listingId: string };
-  BookingScreen: { listingId: string };
-  Payments: {
-    listingId: string;
-    listingType?: string;
-    amount: number;
-    description: string;
-    receiverPhone: string;
-    receiverName: string;
-    bookingId?: string;
-    landlordId?: string;
-    paymentType?: 'initial' | 'rent_completion' | 'renewal';
-    isRenewal?: boolean;
-    reason?: 'rent' | 'boosting' | 'landlord_subscription';
-  };
-  Support: { currentUserId: string };
-  Legal: undefined;
-  ViewBookingsScreen: undefined;
-  BookingDetails: { bookingId: string };
-  PendingScreen: { bookingId: string };
-  ListingReview: { listing_id: string };
-  ReportUser: undefined;
-  ReportBug: undefined;
-  Notifications: undefined;
-};
-
-export type LandlordStackParamList = {
-  Tabs: NavigatorScreenParams<LandlordTabParamList> | undefined;
-  Bookings: undefined;
-  Notifications: undefined;
-  KYCVerification: undefined;
-  UploadListing: undefined;
-  EditListing: { listingId: string };
-  ListingDetails: { listingId: string };
-  BoostScreen: { listingId: string };
-  ApprovalScreen: { bookingId: string };
-  Legal: undefined;
-  SignIn: undefined;
-  ReportUser: undefined;
-  ReportBug: undefined;
-  Support: { currentUserId: string };
-};
-
-export type AuthStackParamList = {
-  SignIn: undefined;
-  SignUp: undefined;
-  VerifyOtp: {
-    whatsappNumber: string;
-    mode: 'signup' | 'login' | 'reset';
-    fullName?: string;
-    password?: string;
-    role?: 'student' | 'landlord';
-    email?: string;
-    mobileMoney?: string;
-    age?: string;
-    address?: string;
-    language?: 'en' | 'fr' | 'pcm';
-  };
-  ForgotPassword: { email?: string; phone?: string };
-  ResetPassword: { phone: string; mode: 'reset' };
-  EmailVerification: { email: string; mode: 'signup' | 'recovery' };
-  AuthCallback: undefined; // new
-};
-
-export type RootStackParamList = {
-  AuthStack: NavigatorScreenParams<AuthStackParamList> | undefined;
-  StudentStack: NavigatorScreenParams<StudentStackParamList> | undefined;
-  LandlordStack: NavigatorScreenParams<LandlordStackParamList> | undefined;
-  ListingDetails: { listingId: string } | undefined;
-  UpdatePassword: undefined;
-};
-
-/* ===========================
-   Screen & Navigation Props
-=========================== */
-
-export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;
-export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<AuthStackParamList, T>;
-export type StudentStackScreenProps<T extends keyof StudentStackParamList> = NativeStackScreenProps<StudentStackParamList, T>;
-export type LandlordStackScreenProps<T extends keyof LandlordStackParamList> = NativeStackScreenProps<LandlordStackParamList, T>;
-export type StudentTabScreenProps<T extends keyof StudentTabParamList> = BottomTabScreenProps<StudentTabParamList, T>;
-export type LandlordTabScreenProps<T extends keyof LandlordTabParamList> = BottomTabScreenProps<LandlordTabParamList, T>;
-
-export type RootNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
-export type StudentStackNavigationProp = NativeStackNavigationProp<StudentStackParamList>;
-export type LandlordStackNavigationProp = NativeStackNavigationProp<LandlordStackParamList>;
-export type StudentTabNavigationProp = BottomTabNavigationProp<StudentTabParamList>;
-export type LandlordTabNavigationProp = BottomTabNavigationProp<LandlordTabParamList>;
-
-export type RootRouteProp<T extends keyof RootStackParamList> = RouteProp<RootStackParamList, T>;
-export type AuthRouteProp<T extends keyof AuthStackParamList> = RouteProp<AuthStackParamList, T>;
-export type StudentStackRouteProp<T extends keyof StudentStackParamList> = RouteProp<StudentStackParamList, T>;
-export type LandlordStackRouteProp<T extends keyof LandlordStackParamList> = RouteProp<LandlordStackParamList, T>;
-export type StudentTabRouteProp<T extends keyof StudentTabParamList> = RouteProp<StudentTabParamList, T>;
-export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RouteProp<LandlordTabParamList, T>;
+# Firebase / Push Notification Credentials
+google-services.json
+GoogleService-Info.plist
+dhubweb.md
+context_output.txt
+# Local Netlify folder
+.netlify
 </file>
 
 <file path="App.tsx">
@@ -31671,6 +28150,7 @@ import { DarkTheme, DefaultTheme, NavigationContainer } from "@react-navigation/
 import { StatusBar } from "expo-status-bar";
 import * as WebBrowser from "expo-web-browser";
 import React from "react";
+import { Platform } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { Provider, useSelector } from "react-redux";
 import SplashScreen from "./SplashScreen";
@@ -31754,7 +28234,24 @@ function ThemedApp() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer ref={navigationRef} theme={navigationTheme}>
+      <NavigationContainer
+        ref={navigationRef}
+        theme={navigationTheme}
+        onReady={() => {
+          // 🟢 Web-only: parse the URL for a listing ID and navigate
+          if (Platform.OS === 'web' && typeof window !== 'undefined') {
+            const path = window.location.pathname;
+            const match = path.match(/^\/listing\/(.+)/);
+            if (match) {
+              const listingId = match[1];
+              // Navigate to the listing details screen
+              navigationRef.navigate('ListingDetails', { listingId });
+              // Clean the URL to avoid re-navigation on refresh
+              window.history.replaceState({}, document.title, '/');
+            }
+          }
+        }}
+      >
         <AuthListener />
         <GlobalNotification />
         <AppGate />
@@ -31790,50 +28287,405 @@ export default function App() {
 }
 </file>
 
-<file path="metro.config.js">
-const { getDefaultConfig } = require('expo/metro-config');
-const { resolve } = require('metro-resolver');
-const path = require('path');
-const fs = require('fs');
+<file path="src/screens/auth/SignInScreen.tsx">
+// src/screens/auth/SignInScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import React, { useState } from 'react';
+import {
+  ActivityIndicator,
+  Keyboard,
+  Platform,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
+} from 'react-native';
+import { useDispatch, useSelector } from 'react-redux';
 
-const config = getDefaultConfig(__dirname);
+import * as Linking from 'expo-linking';
+import ButtonPrimary from '../../components/ButtonPrimary';
+import { DiraBranding } from '../../components/DiraBranding';
+import { LanguageSelector } from '../../components/LanguageSelector';
+import { useTheme } from '../../context/ThemeContext';
+import type { AppDispatch } from '../../store/store';
+import { AuthStackParamList } from '../../types';
+import { normalizePhone } from '../../utils/authHelpers';
+import { loginWithEmail, loginWithGoogle, loginWithPhone } from '../../utils/login';
+import { supabase } from '../../utils/supabaseClient';
 
-config.resolver.resolverMainFields = ['react-native', 'browser', 'main'];
+type SignInScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
-// 1. Tell Metro to ignore .wasm files
-config.resolver.assetExts.push('wasm');
+const SignInScreen: React.FC = () => {
+  const navigation = useNavigation<SignInScreenNavigationProp>();
+  const dispatch = useDispatch<AppDispatch>();
+  const { error: globalError } = useSelector((state: any) => state.auth);
 
-// 2. Create a mock file for expo-sqlite on web
-const mockExpoSQLite = path.resolve(__dirname, 'src/mocks/expo-sqlite.ts');
-const mockDir = path.resolve(__dirname, 'src/mocks');
-if (!fs.existsSync(mockDir)) fs.mkdirSync(mockDir, { recursive: true });
-if (!fs.existsSync(mockExpoSQLite)) {
-  fs.writeFileSync(mockExpoSQLite, `
-export const openDatabase = () => ({
-  execute: () => Promise.resolve(),
-  close: () => {},
-});
-export default { openDatabase };
-`);
-}
+  const [identifier, setIdentifier] = useState('');
+  const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
+  const [loginMethod, setLoginMethod] = useState<'phone' | 'email'>('phone');
 
-// 3. Redirect expo-sqlite to the mock on web
-config.resolver.resolveRequest = (context, moduleName, platform) => {
-  if (platform === 'web' && moduleName === 'expo-sqlite') {
-    const newContext = { ...context, filePath: mockExpoSQLite };
-    return resolve(newContext, mockExpoSQLite, platform);
-  }
+  const { colors: themeColors, isDark } = useTheme();
 
-  if (platform === 'web' && moduleName === 'react-native-maps') {
-    const webMapPath = path.resolve(__dirname, 'src/components/MapView.web.tsx');
-    const newContext = { ...context, filePath: webMapPath };
-    return resolve(newContext, webMapPath, platform);
-  }
+  const colors = React.useMemo(() => ({
+    background: themeColors.background,
+    card: themeColors.card,
+    border: themeColors.border,
+    primary: themeColors.primary,
+    text: themeColors.text,
+    textSecondary: themeColors.textSecondary,
+    inputBg: isDark ? '#2A2A2A' : '#fafafa',
+    footerBg: isDark ? '#1A1A1A' : '#fcfaf2',
+    error: themeColors.error,
+  }), [themeColors, isDark]);
 
-  return resolve(context, moduleName, platform);
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
+
+  // Clear local loading if global error occurs
+  React.useEffect(() => {
+    if (globalError && loading) {
+      setLoading(false);
+      setErrorMessage(globalError);
+    }
+  }, [globalError, loading]);
+
+  const sanitizePhone = (text: string) => text.replace(/\D/g, '').slice(0, 9);
+  const handleIdentifierChange = (text: string) => {
+    setIdentifier(text);
+    setErrorMessage('');
+  };
+
+  const handleSignIn = async () => {
+    console.log('[SignInScreen] Sign In button pressed. Method:', loginMethod);
+    Keyboard.dismiss();
+    setErrorMessage('');
+
+    if (!identifier.trim() || !password.trim()) {
+      setErrorMessage(`Please enter your ${loginMethod} and password.`);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      if (loginMethod === 'phone') {
+        const digits = sanitizePhone(identifier);
+        const normalized = normalizePhone(digits);
+        if (!normalized || !normalized.startsWith('+237') || normalized.length !== 13) {
+          setErrorMessage('Please enter a valid Cameroon phone number (9 digits).');
+          setLoading(false);
+          return;
+        }
+        console.log('[SignInScreen] Attempting phone login...');
+        await loginWithPhone(normalized, password);
+      } else {
+        const isEmail = /\S+@\S+\.\S+/.test(identifier.trim());
+        if (!isEmail) {
+          setErrorMessage('Please enter a valid email address.');
+          setLoading(false);
+          return;
+        }
+        console.log('[SignInScreen] Attempting email login...');
+        await loginWithEmail(identifier.trim(), password);
+      }
+    } catch (err: any) {
+      console.error('[SignInScreen] Sign-in error:', err.message);
+      setErrorMessage(err.message || 'Please check your credentials and try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      await loginWithGoogle();
+    } catch (err: any) {
+      console.error('[SignInScreen] Google Sign-in error:', err.message);
+      if (err.message === 'ACCOUNT_NOT_FOUND') {
+        setErrorMessage('Account not found. Please use the Sign Up screen first.');
+      } else {
+        setErrorMessage(err.message || 'Could not complete Google sign-in.');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMagicLink = async () => {
+    if (!identifier.trim() || !/\S+@\S+\.\S+/.test(identifier.trim())) {
+      setErrorMessage('Please enter a valid email address.');
+      return;
+    }
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const redirectUrl = Platform.OS === 'web'
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL('auth/callback');
+
+      const { error } = await supabase.auth.signInWithOtp({
+        email: identifier.trim(),
+        options: {
+          emailRedirectTo: redirectUrl,
+          shouldCreateUser: true,
+        },
+      });
+      if (error) throw error;
+
+      navigation.navigate('EmailVerification', {
+        email: identifier.trim(),
+        mode: 'signup'
+      });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Could not send Magic Link.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!identifier.trim() || !/\S+@\S+\.\S+/.test(identifier.trim())) {
+      setErrorMessage('Please enter your email to reset your password.');
+      return;
+    }
+
+    setLoading(true);
+    setErrorMessage('');
+    try {
+      const resetRedirectUrl = Platform.OS === 'web'
+        ? `${window.location.origin}/auth/callback`
+        : Linking.createURL('auth/callback');
+      const { error } = await supabase.auth.resetPasswordForEmail(identifier.trim(), {
+        redirectTo: resetRedirectUrl,
+      });
+      if (error) throw error;
+
+      navigation.navigate('EmailVerification', { email: identifier.trim(), mode: 'recovery' });
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Could not send reset link.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to your account</Text>
+      </View>
+
+      {/* Main content – simple ScrollView, no native wrappers */}
+      <ScrollView
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+      >
+        <View style={styles.methodToggleContainer}>
+          <TouchableOpacity
+            style={[styles.methodToggleBtn, loginMethod === 'phone' && styles.methodToggleBtnActive]}
+            onPress={() => { setLoginMethod('phone'); setIdentifier(''); setErrorMessage(''); }}
+          >
+            <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>Phone</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.methodToggleBtn, loginMethod === 'email' && styles.methodToggleBtnActive]}
+            onPress={() => { setLoginMethod('email'); setIdentifier(''); setErrorMessage(''); }}
+          >
+            <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>Email</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.formContainer}>
+          {loginMethod === 'phone' ? (
+            <View style={styles.phoneInputContainer}>
+              <View style={styles.phonePrefix}><Text style={styles.phonePrefixText}>+237</Text></View>
+              <TextInput
+                placeholder="Phone Number (e.g. 6xxxxxxxx)"
+                style={styles.phoneInput}
+                placeholderTextColor={colors.textSecondary}
+                value={identifier}
+                onChangeText={handleIdentifierChange}
+                keyboardType="phone-pad"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="tel"
+                editable={!loading}
+                maxLength={9}
+              />
+            </View>
+          ) : (
+            <View style={styles.phoneInputContainer}>
+              <TextInput
+                placeholder="Email Address"
+                style={styles.phoneInput}
+                placeholderTextColor={colors.textSecondary}
+                value={identifier}
+                onChangeText={handleIdentifierChange}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                editable={!loading}
+              />
+            </View>
+          )}
+
+          <View style={styles.passwordContainer}>
+            <TextInput
+              placeholder="Password"
+              style={styles.passwordInput}
+              placeholderTextColor={colors.textSecondary}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              autoComplete="password"
+              textContentType="password"
+              editable={!loading}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              disabled={loading}
+              style={styles.eyeButton}
+            >
+              <Ionicons name={showPassword ? 'eye-off' : 'eye'} size={20} color={colors.textSecondary} />
+            </TouchableOpacity>
+          </View>
+
+          <ButtonPrimary
+            title={loading ? 'Signing In...' : 'Sign In'}
+            onPress={handleSignIn}
+            disabled={loading}
+          />
+
+          {loginMethod === 'email' && (
+            <TouchableOpacity
+              onPress={handleMagicLink}
+              disabled={loading}
+              style={styles.magicLinkBtn}
+            >
+              <Text style={styles.magicLinkBtnText}>Or send me a Magic Link (No password)</Text>
+            </TouchableOpacity>
+          )}
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.divider} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.divider} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.googleButton}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+          >
+            <Ionicons name="logo-google" size={20} color={colors.text} />
+            <Text style={styles.googleButtonText}>Continue with Google</Text>
+          </TouchableOpacity>
+
+          {loading && <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />}
+
+          {errorMessage ? <Text style={styles.errorText}>{errorMessage}</Text> : null}
+
+          <View style={styles.linksContainer}>
+            <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
+              <Text style={styles.linkText}>Forgot Password?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </ScrollView>
+
+      {/* Footer */}
+      <View style={styles.footer}>
+        <View style={styles.brandingWrapper}>
+          <DiraBranding />
+        </View>
+
+        <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUp')}>
+          <Text style={styles.switchText}>Don't have an account? <Text style={styles.link}>Sign Up</Text></Text>
+        </TouchableOpacity>
+
+        <View style={styles.languageWrapper}>
+          <LanguageSelector />
+        </View>
+      </View>
+    </View>
+  );
 };
 
-module.exports = config;
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { flexGrow: 1, padding: 24, paddingBottom: 80 },
+  formContainer: { width: '100%' },
+  header: {
+    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+    alignItems: 'center',
+  },
+  title: { fontSize: 32, fontWeight: 'bold', textAlign: 'center', color: colors.primary },
+  subtitle: { fontSize: 16, textAlign: 'center', color: colors.textSecondary, marginTop: 8 },
+  methodToggleContainer: { flexDirection: 'row', backgroundColor: colors.card, borderRadius: 12, padding: 4, marginVertical: 24, marginHorizontal: 0 },
+  methodToggleBtn: { flex: 1, paddingVertical: 10, borderRadius: 8, alignItems: 'center' },
+  methodToggleBtnActive: { backgroundColor: colors.background, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.1, shadowRadius: 2, elevation: 2 },
+  methodToggleText: { fontSize: 14, fontWeight: '600', color: colors.textSecondary },
+  methodToggleTextActive: { color: colors.primary },
+  phoneInputContainer: { flexDirection: 'row', alignItems: 'center', marginBottom: 16, borderWidth: 1, borderColor: colors.border, borderRadius: 12, overflow: 'hidden', backgroundColor: colors.inputBg },
+  phonePrefix: { paddingHorizontal: 16, paddingVertical: 16, backgroundColor: colors.card, borderRightWidth: 1, borderRightColor: colors.border },
+  phonePrefixText: { fontSize: 16, fontWeight: '600', color: colors.text },
+  phoneInput: { flex: 1, padding: 16, fontSize: 16, color: colors.text },
+  passwordContainer: { flexDirection: 'row', alignItems: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, marginBottom: 24, backgroundColor: colors.inputBg },
+  passwordInput: { flex: 1, padding: 16, fontSize: 16, color: colors.text },
+  eyeButton: { padding: 16 },
+  dividerContainer: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
+  divider: { flex: 1, height: 1, backgroundColor: colors.border },
+  dividerText: { marginHorizontal: 16, color: colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  googleButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 16, paddingVertical: 14, backgroundColor: colors.background },
+  googleButtonText: { marginLeft: 12, fontSize: 16, fontWeight: '600', color: colors.text },
+  loader: { marginTop: 16 },
+  linksContainer: { flexDirection: 'row', justifyContent: 'center', marginTop: 16 },
+  linkText: { color: colors.primary, fontWeight: '600', fontSize: 14 },
+  magicLinkBtn: { marginTop: 12, paddingVertical: 10, alignItems: 'center' },
+  magicLinkBtnText: { color: colors.textSecondary, fontSize: 14, textDecorationLine: 'underline' },
+  signUpLink: { marginBottom: 2, alignItems: 'center' },
+  switchText: { textAlign: 'center', fontSize: 13, color: colors.textSecondary },
+  link: { color: colors.primary, fontWeight: '600' },
+  errorText: {
+    color: '#fff',
+    backgroundColor: colors.error,
+    padding: 12,
+    borderRadius: 8,
+    textAlign: 'center',
+    marginTop: 16,
+    fontSize: 14,
+    fontWeight: '600',
+    overflow: 'hidden'
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: colors.footerBg,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    paddingVertical: 8,
+  },
+  brandingWrapper: { marginTop: 0, marginBottom: 2 },
+  languageWrapper: { paddingBottom: Platform.OS === 'ios' ? 10 : 5 },
+});
+
+export default SignInScreen;
 </file>
 
 <file path="src/screens/landlord/ListingDetailsScreen.tsx">
@@ -31939,20 +28791,21 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     }
   };
 
-  const handleShare = async () => {
-    try {
-      const url = Platform.OS === 'web'
-        ? `${window.location.origin}/listing/${listingId}`
-        : `dhub://listing/${listingId}`;
-      await Share.share({
-        message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
-        url: url,
-        title: listing?.title,
-      });
-    } catch (error: any) {
-      console.log('Error sharing:', error.message);
-    }
-  };
+const handleShare = async () => {
+  try {
+    const url = Platform.OS === 'web'
+      ? `https://dhubweb.diracmr.com/listing/${listingId}`  // Branded web URL
+      : `dhub://listing/${listingId}`;                      // Deep link for native
+
+    await Share.share({
+      message: `Check out this listing on DHUB! ${listing?.title} - ${listing?.city}\n${url}`,
+      url: url,
+      title: listing?.title,
+    });
+  } catch (error: any) {
+    console.log('Error sharing:', error.message);
+  }
+};
 
   const handleEdit = () => navigation.navigate('EditListing', { listingId });
 
@@ -32534,370 +29387,4160 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 export default ListingDetailsScreen;
 </file>
 
-<file path="src/screens/student/ProfileScreen.tsx">
-// src/screens/student/ProfileScreen.tsx
-import { Ionicons } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useNavigation } from "@react-navigation/native";
-import React, { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+<file path="src/screens/landlord/UploadListingScreen.tsx">
+// src/screens/landlord/UploadListingScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import * as ImagePicker from 'expo-image-picker';
+import * as VideoThumbnails from 'expo-video-thumbnails';
+import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
+  ActivityIndicator,
   Alert,
+  Dimensions,
+  Image,
   KeyboardAvoidingView,
-  Linking,
-  Modal,
   Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View
-} from "react-native";
-import { useTheme } from "../../context/ThemeContext";
-import { useAuth } from "../../hooks/useAuth";
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import MapPickerModal from '../../components/MapPickerModal';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { MediaItem } from '../../types';
+import { requestLocationPermission } from '../../utils/location';
 import { supabase } from '../../utils/supabaseClient';
+// ✅ FIX: import from the conditional upload (not upload.native)
+import { uploadListingMedia } from '../../utils/upload';
 
-export default function ProfileScreen() {
-  const navigation = useNavigation();
-  const { user, signOut } = useAuth();
-  const { t, i18n } = useTranslation();
-  const { mode, setThemeMode, colors } = useTheme();
+const { width } = Dimensions.get('window');
+
+// ─── Web‑safe alert helper ───────────────────────────────────────────────
+const showAlert = (title: string, message?: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    const msg = message ? `${title}\n${message}` : title;
+    window.alert(msg);
+    // On web, execute the first button's onPress handler automatically since window.alert is blocking
+    if (buttons && buttons.length > 0 && buttons[0].onPress) {
+      buttons[0].onPress();
+    }
+    return;
+  }
+  Alert.alert(title, message, buttons);
+};
+
+const UploadListingScreen: React.FC = () => {
+  const navigation = useNavigation<any>();
+  const { user } = useAuth();
+  const { t } = useTranslation();
+  const scrollViewRef = useRef<ScrollView>(null);
+
   const [loading, setLoading] = useState(false);
+  const [showMap, setShowMap] = useState(false);
+  const [mapLoading, setMapLoading] = useState(false);
+  const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number[]>([]);
 
-  const [fullName, setFullName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [momo, setMomo] = useState("");
-  const [age, setAge] = useState("");
-  const [profession, setProfession] = useState("");
-  const [language, setLanguage] = useState<"eng" | "fren" | "pidgin">("eng");
+  const { colors: themeColors, isDark } = useTheme();
 
-  const [changePasswordVisible, setChangePasswordVisible] = useState(false);
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
+  const colors = React.useMemo(() => ({
+    background: themeColors.background,
+    card: themeColors.card,
+    border: themeColors.border,
+    primary: themeColors.primary,
+    text: themeColors.text,
+    textSecondary: themeColors.textSecondary,
+    inputBg: isDark ? '#2A2A2A' : '#f0f0f0',
+    inputFocusedBg: isDark ? '#333333' : '#ffffff',
+  }), [themeColors, isDark]);
 
-  const fetchUserData = async () => {
-    if (!user) return;
-    setLoading(true);
-    const { data, error } = await supabase
-      .from("users")
-      .select("*")
-      .eq("id", user.id)
-      .single();
+  const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
-    setLoading(false);
-    if (error) return Alert.alert(t('common.error'), error.message);
+  const [form, setForm] = useState({
+    title: '',
+    description: '',
+    price: '',
+    address: '',
+    city: '',
+    rooms: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
+    terms: '',
+    listing_type: 'apartment',
+    stay_type: 'long_term',
+    price_unit: 'per_month' as 'per_month' | 'per_night',
+  });
 
-    setFullName(data.full_name ?? "");
-    setEmail(data.email ?? "");
-    setPhone(data.phone ?? "");
-    setMomo(data.momo ?? "");
-    const savedLang = (data.preferred_language as "eng" | "fren" | "pidgin") ?? "eng";
-    setLanguage(savedLang);
-    // Fetch student profile details
-    const { data: studentData } = await supabase
-      .from("student_profiles")
-      .select("*")
-      .eq("user_id", user.id)
-      .single();
-
-    if (studentData) {
-      setAge(studentData.age ? String(studentData.age) : "");
-      setProfession(studentData.profession ?? "");
-    }
-
-    // Sync i18n with stored preference on load
-    if (i18n.language !== savedLang) {
-      i18n.changeLanguage(savedLang);
-    }
+  const handleListingTypeChange = (value: string) => {
+    const isDailyType = value === 'guest_house' || value === 'hotel';
+    setForm(p => ({
+      ...p,
+      listing_type: value,
+      price_unit: isDailyType ? 'per_night' : p.price_unit,
+      stay_type: isDailyType ? 'short_term' : p.stay_type,
+    }));
   };
+
+  const LISTING_TYPES = [
+    { label: 'Room', value: 'room' },
+    { label: 'Studio', value: 'studio' },
+    { label: 'Apartment', value: 'apartment' },
+    { label: 'Guest House', value: 'guest_house' },
+    { label: 'Hotel', value: 'hotel' },
+  ];
+
+  const STAY_TYPES = [
+    { label: 'Short Term', value: 'short_term' },
+    { label: 'Long Term', value: 'long_term' },
+    { label: 'Both', value: 'both' },
+  ];
 
   useEffect(() => {
-    fetchUserData();
-  }, [user]);
+    if (!form.terms || form.terms.trim().length === 0) {
+      setForm((p) => ({ ...p, terms: t('booking.default_terms_template') }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const validateEmail = (e: string) =>
-    /^(([^<>()[\]\\.,;:\s@"]+(.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@(([^<>()[\]\\.,;:\s@"]+\.)+[^<>()[\]\\.,;:\s@"]{2,})$/i.test(e);
-  const validateMomo = (m: string) => /^\d{9}$/.test(m);
+  const [media, setMedia] = useState<MediaItem[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
 
-  const handleLanguageToggle = async (next: "eng" | "fren" | "pidgin") => {
-    setLanguage(next);
-    i18n.changeLanguage(next);
+  const handleInputFocus = (inputName: string) => {
+    setFocusedInput(inputName);
   };
 
-  const handleSaveProfile = async () => {
-    if (!fullName.trim()) return Alert.alert(t('common.error'), t('profile.full_name') + " is required");
-    if (email && !validateEmail(email)) return Alert.alert(t('common.error'), "Invalid email format");
-    if (!validateMomo(momo)) return Alert.alert(t('common.error'), "Momo must be 9 digits");
-    if (!age || isNaN(Number(age))) return Alert.alert(t('common.error'), "Valid Age is required for verification");
-    if (!profession.trim()) return Alert.alert(t('common.error'), "Profession/Level is required for verification");
-    if (!user) return Alert.alert(t('common.error'), "User session missing");
+  const pickMedia = async () => {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      showAlert(
+        'Permission Needed',
+        'Enable media permissions to upload images and videos.'
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ['images', 'videos'],
+      allowsMultipleSelection: true,
+      quality: 0.8,
+    });
+
+    if (!result.canceled && result.assets.length > 0) {
+      const newMedia: MediaItem[] = [];
+
+      for (const asset of result.assets) {
+        let thumbUrl = asset.uri;
+
+        if (asset.type === 'video') {
+          try {
+            const { uri } = await VideoThumbnails.getThumbnailAsync(asset.uri, { time: 1000 });
+            thumbUrl = uri;
+          } catch (err) {
+            console.warn('Failed to generate video thumbnail:', err);
+          }
+        }
+
+        newMedia.push({
+          type: asset.type as 'image' | 'video',
+          url: asset.uri,
+          thumbUrl,
+          mimeType: asset.mimeType,
+        });
+      }
+
+      setMedia((prev) => [...prev, ...newMedia]);
+    }
+  };
+
+  const removeMedia = (index: number) => {
+    setMedia((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const openLocationPicker = async () => {
+    setMapLoading(true);
+    const loc = await requestLocationPermission();
+    if (!loc) {
+      setMapLoading(false);
+      return;
+    }
+    setShowMap(true);
+  };
+
+  const generateMarker = (text: string) => {
+    const ts = Date.now().toString().slice(-6);
+    const userIdPart = user?.id?.slice(0, 6) || 'xxxxxx';
+    return `${ts}-${userIdPart}`;
+  };
+
+  const handleSubmit = async () => {
+    if (!user) return;
+
+    // ─── Validation ────────────────────────────────────────────────
+    if (!form.title?.trim()) {
+      showAlert('Missing Information', 'Please enter a property title.');
+      return;
+    }
+    if (!form.price || isNaN(Number(form.price)) || Number(form.price) <= 0) {
+      showAlert('Missing Information', 'Please enter a valid price.');
+      return;
+    }
+    if (!form.city?.trim()) {
+      showAlert('Missing Information', 'Please enter a city.');
+      return;
+    }
+    if (!form.address?.trim()) {
+      showAlert('Missing Information', 'Please enter an address.');
+      return;
+    }
+    if (form.latitude === null || form.longitude === null) {
+      showAlert('Location Required', 'Please select a location on the map.');
+      return;
+    }
+    if (!form.terms || form.terms.trim().length < 10) {
+      showAlert('Terms Required', 'Please provide Terms & Conditions (at least 10 characters).');
+      return;
+    }
+    // ─── End validation ──────────────────────────────────────────
 
     setLoading(true);
+    try {
+      const marker = generateMarker(form.terms);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    if (!sessionData?.session) {
-      setLoading(false);
-      return Alert.alert(t('profile.session_missing'), t('profile.session_missing_msg'));
-    }
+      // 1. Create the listing record first to get a valid ID
+      const { data: listing, error: insertError } = await supabase
+        .from('listings')
+        .insert({
+          landlord_id: user.id,
+          title: form.title,
+          description: form.description,
+          price: Number(form.price),
+          address: form.address,
+          city: form.city,
+          latitude: form.latitude,
+          longitude: form.longitude,
+          rooms: form.rooms ? Number(form.rooms) : null,
+          media: [],
+          available: true,
+          terms_text: form.terms,
+          terms_marker: marker,
+          listing_type: form.listing_type,
+          stay_type: form.stay_type,
+          price_unit: form.price_unit,
+        })
+        .select()
+        .single();
 
-    if (email !== user.email) {
-      const { error: authError } = await supabase.auth.updateUser({ email });
-      if (authError) {
-        setLoading(false);
-        return Alert.alert(t('common.error'), authError.message);
+      if (insertError || !listing) {
+        throw new Error(insertError?.message || "Failed to create listing record");
       }
-      Alert.alert(
-        t('profile.verification_required'),
-        t('profile.verification_msg'),
-        [
-          { text: t('common.cancel'), style: "cancel" },
-          { text: t('profile.open_gmail'), onPress: () => Linking.openURL('googlegmail://').catch(() => Linking.openURL('mailto:')) }
-        ]
-      );
-    }
 
-    const { error } = await supabase
-      .from("users")
-      .update({
-        full_name: fullName,
-        email: email || null,
-        momo,
-        preferred_language: language,
-      })
-      .eq("id", user.id);
+      const listingId = listing.id;
 
-    const { error: studentError } = await supabase
-      .from("student_profiles")
-      .upsert({
-        user_id: user.id,
-        age: parseInt(age, 10),
-        profession,
-        contact_number: momo
+      // 2. Prepare atomic media uploads using the listingId
+      setUploadProgress(new Array(media.length).fill(0));
+      abortControllerRef.current = new AbortController();
+
+      const uploadPromises = media.map(async (item, index) => {
+        const ext = item.type === 'image' ? 'webp' : 'mp4';
+        const fileName = `listings/${listingId}/${Date.now()}-${Math.random().toString(36).substring(7)}.${ext}`;
+        
+        return uploadListingMedia(
+          item.url,
+          fileName,
+          item.type,
+          listingId,
+          item.type === 'video' ? item.thumbUrl : undefined,
+          item.mimeType,
+        (progress: number) => {
+          setUploadProgress(prev => {
+            const newProgress = [...prev];
+            newProgress[index] = progress;
+            return newProgress;
+          });
+        },
+          abortControllerRef.current!.signal
+        );
       });
 
-    if (!error && !studentError) {
-      await AsyncStorage.setItem("appLanguage", language);
-    }
+      // Execute all uploads in parallel
+      const uploadedMedia = await Promise.all(uploadPromises);
 
-    setLoading(false);
-    if (error) return Alert.alert(t('common.error'), error.message);
-    if (studentError) return Alert.alert(t('common.error'), studentError.message);
+      // 3. Final commit: update the listing with the uploaded media array
+      const { error: updateError } = await supabase
+        .from('listings')
+        .update({ media: uploadedMedia })
+        .eq('id', listingId);
 
-    Alert.alert(t('common.success'), t('profile.saved'));
-    fetchUserData();
-  };
+      if (updateError) {
+        throw new Error("Media upload succeeded, but failed to link to property: " + updateError.message);
+      }
 
-  const handleLogout = async () => {
-    try {
-      setLoading(true);
-      await signOut();
-    } catch {
-      Alert.alert(t('common.error'), "Logout failed. Please try again.");
+      setLoading(false);
+
+      showAlert('Success!', 'Your property listing has been created successfully.', [
+        { text: 'OK', onPress: () => navigation.navigate('ListingDetails', { listingId }) },
+      ]);
+    } catch (err: any) {
+      console.error('Error creating listing:', err);
+      showAlert('Error', err.message || 'Failed to create listing. Please try again.');
+      abortControllerRef.current = null;
       setLoading(false);
     }
   };
 
-  const handleUpdatePassword = async () => {
-    if (!newPassword || !confirmPassword) return Alert.alert(t('common.error'), "Please fill in all fields");
-    if (newPassword !== confirmPassword) return Alert.alert(t('common.error'), "Passwords do not match");
-    if (newPassword.length < 6) return Alert.alert(t('common.error'), "Password must be at least 6 characters");
-
-    setLoading(true);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setLoading(false);
-
-    if (error) {
-      Alert.alert(t('common.error'), error.message);
-    } else {
-      Alert.alert(t('common.success'), "Password updated successfully");
-      setChangePasswordVisible(false);
-      setNewPassword("");
-      setConfirmPassword("");
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
     }
   };
 
-  const handleDeleteAccount = () => {
-    Alert.alert(
-      t('profile.delete_confirm_title'),
-      t('profile.delete_confirm_msg'),
-      [
-        { text: t('common.cancel'), style: "cancel" },
-        {
-          text: t('profile.delete'),
-          style: "destructive",
-          onPress: async () => {
-            if (!user) return;
-            setLoading(true);
-            const { error } = await supabase.from('users').update({ is_active: false }).eq('id', user.id);
-            if (error) {
+  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => (
+    <View style={styles.mediaItemWrapper}>
+      <View style={styles.imageContainer}>
+        <Image source={{ uri: item.thumbUrl }} style={styles.mediaImage} />
+        {item.type === 'video' && (
+          <View style={styles.videoIconContainer}>
+            <Ionicons name="play-circle" size={32} color={colors.text} />
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.removeImageBtn}
+          onPress={() => removeMedia(index)}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="close" size={18} color={colors.text} />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.mediaBadge}>
+        <Text style={styles.mediaBadgeText}>{index + 1}</Text>
+      </View>
+    </View>
+  );
+
+  return (
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
+      
+      <View style={styles.header}>
+        <TouchableOpacity 
+          onPress={() => navigation.goBack()} 
+          style={styles.backButton}
+          activeOpacity={0.7}
+        >
+          <Ionicons name="arrow-back" size={24} color={colors.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Add New Property</Text>
+        <View style={styles.headerRight} />
+      </View>
+
+      <MapPickerModal
+        visible={showMap}
+        onClose={() => {
+          setShowMap(false);
+          setMapLoading(false);
+        }}
+        onLocationSelected={(coords) => {
+          setForm((prev) => ({
+            ...prev,
+            latitude: coords.latitude,
+            longitude: coords.longitude,
+          }));
+          setShowMap(false);
+          setMapLoading(false);
+        }}
+      />
+
+      <KeyboardAvoidingView 
+        style={{ flex: 1 }} 
+        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      >
+        <ScrollView 
+          ref={scrollViewRef}
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+            {/* Media Section */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="images-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Property Photos & Videos</Text>
+              </View>
+              <Text style={styles.sectionSubtitle}>
+                Add up to 10 photos or videos of your property
+              </Text>
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false} 
+                contentContainerStyle={styles.mediaList}
+              >
+                <TouchableOpacity 
+                  style={styles.addPhotoBtn} 
+                  onPress={pickMedia}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="camera-outline" size={32} color={colors.primary} />
+                  <Text style={styles.addPhotoText}>Add Media</Text>
+                </TouchableOpacity>
+
+                {media.map((item, index) => (
+                  <View key={`${item.url}-${index}`}>
+                    {renderMediaItem({ item, index })}
+                  </View>
+                ))}
+              </ScrollView>
+            </View>
+
+            {/* Basic Info */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="home-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Basic Information</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Listing Type <Text style={styles.requiredStar}>*</Text></Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                  {LISTING_TYPES.map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[styles.chip, form.listing_type === type.value && styles.chipSelected]}
+                      onPress={() => handleListingTypeChange(type.value)}
+                    >
+                      <Text style={[styles.chipText, form.listing_type === type.value && styles.chipTextSelected]}>
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Stay Type <Text style={styles.requiredStar}>*</Text></Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
+                  {STAY_TYPES.map((type) => (
+                    <TouchableOpacity
+                      key={type.value}
+                      style={[styles.chip, form.stay_type === type.value && styles.chipSelected]}
+                      onPress={() => setForm(p => ({ ...p, stay_type: type.value }))}
+                    >
+                      <Text style={[styles.chipText, form.stay_type === type.value && styles.chipTextSelected]}>
+                        {type.label}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              </View>
+              
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Property Title <Text style={styles.requiredStar}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, focusedInput === 'title' && styles.inputFocused]}
+                  value={form.title}
+                  onChangeText={(t) => setForm((p) => ({ ...p, title: t }))}
+                  placeholder="e.g., Modern Apartment in Bonapriso"
+                  placeholderTextColor={colors.textSecondary}
+                  onFocus={() => handleInputFocus('title')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Description</Text>
+                <TextInput
+                  style={[styles.input, styles.textArea, focusedInput === 'description' && styles.inputFocused]}
+                  value={form.description}
+                  onChangeText={(t) => setForm((p) => ({ ...p, description: t }))}
+                  placeholder="Describe your property's features, location, and amenities..."
+                  placeholderTextColor={colors.textSecondary}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                  onFocus={() => handleInputFocus('description')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+              </View>
+
+              <View style={styles.row}>
+                <View style={[styles.inputGroup, styles.halfWidthLeft]}>
+                  <Text style={styles.label}>
+                    {form.price_unit === 'per_night' ? 'Daily Price (FCFA)' : 'Monthly Price (FCFA)'}{' '}
+                    <Text style={styles.requiredStar}>*</Text>
+                  </Text>
+                  <TextInput
+                    style={[styles.input, focusedInput === 'price' && styles.inputFocused]}
+                    value={form.price}
+                    onChangeText={(t) => setForm((p) => ({ ...p, price: t }))}
+                    placeholder={form.price_unit === 'per_night' ? '15000' : '150000'}
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    onFocus={() => handleInputFocus('price')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                  {/* Price Unit Toggle */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+                    {(['per_month', 'per_night'] as const).map((unit) => (
+                      <TouchableOpacity
+                        key={unit}
+                        style={[
+                          styles.chip,
+                          { paddingHorizontal: 10, paddingVertical: 6 },
+                          form.price_unit === unit && styles.chipSelected,
+                        ]}
+                        onPress={() => setForm(p => ({ ...p, price_unit: unit }))}
+                      >
+                        <Text style={[styles.chipText, { fontSize: 11 }, form.price_unit === unit && styles.chipTextSelected]}>
+                          {unit === 'per_month' ? '/ Month' : '/ Night'}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </View>
+
+                <View style={[styles.inputGroup, styles.halfWidthRight]}>
+                  <Text style={styles.label}>Number of Rooms</Text>
+                  <TextInput
+                    style={[styles.input, focusedInput === 'rooms' && styles.inputFocused]}
+                    value={form.rooms}
+                    onChangeText={(t) => setForm((p) => ({ ...p, rooms: t }))}
+                    placeholder="3"
+                    placeholderTextColor={colors.textSecondary}
+                    keyboardType="numeric"
+                    onFocus={() => handleInputFocus('rooms')}
+                    onBlur={() => setFocusedInput(null)}
+                  />
+                </View>
+              </View>
+            </View>
+
+            {/* Location */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="location-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Location</Text>
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>Street Address <Text style={styles.requiredStar}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, focusedInput === 'address' && styles.inputFocused]}
+                  value={form.address}
+                  onChangeText={(t) => setForm((p) => ({ ...p, address: t }))}
+                  placeholder="123 Rue de la Paix"
+                  placeholderTextColor={colors.textSecondary}
+                  onFocus={() => handleInputFocus('address')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+              </View>
+
+              <View style={styles.inputGroup}>
+                <Text style={styles.label}>City <Text style={styles.requiredStar}>*</Text></Text>
+                <TextInput
+                  style={[styles.input, focusedInput === 'city' && styles.inputFocused]}
+                  value={form.city}
+                  onChangeText={(t) => setForm((p) => ({ ...p, city: t }))}
+                  placeholder="Douala"
+                  placeholderTextColor={colors.textSecondary}
+                  onFocus={() => handleInputFocus('city')}
+                  onBlur={() => setFocusedInput(null)}
+                />
+              </View>
+
+              <TouchableOpacity
+                style={[styles.locationPicker, mapLoading && styles.submitBtnDisabled]}
+                onPress={openLocationPicker}
+                disabled={mapLoading}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="map-outline" size={22} color={colors.primary} />
+                {mapLoading ? (
+                  <ActivityIndicator style={{ marginLeft: 12 }} color={colors.primary} />
+                ) : form.latitude && form.longitude ? (
+                  <Text style={styles.locationPickerText}>
+                    Selected: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
+                  </Text>
+                ) : (
+                  <Text style={styles.locationPickerText}>Tap to select location on map</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* Terms */}
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="document-text-outline" size={20} color={colors.primary} />
+                <Text style={styles.sectionTitle}>Terms & Conditions <Text style={styles.requiredStar}>*</Text></Text>
+              </View>
+              
+              <TextInput
+                style={[styles.input, styles.termsArea, focusedInput === 'terms' && styles.inputFocused]}
+                value={form.terms}
+                onChangeText={(t) => setForm((p) => ({ ...p, terms: t }))}
+                multiline
+                numberOfLines={6}
+                placeholder="Enter your terms and conditions..."
+                placeholderTextColor={colors.textSecondary}
+                textAlignVertical="top"
+                onFocus={() => handleInputFocus('terms')}
+                onBlur={() => setFocusedInput(null)}
+              />
+              
+              <View style={styles.termsHint}>
+                <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
+                <Text style={styles.hintText}>
+                  Students will review and agree to these terms before booking
+                </Text>
+              </View>
+            </View>
+
+            {/* Submit */}
+            <TouchableOpacity
+              style={[styles.submitBtn, loading && styles.submitBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={loading}
+              activeOpacity={0.8}
+            >
+              {loading ? (
+                <ActivityIndicator size="small" color={colors.background} />
+              ) : (
+                <>
+                  <Ionicons name="checkmark-circle-outline" size={20} color={colors.background} />
+                  <Text style={styles.submitBtnText}>Create Property Listing</Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            <View style={styles.bottomPadding} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* Upload Progress Overlay */}
+      {loading && (
+        <View style={styles.overlay}>
+          <View style={styles.progressCard}>
+            <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 16 }} />
+            <Text style={styles.progressTitle}>Uploading Media...</Text>
+            <Text style={styles.progressSubtitle}>
+              Please do not close the app or turn off your screen.
+            </Text>
+
+            <View style={{ width: '100%' }}>
+              <View style={styles.progressBarContainer}>
+                <Text style={styles.progressLabel}>
+                  Uploading {media.length} file{media.length !== 1 ? 's' : ''}... 
+                  ({( (uploadProgress.reduce((a,b)=>a+b,0) / Math.max(1, media.length)) * 100 ).toFixed(0)}%)
+                </Text>
+                <View style={styles.progressBarTrack}>
+                  <View style={[styles.progressBarFill, { width: `${(uploadProgress.reduce((a,b)=>a+b,0) / Math.max(1, media.length)) * 100}%` }]} />
+                </View>
+              </View>
+              
+              <TouchableOpacity 
+                style={[styles.submitBtn, { backgroundColor: '#E74C3C', marginTop: 24, width: '100%' }]} 
+                onPress={handleCancelUpload}
+              >
+                <Text style={styles.submitBtnText}>Cancel Upload</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      )}
+    </SafeAreaView>
+  );
+};
+
+const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
+  container: { 
+    flex: 1, 
+    backgroundColor: colors.background 
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 60,
+    paddingBottom: 20,
+    backgroundColor: colors.background,
+    borderBottomWidth: 1,
+    borderBottomColor: colors.border,
+  },
+  backButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: colors.card,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerTitle: { 
+    color: colors.text, 
+    fontSize: 20, 
+    fontWeight: '600',
+    letterSpacing: 0.5,
+  },
+  headerRight: {
+    width: 40,
+  },
+  keyboardView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  content: {
+    padding: 16,
+    paddingBottom: 200,
+  },
+  section: {
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  sectionTitle: { 
+    color: colors.text, 
+    fontSize: 18, 
+    fontWeight: '600',
+    letterSpacing: 0.3,
+  },
+  sectionSubtitle: {
+    color: colors.textSecondary,
+    fontSize: 14,
+    marginBottom: 16,
+    marginLeft: 28,
+  },
+  inputGroup: { 
+    marginBottom: 16 
+  },
+  label: { 
+    color: colors.text, 
+    fontSize: 14, 
+    fontWeight: '600', 
+    marginBottom: 8,
+    letterSpacing: 0.3,
+  },
+  requiredStar: {
+    color: colors.primary,
+    fontSize: 14,
+  },
+  input: {
+    backgroundColor: colors.inputBg,
+    borderRadius: 12,
+    padding: 16,
+    color: colors.text,
+    fontSize: 16,
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  inputFocused: {
+    borderColor: colors.primary,
+    backgroundColor: colors.inputFocusedBg,
+  },
+  chipScroll: {
+    gap: 8,
+    paddingVertical: 4,
+  },
+  chip: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.inputBg,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  chipSelected: {
+    backgroundColor: colors.primary,
+    borderColor: colors.primary,
+  },
+  chipText: {
+    color: colors.text,
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  chipTextSelected: {
+    color: colors.background,
+  },
+  textArea: { 
+    minHeight: 100,
+    textAlignVertical: 'top',
+  },
+  termsArea: {
+    minHeight: 150,
+    textAlignVertical: 'top',
+  },
+  row: { 
+    flexDirection: 'row',
+    marginHorizontal: -4,
+  },
+  halfWidthLeft: {
+    flex: 1,
+    marginRight: 4,
+  },
+  halfWidthRight: {
+    flex: 1,
+    marginLeft: 4,
+  },
+  mediaList: {
+    paddingRight: 16,
+    gap: 8,
+  },
+  mediaItemWrapper: {
+    position: 'relative',
+    marginRight: 12,
+  },
+  addPhotoBtn: {
+    width: 120,
+    height: 120,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    borderStyle: 'dashed',
+    borderRadius: 16,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: colors.card,
+    marginRight: 12,
+  },
+  addPhotoText: { 
+    color: colors.primary, 
+    fontSize: 12, 
+    marginTop: 8,
+    fontWeight: '500',
+  },
+  imageContainer: { 
+    position: 'relative', 
+    width: 120, 
+    height: 120, 
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  mediaImage: { 
+    width: 120, 
+    height: 120, 
+    borderRadius: 16,
+  },
+  removeImageBtn: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    borderRadius: 16,
+    width: 28,
+    height: 28,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: colors.primary,
+  },
+  videoIconContainer: {
+    position: 'absolute',
+    top: 44,
+    left: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  mediaBadge: {
+    position: 'absolute',
+    bottom: 8,
+    left: 8,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  mediaBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  bottomPadding: {
+    height: 60,
+  },
+  submitBtnDisabled: {
+    opacity: 0.7,
+  },
+  submitBtn: {
+    backgroundColor: colors.primary,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 16,
+    borderRadius: 16,
+    gap: 8,
+    marginTop: 8,
+  },
+  submitBtnText: {
+    color: colors.background,
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
+  locationPicker: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: colors.inputBg,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  locationPickerText: {
+    flex: 1,
+    color: colors.text,
+    fontSize: 14,
+    marginLeft: 12,
+  },
+  termsHint: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 12,
+    paddingHorizontal: 4,
+  },
+  hintText: {
+    flex: 1,
+    color: colors.textSecondary,
+    fontSize: 12,
+  },
+  overlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  progressCard: {
+    width: '85%',
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    padding: 24,
+    alignItems: 'center',
+  },
+  progressTitle: {
+    color: colors.text,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginBottom: 8,
+  },
+  progressSubtitle: {
+    color: colors.primary,
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 24,
+    fontWeight: '500',
+  },
+  progressBarContainer: {
+    width: '100%',
+    marginBottom: 16,
+  },
+  progressLabel: {
+    color: colors.textSecondary,
+    fontSize: 12,
+    marginBottom: 8,
+  },
+  progressBarTrack: {
+    height: 8,
+    backgroundColor: colors.inputBg,
+    borderRadius: 4,
+    overflow: 'hidden',
+  },
+  progressBarFill: {
+    height: '100%',
+    backgroundColor: colors.primary,
+    borderRadius: 4,
+  },
+});
+
+export default UploadListingScreen;
+</file>
+
+<file path="src/screens/student/BookingDetails.tsx">
+// src/screens/student/BookingDetails.tsx
+import { Ionicons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { RouteProp, useNavigation, useRoute } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { differenceInDays, format } from "date-fns";
+import * as ImagePicker from 'expo-image-picker';
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import MapView from 'react-native-maps';
+import MapPickerModal from '../../components/MapPickerModal';
+import { SafeAreaView } from "react-native-safe-area-context";
+import FullVideoPlayer from "../../components/FullVideoPlayer";
+import { useTheme } from "../../context/ThemeContext";
+import { useAuth } from "../../hooks/useAuth";
+import { triggerPushNotifications } from '../../hooks/usePushNotifications';
+import { LocationService } from '../../services/LocationService';
+import { StudentStackParamList } from "../../types";
+import { supabase } from '../../utils/supabaseClient';
+import { uploadListingMedia } from '../../utils/upload';
+
+const { width } = Dimensions.get("window");
+
+type BookingDetailsNavProp = NativeStackNavigationProp<StudentStackParamList, "BookingDetails">;
+type BookingDetailsRouteProp = RouteProp<StudentStackParamList, "BookingDetails">;
+
+type MediaItem = {
+  url: string;
+  type: 'image' | 'video';
+  thumbUrl?: string;
+  processing_status?: string;
+};
+
+type ListingType = {
+  id: string;
+  title: string;
+  address: string | null;
+  city: string;
+  price: string;
+  description: string | null;
+  rooms: number | null;
+  media: MediaItem[] | null;
+  terms_text: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  landlord?: {
+    id: string;
+    full_name: string;
+    phone: string;
+  };
+  listing_type?: string | null;
+};
+
+type BookingFull = {
+  id: string;
+  listing_id: string;
+  landlord_id: string;
+  student_id: string;
+  amount: string;
+  start_date: string;
+  end_date: string;
+  status: "pending" | "confirmed" | "cancelled" | "completed";
+  approval_status: "pending" | "approved" | "rejected";
+  payment_status: "pending" | "completed" | "failed";
+  agreed_to_terms: boolean;
+  tenant_confirmation: boolean;
+  landlord_confirmation: boolean;
+  duration_type?: string;
+  total_amount?: number;
+  created_at: string;
+  updated_at: string;
+  caution_fee?: number;
+  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed' | 'refund_pending' | 'forfeited_bypass' | 'refund_queued' | 'refund_paused';
+  rent_payment_status?: string;
+  contract_status?: 'active' | 'grace' | 'expired' | 'renewed' | 'terminated';
+  is_renewal_active?: boolean;
+  listing: ListingType;
+  entry_media?: MediaItem[] | null;
+  exit_media?: MediaItem[] | null;
+};
+
+const STORAGE_KEY_PREFIX = "@booking_";
+const CACHE_DURATION = 5 * 60 * 1000; // Reduced to 5 minutes
+
+export default function BookingDetails() {
+  const { t } = useTranslation();
+  const navigation = useNavigation<BookingDetailsNavProp>();
+  const route = useRoute<BookingDetailsRouteProp>();
+  const { bookingId } = route.params;
+  const { user } = useAuth();
+  const { colors: themeColors, isDark } = useTheme();
+  const COLORS = useMemo(() => ({
+    gold: themeColors.primary,
+    goldLight: isDark ? '#2D2510' : '#F5E7C8',
+    goldDark: themeColors.primary,
+    white: themeColors.card,
+    offWhite: isDark ? '#1A1A1A' : '#F8F9FA',
+    greyDark: themeColors.text,
+    greyMedium: themeColors.textSecondary,
+    greyLight: isDark ? '#2A2A2A' : '#ECF0F1',
+    border: themeColors.border,
+    shadow: '#000000',
+    success: themeColors.success,
+    warning: '#FFD700',
+    danger: themeColors.error,
+    orange: '#FFA500',
+    purple: '#9B59B6',
+    background: themeColors.background,
+  }), [themeColors, isDark]);
+  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
+
+  const [booking, setBooking] = useState<BookingFull | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [uploadingMedia, setUploadingMedia] = useState(false);
+  const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
+
+  // Caution Refund Flow States
+  const [showSurveyModal, setShowSurveyModal] = useState(false);
+  const [cancellationReason, setCancellationReason] = useState<string | null>(null);
+  const [cancellationDetails, setCancellationDetails] = useState('');
+  const [updating, setUpdating] = useState(false);
+  const [showWhyModal, setShowWhyModal] = useState(false);
+  const [mapModalVisible, setMapModalVisible] = useState(false);
+
+  // Dispute States
+  const [disputeText, setDisputeText] = useState('');
+  const [isSubmittingDispute, setIsSubmittingDispute] = useState(false);
+
+  const handleUploadMedia = async (type: 'entry' | 'exit' | 'dispute') => {
+    try {
+      const cameraPermission = await ImagePicker.requestCameraPermissionsAsync();
+      const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!cameraPermission.granted || !libraryPermission.granted) {
+        Alert.alert('Permission Needed', 'Enable camera and media permissions to take and save pictures.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        quality: 0.8,
+        allowsEditing: false,
+      });
+
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        setUploadingMedia(true);
+        const asset = result.assets[0];
+
+        const ext = 'webp';
+        const fileName = `bookings/${bookingId}/${type}_${Date.now()}.${ext}`;
+
+        const uploadedMedia = await uploadListingMedia(
+          asset.uri,
+          fileName,
+          'image',
+          bookingId,
+          undefined,
+          asset.mimeType || 'image/jpeg'
+        );
+
+        const currentMediaArray = ((booking as any)[type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`] as any[]) || [];
+
+        // Ensure max 3 photos for disputes
+        if (type === 'dispute' && currentMediaArray.length >= 3) {
+          Alert.alert('Limit Reached', 'You can only upload up to 3 photos for evidence.');
+          setUploadingMedia(false);
+          return;
+        }
+
+        const newMediaObj = { url: uploadedMedia.url, timestamp: new Date().toISOString() };
+        const updatedArray = [...currentMediaArray, newMediaObj];
+
+        const { error: dbError } = await supabase
+          .from('bookings')
+          .update({ [type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`]: updatedArray } as any)
+          .eq('id', bookingId);
+
+        if (dbError) throw dbError;
+
+        setBooking((prev: any) => ({ ...prev, [type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`]: updatedArray }));
+
+        Alert.alert('Success', `${type === 'entry' ? 'Entry' : (type === 'exit' ? 'Exit' : 'Evidence')} picture captured successfully.`);
+        fetchBookingDetails(true);
+      }
+    } catch (err: any) {
+      console.error(err);
+      Alert.alert('Error', 'Failed to capture media: ' + (err.message || ''));
+    } finally {
+      setUploadingMedia(false);
+    }
+  };
+
+  const handleGoBack = () => {
+    if (navigation.canGoBack()) {
+      navigation.goBack();
+    } else {
+      navigation.navigate("ViewBookingsScreen");
+    }
+  };
+
+  const fetchBookingDetails = useCallback(async (forceRefresh = false) => {
+    if (!user?.id || !bookingId) {
+      setError(!user?.id ? "User not authenticated" : "No booking ID provided");
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      if (!forceRefresh) {
+        const cached = await AsyncStorage.getItem(STORAGE_KEY_PREFIX + bookingId);
+        if (cached) {
+          try {
+            const { data, timestamp } = JSON.parse(cached);
+            if (data?.id) {
+              setBooking(data);
               setLoading(false);
-              return Alert.alert(t('common.error'), error.message);
+
+              if (Date.now() - timestamp > CACHE_DURATION || data.approval_status === 'pending') {
+                fetchBookingDetails(true);
+              }
+              return;
+            } else {
+              await AsyncStorage.removeItem(STORAGE_KEY_PREFIX + bookingId);
             }
-            await signOut();
+          } catch {
+            await AsyncStorage.removeItem(STORAGE_KEY_PREFIX + bookingId);
+          }
+        }
+      }
+
+      const { data, error } = await supabase
+        .from("bookings")
+        .select("*, listings(*, landlord:users!listings_landlord_id_fkey(id, full_name, phone))")
+        .eq("id", bookingId)
+        .eq("student_id", user.id)
+        .single();
+
+      if (error) throw error;
+      if (!data) throw new Error("Booking not found");
+
+      const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
+      const rawMedia = data.listings?.media;
+      const mediaItems: MediaItem[] = Array.isArray(rawMedia)
+        ? rawMedia
+          .filter((m: any) => m?.url && m?.type)
+          .map((m: any) => ({
+            url: m.url.startsWith('/media/') ? `${MEDIA_BASE_URL}${m.url}` : m.url,
+            type: m.type,
+            thumbUrl: m.thumbUrl && m.thumbUrl.startsWith('/media/')
+              ? `${MEDIA_BASE_URL}${m.thumbUrl}`
+              : m.thumbUrl,
+            processing_status: m.processing_status || 'ready',
+          }))
+        : [];
+
+      const bookingData: BookingFull = {
+        ...data,
+        listing: data.listings ? {
+          id: data.listings.id,
+          title: data.listings.title || "Unknown Property",
+          address: data.listings.address || null,
+          city: data.listings.city || "",
+          price: data.listings.price || data.amount,
+          description: data.listings.description || null,
+          rooms: data.listings.rooms || null,
+          media: mediaItems,
+          terms_text: data.listings.terms_text || null,
+          latitude: data.listings.latitude || null,
+          longitude: data.listings.longitude || null,
+          landlord: data.listings.landlord,
+          listing_type: data.listings.listing_type || null,
+        } : {
+          id: data.listing_id,
+          title: "Unknown Property",
+          address: null,
+          city: "",
+          price: data.amount,
+          description: null,
+          rooms: null,
+          media: null,
+          terms_text: null,
+          latitude: null,
+          longitude: null,
+          listing_type: null,
+        }
+      };
+
+      if (bookingData?.id) {
+        await AsyncStorage.setItem(
+          STORAGE_KEY_PREFIX + bookingId,
+          JSON.stringify({
+            data: bookingData,
+            timestamp: Date.now()
+          })
+        );
+      }
+
+      setBooking(bookingData);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch booking");
+
+      const cached = await AsyncStorage.getItem(STORAGE_KEY_PREFIX + bookingId);
+      if (cached) {
+        try {
+          const { data } = JSON.parse(cached);
+          if (data?.id) {
+            setBooking(data);
+            Alert.alert(t('bookings.offline_mode'), t('bookings.offline_msg'));
+          }
+        } catch {
+          // Silent fail
+        }
+      }
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, [bookingId, user?.id, t]);
+
+  useEffect(() => {
+    fetchBookingDetails(false);
+  }, [fetchBookingDetails]);
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    fetchBookingDetails(true);
+  };
+
+  // ── Realtime listener ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!bookingId) return;
+
+    const channel = supabase
+      .channel('booking_details_realtime_' + bookingId)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'bookings',
+          filter: `id=eq.${bookingId}`,
+        },
+        (payload: any) => {
+          const updated = payload.new;
+          setBooking((prev: any) => {
+            if (!prev) return prev;
+            // Update booking state with new data from payload
+            const newBooking = { ...prev, ...updated };
+
+            // Sync with AsyncStorage to avoid stale cache on next load
+            AsyncStorage.setItem(
+              STORAGE_KEY_PREFIX + bookingId,
+              JSON.stringify({
+                data: newBooking,
+                timestamp: Date.now()
+              })
+            );
+
+            return newBooking;
+          });
+
+          if (updated.approval_status === 'rejected' || updated.status === 'cancelled') {
+            Alert.alert('Booking Update', 'Your booking status has changed.');
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [bookingId]);
+
+  // Time remaining calculation
+  let rentTimeRemaining = '';
+  if (booking?.status === 'confirmed' && (booking as any).student_confirmation && (booking as any).landlord_confirmation) {
+    const msLeft = new Date(booking.end_date).getTime() - Date.now();
+    if (msLeft > 0) {
+      const daysLeft = Math.floor(msLeft / (1000 * 60 * 60 * 24));
+      if (daysLeft >= 30) {
+        rentTimeRemaining = `${Math.floor(daysLeft / 30)} Months left`;
+      } else {
+        rentTimeRemaining = `${daysLeft} Days left`;
+      }
+    } else {
+      rentTimeRemaining = 'Expired';
+    }
+  }
+
+  const handlePayNow = () => {
+    if (!booking) return;
+
+    if (Platform.OS === 'web') {
+      navigation.navigate('DownloadAppScreen' as never);
+      return;
+    }
+
+    navigation.navigate('Payments', {
+      listingId: booking.listing_id,
+      bookingId: booking.id,
+      amount: Number(booking.total_amount ?? booking.amount),
+      description: `Booking payment for ${booking.listing?.title || "Property"}`,
+      receiverPhone: booking.listing?.landlord?.phone || "",
+      receiverName: booking.listing?.landlord?.full_name || "",
+      landlordId: booking.landlord_id,
+                  paymentType: 'initial',
+      listingType: booking.listing?.listing_type || 'Apartment',
+    });
+  };
+
+  const handleCompleteRent = () => {
+    if (!booking) return;
+
+    if (Platform.OS === 'web') {
+      navigation.navigate('DownloadAppScreen' as never);
+      return;
+    }
+    const caution = booking.caution_fee ?? 0;
+    const rentBalance = Number(booking.total_amount ?? booking.amount) - caution;
+
+    navigation.navigate('Payments', {
+      listingId: booking.listing_id,
+      bookingId: booking.id,
+      amount: rentBalance,
+      description: `Rent Completion Payment for ${booking.listing?.title || "Property"}`,
+      receiverPhone: booking.listing?.landlord?.phone || "",
+      receiverName: booking.listing?.landlord?.full_name || "",
+      landlordId: booking.landlord_id,
+      paymentType: 'rent_completion',
+      listingType: booking.listing?.listing_type || 'Apartment',
+    } as any);
+  };
+
+  // ── Renewal (Extend Lease) handler ──────────────────────────────────────
+  const RENEWAL_PROCESSING_FEE = 5000;
+  const handleRenewLease = () => {
+    if (!booking) return;
+    Alert.alert(
+      '🔄 Renew Your Lease',
+      `Tap "Proceed" to pay the XAF ${RENEWAL_PROCESSING_FEE.toLocaleString()} Rent Processing Fee. Once confirmed, your lease end date will be extended.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Proceed to Payment',
+          onPress: () => {
+            if (Platform.OS === 'web') {
+              navigation.navigate('DownloadAppScreen' as never);
+              return;
+            }
+            navigation.navigate('Payments', {
+              listingId: booking.listing_id,
+              bookingId: booking.id,
+              amount: RENEWAL_PROCESSING_FEE,
+              description: `Rent Processing Fee — Renewal for ${booking.listing?.title || 'Property'}`,
+              receiverPhone: booking.listing?.landlord?.phone || '',
+              receiverName: booking.listing?.landlord?.full_name || '',
+              landlordId: booking.landlord_id,
+              paymentType: 'renewal',
+              isRenewal: true,
+              listingType: booking.listing?.listing_type || 'Apartment',
+            } as any);
+          },
+        },
+      ]
+    );
+  };
+
+  // ── Confirm Checkout handler ─────────────────────────────────────────────
+  const handleConfirmCheckout = () => {
+    Alert.alert(
+      '🚪 Confirm Move-Out',
+      'Are you sure you have vacated the property? The landlord will be notified to complete the handshake and release your caution.',
+      [
+        { text: 'Not Yet', style: 'cancel' },
+        {
+          text: 'Yes, I Have Moved Out',
+          style: 'destructive',
+          onPress: async () => {
+            setUpdating(true);
+            try {
+              const { error } = await supabase.rpc('request_checkout', {
+                p_booking_id: bookingId
+              });
+              if (error) throw error;
+              Alert.alert('Move-Out Requested', 'The landlord has been notified. Your caution refund is pending their confirmation.');
+              fetchBookingDetails(true);
+            } catch (err: any) {
+              Alert.alert('Error', err.message || 'Failed to submit move-out.');
+            } finally {
+              setUpdating(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleContactSupport = (type: 'call' | 'email') => {
+    if (type === 'call') {
+      Linking.openURL("tel:+237682366472");
+    } else {
+      Linking.openURL("mailto:info@diracmr.com");
+    }
+  };
+
+  const handleSubmitDisputeEvidence = async () => {
+    if (!disputeText.trim()) {
+      Alert.alert('Missing Info', 'Please provide a description of the issue.');
+      return;
+    }
+    
+    setIsSubmittingDispute(true);
+    try {
+      const { error } = await supabase.from('bookings').update({
+        dispute_tenant_text: disputeText
+      }).eq('id', bookingId);
+      
+      if (error) throw error;
+      
+      Alert.alert('Evidence Submitted', 'Your evidence has been submitted to DHUB for review.');
+      fetchBookingDetails(true);
+    } catch (err: any) {
+      Alert.alert('Error', err.message || 'Failed to submit evidence.');
+    } finally {
+      setIsSubmittingDispute(false);
+    }
+  };
+
+  const confirmMoveIn = () => {
+    Alert.alert(
+      "Confirm Move-In",
+      "Are you sure you have moved into the property? This confirms the start of your tenancy.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Yes, I'm In",
+          onPress: async () => {
+            setUpdating(true);
+            try {
+              const { error } = await supabase.rpc('confirm_handshake_side', {
+                p_booking_id: bookingId,
+                p_role: 'student'
+              });
+              if (error) throw error;
+              
+              // Optimistically update UI so the button vanishes instantly
+              setBooking((prev: any) => prev ? { ...prev, student_confirmation: true } : prev);
+              
+              fetchBookingDetails();
+              Alert.alert('Confirmed', 'Enjoy your stay!');
+            } catch (err) {
+              console.error(err);
+              Alert.alert('Error', 'Failed to confirm move in.');
+            } finally {
+              setUpdating(false);
+            }
           }
         }
       ]
     );
   };
 
-  const langOptions: { code: "eng" | "fren" | "pidgin"; label: string }[] = [
-    { code: "eng", label: "EN" },
-    { code: "fren", label: "FR" },
-    { code: "pidgin", label: "PCM" },
-  ];
+  const handleCancelBooking = () => {
+    Alert.alert(
+      t('bookings.cancel_booking'),
+      "Are you sure you want to cancel this booking? This action cannot be undone.",
+      [
+        { text: t('common.cancel'), style: "cancel" },
+        {
+          text: t('bookings.cancel_booking'),
+          style: "destructive",
+          onPress: async () => {
+            const { error } = await supabase.rpc('cancel_booking', {
+              p_booking_id: bookingId,
+              p_reason: 'User cancelled before payment'
+            });
+            if (error) {
+              Alert.alert('Error', error.message);
+            } else {
+              Alert.alert(t('common.success'), "Booking cancelled successfully");
+              triggerPushNotifications();
+              fetchBookingDetails(true);
+            }
+          }
+        }
+      ]
+    );
+  };
 
-  const themeOptions: { code: "light" | "dark" | "system"; label: string }[] = [
-    { code: "light", label: "Light" },
-    { code: "dark", label: "Dark" },
-    { code: "system", label: "System" },
-  ];
+  const handleCancelAndRefund = async () => {
+    if (!cancellationReason) {
+      Alert.alert('Reason Required', 'Please select a reason for cancellation.');
+      return;
+    }
+
+    setLoading(true);
+    const refundScheduledAt = new Date();
+    refundScheduledAt.setHours(refundScheduledAt.getHours() + 72);
+
+    const { error } = await supabase.rpc('cancel_booking', {
+      p_booking_id: bookingId,
+      p_reason: cancellationReason + (cancellationDetails ? ` - ${cancellationDetails}` : '')
+    });
+
+    setLoading(false);
+    if (error) {
+      Alert.alert('Error', error.message);
+    } else {
+      setShowSurveyModal(false);
+      Alert.alert('Cancellation Submitted', 'Your cancellation has been received. Geo-Auditing will begin immediately.');
+      triggerPushNotifications();
+      fetchBookingDetails(true);
+
+      // Start Geo-Audit for 72 hours
+      await LocationService.startGeoAudit();
+    }
+  };
+
+  const handleConfirmMoveIn = () => {
+    Alert.alert(
+      "Confirm Move-In",
+      "Are you sure you have moved into the property? This will trigger the release of your caution fee from Escrow to the Landlord.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Confirm",
+          onPress: async () => {
+            setLoading(true);
+            const { error } = await supabase.rpc('confirm_handshake_side', {
+              p_booking_id: bookingId,
+              p_role: 'student'
+            });
+
+            setLoading(false);
+            if (error) {
+              Alert.alert('Error', error.message);
+            } else {
+              Alert.alert('Success', 'You have confirmed your move-in.');
+              triggerPushNotifications();
+              fetchBookingDetails(true);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  if (loading && !booking) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color={COLORS.gold} />
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !booking) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
+        <View style={styles.center}>
+          <View style={styles.errorIconContainer}>
+            <Ionicons name="alert-circle-outline" size={64} color={COLORS.danger} />
+          </View>
+          <Text style={styles.errorTitle}>{t('bookings.unable_to_load')}</Text>
+          <Text style={styles.errorText}>{error}</Text>
+          <View style={styles.errorActions}>
+            <TouchableOpacity onPress={handleRefresh} style={styles.retryButton}>
+              <Ionicons name="refresh" size={20} color={COLORS.white} />
+              <Text style={styles.retryButtonText}>{t('bookings.try_again')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity onPress={handleGoBack} style={styles.backButton}>
+              <Ionicons name="arrow-back" size={20} color={COLORS.gold} />
+              <Text style={styles.backButtonText}>{t('common.back')}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!booking) return null;
+
+  const { listing } = booking;
+  const startDate = new Date(booking.start_date);
+  const endDate = new Date(booking.end_date);
+  const daysLeft = differenceInDays(endDate, new Date());
+  const isActive = daysLeft >= 0 && booking.status === "confirmed";
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "pending": return COLORS.warning;
+      case "confirmed": return COLORS.success;
+      case "cancelled": return COLORS.danger;
+      default: return COLORS.greyMedium;
+    }
+  };
+
+  const getPaymentColor = (status: string) => {
+    switch (status) {
+      case "pending": return COLORS.orange;
+      case "completed": return COLORS.success;
+      case "failed": return COLORS.danger;
+      default: return COLORS.greyMedium;
+    }
+  };
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "confirmed": return "checkmark-circle";
+      case "pending": return "time";
+      case "cancelled": return "close-circle";
+      default: return "information-circle";
+    }
+  };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+    <SafeAreaView style={styles.container} edges={['top', 'bottom']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
 
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.full_name')}</Text>
-          <TextInput value={fullName} onChangeText={setFullName} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholderTextColor={colors.textSecondary} />
+      <View style={styles.header}>
+        <TouchableOpacity onPress={handleGoBack} style={styles.headerButton}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('bookings.details_title')}</Text>
+        <TouchableOpacity onPress={handleRefresh} style={styles.headerButton}>
+          <Ionicons name="refresh" size={22} color={COLORS.greyDark} />
+        </TouchableOpacity>
+      </View>
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.email')}</Text>
-          <TextInput value={email} onChangeText={setEmail} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="email-address" placeholderTextColor={colors.textSecondary} />
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+        {listing?.media?.length ? (
+          <View style={styles.gallerySection}>
+            <ScrollView
+              horizontal pagingEnabled showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const newIndex = Math.round(e.nativeEvent.contentOffset.x / width);
+                setActiveImageIndex(newIndex);
+              }}
+            >
+              {listing.media.map((item, idx) => {
+                const hasRealThumb =
+                  item.type === 'video' &&
+                  item.thumbUrl &&
+                  item.thumbUrl !== item.url &&
+                  !item.thumbUrl.endsWith('.mp4');
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.phone')}</Text>
-          <TextInput value={phone} style={[styles.input, { backgroundColor: colors.border, borderColor: colors.border, color: colors.textSecondary }]} editable={false} />
+                return (
+                  <TouchableOpacity
+                    key={idx}
+                    onPress={() => setFullscreenMedia(item)}
+                    activeOpacity={0.9}
+                  >
+                    {item.type === 'image' ? (
+                      <Image source={{ uri: item.url }} style={styles.listingImage} />
+                    ) : (
+                      <View style={styles.videoContainer}>
+                        {hasRealThumb ? (
+                          <Image source={{ uri: item.thumbUrl }} style={styles.listingImage} />
+                        ) : (
+                          <View style={[styles.listingImage, styles.videoFallback]}>
+                            <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
+                            <Text style={styles.videoFallbackText}>{t('listing.video')}</Text>
+                          </View>
+                        )}
+                        <View style={styles.playButton}>
+                          <Ionicons name="play-circle" size={48} color={COLORS.white} />
+                        </View>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.momo')}</Text>
-          <TextInput value={momo} onChangeText={setMomo} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={9} placeholderTextColor={colors.textSecondary} />
+            {listing.media.length > 1 && (
+              <View style={styles.paginationDots}>
+                {listing.media.map((_, idx) => (
+                  <View
+                    key={idx}
+                    style={[
+                      styles.paginationDot,
+                      idx === activeImageIndex && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Age</Text>
-          <TextInput value={age} onChangeText={setAge} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={2} placeholder="e.g. 22" placeholderTextColor={colors.textSecondary} />
-
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Profession / Level of Study</Text>
-          <TextInput value={profession} onChangeText={setProfession} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} placeholder="e.g. Level 300 Software Eng" placeholderTextColor={colors.textSecondary} />
-
-          <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]} onPress={handleSaveProfile} disabled={loading}>
-            <Text style={styles.saveText}>{loading ? t('common.loading') : t('common.save')}</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Language Selector */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.language_label')}</Text>
-          <View style={styles.langRow}>
-            {langOptions.map((lang) => (
-              <TouchableOpacity
-                key={lang.code}
-                style={[styles.langBtn, { backgroundColor: colors.background, borderColor: colors.border }, language === lang.code && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                onPress={() => handleLanguageToggle(lang.code)}
-              >
-                <Text style={[styles.langText, { color: colors.textSecondary }, language === lang.code && styles.langTextActive]}>
-                  {lang.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <View style={styles.imageCount}>
+              <Ionicons name="images" size={14} color={COLORS.white} />
+              <Text style={styles.imageCountText}>{listing.media.length}</Text>
+            </View>
           </View>
-        </View>
-
-        {/* Theme Selector */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.theme_label', 'Theme')}</Text>
-          <View style={styles.langRow}>
-            {themeOptions.map((tOpt) => (
-              <TouchableOpacity
-                key={tOpt.code}
-                style={[styles.langBtn, { backgroundColor: colors.background, borderColor: colors.border }, mode === tOpt.code && { backgroundColor: colors.primary, borderColor: colors.primary }]}
-                onPress={() => setThemeMode(tOpt.code as "light" | "dark" | "system")}
-              >
-                <Text style={[styles.langText, { color: colors.textSecondary }, mode === tOpt.code && styles.langTextActive]}>
-                  {tOpt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+        ) : (
+          <View style={styles.noImageContainer}>
+            <Ionicons name="image-outline" size={48} color={COLORS.greyLight} />
+            <Text style={styles.noImageText}>{t('listing.no_media')}</Text>
           </View>
-        </View>
+        )}
 
-        {/* Quick Actions */}
-        <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <ProfileButton icon="calendar" label={t('profile.view_bookings')} onPress={() => navigation.navigate("ViewBookingsScreen" as never)} colors={colors} />
-          <ProfileButton icon="card" label="My Payments" onPress={() => navigation.navigate("Payments" as never)} colors={colors} />
-          <ProfileButton icon="notifications" label={t('common.notifications')} onPress={() => navigation.navigate("Notifications" as never)} colors={colors} />
-          {/* ✅ Added Terms & Privacy Policy button */}
-          <ProfileButton icon="document-text" label={t('profile.terms')} onPress={() => navigation.navigate("Legal" as never)} colors={colors} />
-          <ProfileButton icon="lock-closed" label={t('profile.change_password')} onPress={() => setChangePasswordVisible(true)} colors={colors} />
-          <ProfileButton icon="warning" label="Report a Landlord" onPress={() => navigation.navigate("ReportUser" as never)} colors={colors} />
-          <ProfileButton icon="bug" label={t('profile.report_bug')} onPress={() => navigation.navigate("ReportBug" as never)} colors={colors} />
-          <ProfileButton icon="trash" label={t('profile.delete_account')} danger onPress={handleDeleteAccount} disabled={loading} colors={colors} />
-          <ProfileButton icon="log-out" label={t('common.logout')} onPress={handleLogout} disabled={loading} colors={colors} />
+        <View style={styles.content}>
+
+          {/* ── Temporal Watchdog Action Banner ─────────────────────────── */}
+          {booking.status === 'confirmed' && (() => {
+            const endDate = new Date(booking.end_date);
+            const daysToEnd = Math.ceil((endDate.getTime() - Date.now()) / 86400_000);
+            const isGrace = booking.contract_status === 'grace' || (daysToEnd < 0 && daysToEnd >= -14);
+            const showBanner = daysToEnd <= 30;
+
+            if (!showBanner) return null;
+
+            const bannerBg = isGrace ? '#C0392B' : COLORS.gold;
+            const bannerText = isGrace ? '#FFFFFF' : '#1A1000';
+            const daysOver = Math.abs(daysToEnd);
+
+            const title = isGrace
+              ? `🔴 Lease Expired ${daysOver} Day${daysOver !== 1 ? 's' : ''} Ago`
+              : `📅 Lease Ends in ${daysToEnd} Day${daysToEnd !== 1 ? 's' : ''}`;
+
+            const subtitle = isGrace
+              ? t('bookings.renew_grace_subtitle', { days: 14 - daysOver })
+              : t('bookings.renew_lease_subtitle');
+
+            const canExtend = !booking.is_renewal_active && booking.contract_status !== 'terminated';
+
+            return (
+              <View style={[
+                {
+                  backgroundColor: bannerBg,
+                  borderRadius: 12,
+                  padding: 16,
+                  marginBottom: 16,
+                  shadowColor: '#000',
+                  shadowOpacity: 0.15,
+                  shadowRadius: 6,
+                  elevation: 4,
+                }
+              ]}>
+                <Text style={{ color: bannerText, fontWeight: '700', fontSize: 16, marginBottom: 4 }}>
+                  {title}
+                </Text>
+                <Text style={{ color: bannerText, fontSize: 13, marginBottom: 14, opacity: 0.9 }}>
+                  {subtitle}
+                </Text>
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  {canExtend && (
+                    <TouchableOpacity
+                      onPress={handleRenewLease}
+                      disabled={updating}
+                      style={{
+                        flex: 1, backgroundColor: isGrace ? '#FFFFFF' : '#1A1000',
+                        borderRadius: 8, paddingVertical: 10, alignItems: 'center',
+                        flexDirection: 'row', justifyContent: 'center', gap: 6,
+                      }}
+                    >
+                      <Ionicons name="refresh-circle" size={18} color={isGrace ? '#C0392B' : COLORS.gold} />
+                      <Text style={{ color: isGrace ? '#C0392B' : COLORS.gold, fontWeight: '700', fontSize: 14 }}>{t('bookings.extend_stay')}</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity
+                    onPress={handleConfirmCheckout}
+                    disabled={updating}
+                    style={{
+                      flex: 1, backgroundColor: isGrace ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.15)',
+                      borderRadius: 8, paddingVertical: 10, alignItems: 'center',
+                      flexDirection: 'row', justifyContent: 'center', gap: 6,
+                      borderWidth: 1, borderColor: bannerText,
+                    }}
+                  >
+                    <Ionicons name="exit-outline" size={18} color={bannerText} />
+                    <Text style={{ color: bannerText, fontWeight: '600', fontSize: 14 }}>{t('bookings.confirm_checkout')}</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })()}
+
+          <View style={styles.titleSection}>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>{listing?.title ?? t('bookings.unknown_property')}</Text>
+              <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.status) }]}>
+                <Ionicons name={getStatusIcon(booking.status)} size={12} color={COLORS.white} />
+                <Text style={styles.statusBadgeText}>{t(`bookings.${booking.status}`)}</Text>
+              </View>
+            </View>
+            <Text style={styles.subtitle}>
+              {listing?.address ? `${listing.address}, ` : ""}{listing?.city}
+            </Text>
+          </View>
+
+          <View style={styles.statsGrid}>
+            <View style={styles.statCard}>
+              <Ionicons name="calendar-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.statValue}>{daysLeft >= 0 ? daysLeft : 0}</Text>
+              <Text style={styles.statLabel}>{t('bookings.days_left_label')}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="cash-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.statValue}>{Number(booking.amount).toLocaleString()}</Text>
+              <Text style={styles.statLabel}>{t('bookings.amount_label')}</Text>
+            </View>
+            <View style={styles.statCard}>
+              <Ionicons name="bed-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.statValue}>{listing.rooms ?? "—"}</Text>
+              <Text style={styles.statLabel}>{t('bookings.rooms_label')}</Text>
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.cardTitle}>{t('bookings.info_title')}</Text>
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="calendar" size={16} color={COLORS.gold} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>{t('bookings.check_in')}</Text>
+                <Text style={styles.infoValue}>{format(startDate, "EEEE, MMMM dd, yyyy")}</Text>
+                <Text style={styles.infoSubvalue}>{format(startDate, "h:mm a")}</Text>
+              </View>
+            </View>
+
+            <View style={styles.infoDivider}>
+              <Ionicons name="arrow-down" size={16} color={COLORS.greyMedium} />
+            </View>
+
+            <View style={styles.infoRow}>
+              <View style={styles.infoIcon}>
+                <Ionicons name="calendar" size={16} color={COLORS.gold} />
+              </View>
+              <View style={styles.infoContent}>
+                <Text style={styles.infoLabel}>{t('bookings.check_out')}</Text>
+                <Text style={styles.infoValue}>{format(endDate, "EEEE, MMMM dd, yyyy")}</Text>
+                <Text style={styles.infoSubvalue}>{format(endDate, "h:mm a")}</Text>
+              </View>
+            </View>
+
+            {booking.status === "confirmed" && (
+              <>
+                <View style={styles.divider} />
+                <View style={styles.paymentRow}>
+                  <View style={styles.paymentItem}>
+                    <Text style={styles.paymentLabel}>{t('bookings.payment_status_label')}</Text>
+                    <View style={[styles.paymentBadge, { backgroundColor: getPaymentColor(booking.payment_status) }]}>
+                      <Text style={styles.paymentBadgeText}>{t(`bookings.${booking.payment_status === 'completed' ? 'paid' : booking.payment_status}`)}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.paymentItem}>
+                    <Text style={styles.paymentLabel}>{t('bookings.agreed_to_terms')}</Text>
+                    <Ionicons
+                      name={booking.agreed_to_terms ? "checkmark-circle" : "close-circle"}
+                      size={24}
+                      color={booking.agreed_to_terms ? COLORS.success : COLORS.danger}
+                    />
+                  </View>
+                </View>
+              </>
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="home-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.cardTitle}>{t('bookings.property_details')}</Text>
+            </View>
+
+            {listing.description && (
+              <Text style={styles.description}>{listing.description}</Text>
+            )}
+
+            <View style={styles.detailsGrid}>
+              <View style={styles.detailItem}>
+                <Ionicons name="resize-outline" size={16} color={COLORS.gold} />
+                <Text style={styles.detailLabel}>{t('bookings.size')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.not_specified')}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="water-outline" size={16} color={COLORS.gold} />
+                <Text style={styles.detailLabel}>{t('bookings.utilities')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.included')}</Text>
+              </View>
+              <View style={styles.detailItem}>
+                <Ionicons name="car-outline" size={16} color={COLORS.gold} />
+                <Text style={styles.detailLabel}>{t('bookings.parking')}</Text>
+                <Text style={styles.detailValue}>{t('bookings.available')}</Text>
+              </View>
+            </View>
+            <View style={styles.detailItem}>
+              <Text style={styles.detailLabel}>{t('bookings.duration_label')}</Text>
+              <Text style={styles.detailValue}>
+                {booking.duration_type === 'daily'
+                  ? t('bookings.days_count', { count: Math.ceil((new Date(booking.end_date).getTime() - new Date(booking.start_date).getTime()) / (1000 * 60 * 60 * 24)) })
+                  : booking.duration_type === 'yearly'
+                    ? t('bookings.one_year')
+                    : booking.duration_type === 'monthly'
+                      ? t('bookings.monthly')
+                      : t('bookings.unknown')}
+              </Text>
+            </View>
+            {rentTimeRemaining ? (
+              <View style={[styles.detailItem, { backgroundColor: COLORS.gold + '15', padding: 8, borderRadius: 8, marginTop: 10 }]}>
+                <Text style={[styles.detailLabel, { color: COLORS.gold }]}>{t('bookings.time_remaining_label')}</Text>
+                <Text style={[styles.detailValue, { color: COLORS.gold, fontWeight: 'bold' }]}>{rentTimeRemaining}</Text>
+              </View>
+            ) : (
+              booking.status === 'confirmed' && (
+                <View style={[styles.detailItem, { backgroundColor: COLORS.gold + '15', padding: 8, borderRadius: 8, marginTop: 10 }]}>
+                  <Text style={[styles.detailLabel, { color: COLORS.gold }]}>{t('bookings.status_label')}</Text>
+                  <Text style={[styles.detailValue, { color: COLORS.gold, fontWeight: 'bold' }]}>{t('bookings.pending_move_in')}</Text>
+                </View>
+              )
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.cardTitle}>{t('bookings.property_details')}</Text>
+            </View>
+            <View style={styles.termsBox}>
+              <Text style={styles.termsText}>
+                {listing.terms_text && listing.terms_text.trim()
+                  ? listing.terms_text
+                  : t('booking.default_terms_template')}
+              </Text>
+            </View>
+          </View>
+
+          {/* Location & Landlord (Revealed only if paid) */}
+          <View style={styles.card}>
+            <View style={styles.cardHeader}>
+              <Ionicons name="map-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.cardTitle}>{t('bookings.location_and_landlord')}</Text>
+            </View>
+
+            {booking.payment_status === 'completed' ? (
+              <>
+                <TouchableOpacity
+                  activeOpacity={0.9}
+                  onPress={() => {
+                    if (listing.latitude && listing.longitude) {
+                      setMapModalVisible(true);
+                    }
+                  }}
+                >
+                  <View style={styles.mapContainer}>
+                    {listing.latitude && listing.longitude ? (
+                      <MapView
+                        style={StyleSheet.absoluteFillObject}
+                        region={{ latitude: listing.latitude, longitude: listing.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+                        scrollEnabled={false}
+                        zoomEnabled={false}
+                        pitchEnabled={false}
+                        rotateEnabled={false}
+                      />
+                    ) : (
+                      <View style={[styles.center, { backgroundColor: COLORS.greyLight }]}>
+                        <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
+                        <Text style={{ color: COLORS.greyMedium, marginTop: 8 }}>{t('bookings.location_not_available')}</Text>
+                      </View>
+                    )}
+                    {listing.latitude && listing.longitude && (
+                      <View style={{ position: 'absolute', bottom: 8, right: 8, backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                        <Ionicons name="open-outline" size={12} color="#fff" />
+                        <Text style={{ color: '#fff', fontSize: 11 }}>{t('bookings.tap_to_open_maps')}</Text>
+                      </View>
+                    )}
+                  </View>
+                </TouchableOpacity>
+
+                {listing.landlord && (
+                  <View style={styles.landlordCard}>
+                    <View style={styles.landlordAvatar}>
+                      <Text style={styles.landlordInitials}>
+                        {listing.landlord.full_name?.split(' ').map(n => n[0]).join('').toUpperCase() || 'L'}
+                      </Text>
+                    </View>
+                    <View style={styles.landlordInfo}>
+                      <Text style={styles.landlordName}>{listing.landlord.full_name}</Text>
+                      <TouchableOpacity onPress={() => Linking.openURL(`tel:${listing.landlord?.phone}`)} style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+                        <Ionicons name="call" size={14} color={COLORS.gold} />
+                        <Text style={{ color: COLORS.gold, marginLeft: 6 }}>{listing.landlord.phone}</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+              </>
+            ) : (
+              <View style={styles.lockedContainer}>
+                <Ionicons name="lock-closed" size={32} color={COLORS.greyMedium} />
+                <Text style={styles.lockedTitle}>Information Locked</Text>
+                <Text style={styles.lockedText}>
+                  Complete your booking to reveal the exact coordinates and landlord contact details.
+                </Text>
+              </View>
+            )}
+          </View>
+
+          {/* Dispute Resolution Card */}
+          {booking.caution_status === 'disputed' && (
+            <View style={[styles.card, { borderColor: COLORS.danger, borderWidth: 1 }]}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="warning-outline" size={20} color={COLORS.danger} />
+                <Text style={[styles.cardTitle, { color: COLORS.danger }]}>{t('bookings.dispute_resolution')}</Text>
+              </View>
+              <Text style={{ fontSize: 13, color: COLORS.greyDark, marginBottom: 12 }}>
+                {t('bookings.dispute_resolution_desc')}
+              </Text>
+              
+              {(booking as any).dispute_tenant_text ? (
+                <View style={{ backgroundColor: COLORS.greyLight, padding: 12, borderRadius: 8 }}>
+                  <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.your_evidence_submitted')}</Text>
+                  <Text style={{ color: COLORS.greyDark }}>{(booking as any).dispute_tenant_text}</Text>
+                  
+                  {((booking as any).dispute_tenant_photos?.length > 0) && (
+                    <View style={{ marginTop: 10 }}>
+                      <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.photos_count', { count: ((booking as any).dispute_tenant_photos).length })}</Text>
+                      <View style={{ flexDirection: 'row', gap: 8 }}>
+                        {((booking as any).dispute_tenant_photos).map((p: any, i: number) => (
+                          <Image key={i} source={{ uri: p.url }} style={{ width: 60, height: 60, borderRadius: 4 }} />
+                        ))}
+                      </View>
+                    </View>
+                  )}
+                  
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
+                    <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
+                    <Text style={{ color: COLORS.success, marginLeft: 4, fontWeight: '600' }}>Under Review by DHUB</Text>
+                  </View>
+                </View>
+              ) : (
+                <View>
+                  <TextInput
+                    style={{
+                      borderWidth: 1, borderColor: COLORS.greyMedium, borderRadius: 8, padding: 12,
+                      height: 100, textAlignVertical: 'top', backgroundColor: COLORS.white, marginBottom: 12
+                    }}
+                    placeholder="Explain what happened..."
+                    value={disputeText}
+                    onChangeText={setDisputeText}
+                    multiline
+                  />
+                  
+                  <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
+                    {((booking as any).dispute_tenant_photos || []).map((p: any, i: number) => (
+                      <Image key={i} source={{ uri: p.url }} style={{ width: 60, height: 60, borderRadius: 4 }} />
+                    ))}
+                    {((booking as any).dispute_tenant_photos || []).length < 3 && (
+                      <TouchableOpacity
+                        style={{
+                          width: 60, height: 60, borderRadius: 4, borderWidth: 1, borderColor: COLORS.gold,
+                          borderStyle: 'dashed', alignItems: 'center', justifyContent: 'center'
+                        }}
+                        onPress={() => handleUploadMedia('dispute')}
+                        disabled={uploadingMedia}
+                      >
+                        {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={24} color={COLORS.gold} />}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                  
+                  <TouchableOpacity
+                    style={[styles.payButton, { width: '100%' }]}
+                    onPress={handleSubmitDisputeEvidence}
+                    disabled={isSubmittingDispute}
+                  >
+                    {isSubmittingDispute ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.payButtonText}>Submit Evidence</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+            </View>
+          )}
+
+          {(booking.status === "confirmed" || booking.status === "pending" || booking.status === "completed") && (
+            <View style={styles.card}>
+              <View style={styles.cardHeader}>
+                <Ionicons name="options-outline" size={20} color={COLORS.gold} />
+                <Text style={styles.cardTitle}>{t('bookings.actions')}</Text>
+              </View>
+
+              {isActive && (
+                <TouchableOpacity
+                  style={styles.cancelButton}
+                  onPress={handleCancelBooking}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close-circle-outline" size={20} color={COLORS.white} />
+                  <Text style={styles.cancelButtonText}>{t('bookings.cancel_booking')}</Text>
+                </TouchableOpacity>
+              )}
+
+              {booking.payment_status === 'completed' && booking.rent_payment_status === 'completed' && !booking.tenant_confirmation && (
+                <TouchableOpacity
+                  style={[styles.actionButton, { backgroundColor: COLORS.success, borderColor: COLORS.success }]}
+                  onPress={handleConfirmMoveIn}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="checkmark-done-circle-outline" size={20} color={COLORS.white} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.white }]}>Confirm I Have Moved In</Text>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.white} style={styles.actionArrow} />
+                </TouchableOpacity>
+              )}
+
+              {booking.tenant_confirmation && (
+                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>Move-In Confirmed by You</Text>
+                </View>
+              )}
+
+              {/* Entry Picture: only visible for pending or confirmed bookings */}
+              {(booking.status === 'pending' || booking.status === 'confirmed') && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUploadMedia('entry')}
+                  activeOpacity={0.7}
+                  disabled={uploadingMedia}
+                >
+                  {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
+                  <Text style={styles.actionButtonText}>Take Entry Picture</Text>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
+                </TouchableOpacity>
+              )}
+              {booking.entry_media && booking.entry_media.length > 0 && (
+                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>✓ Entry Picture Captured</Text>
+                </View>
+              )}
+
+              {/* Exit Picture: only visible for completed/expired bookings AND no exit photo yet */}
+              {(booking.status === 'completed' || (booking.status === 'confirmed' && daysLeft < 0)) && !(booking.exit_media && booking.exit_media.length > 0) && (
+                <TouchableOpacity
+                  style={styles.actionButton}
+                  onPress={() => handleUploadMedia('exit')}
+                  activeOpacity={0.7}
+                  disabled={uploadingMedia}
+                >
+                  {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
+                  <Text style={styles.actionButtonText}>Take Exit Picture</Text>
+                  <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
+                </TouchableOpacity>
+              )}
+              {booking.exit_media && booking.exit_media.length > 0 && (
+                <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
+                  <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
+                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>✓ Exit Picture Captured</Text>
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => navigation.navigate("ListingReview", { listing_id: listing.id })}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="star-outline" size={20} color={COLORS.gold} />
+                <Text style={styles.actionButtonText}>{t('bookings.rate_property')}</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.actionButton}
+                onPress={() => Alert.alert("Report", "This feature will be available soon")}
+                activeOpacity={0.7}
+              >
+                <Ionicons name="flag-outline" size={20} color={COLORS.gold} />
+                <Text style={styles.actionButtonText}>{t('bookings.report_issue')}</Text>
+                <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
+              </TouchableOpacity>
+            </View>
+          )}
+
+          <View style={styles.helpSection}>
+            <Text style={styles.helpTitle}>{t('bookings.help_title')}</Text>
+            <View style={styles.helpButtons}>
+              <TouchableOpacity onPress={() => handleContactSupport('call')} style={styles.helpButton}>
+                <Ionicons name="call-outline" size={18} color={COLORS.gold} />
+                <Text style={styles.helpButtonText}>{t('bookings.call_support')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => handleContactSupport('email')} style={styles.helpButton}>
+                <Ionicons name="mail-outline" size={18} color={COLORS.gold} />
+                <Text style={styles.helpButtonText}>{t('bookings.email_support')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </ScrollView>
 
-      {/* Change Password Modal */}
-      <Modal visible={changePasswordVisible} transparent animationType="slide">
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={[styles.modalContent, { backgroundColor: colors.card }]}>
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.text }]}>{t('profile.change_password')}</Text>
-              <TouchableOpacity onPress={() => setChangePasswordVisible(false)}>
-                <Ionicons name="close" size={24} color={colors.text} />
-              </TouchableOpacity>
+      {/* ── Waiting for Landlord Approval Banner ── */}
+      {(!booking.approval_status || booking.approval_status === 'pending') && (
+        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
+          <Ionicons name="hourglass-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>Awaiting Landlord Approval</Text>
+          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
+            The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking.
+          </Text>
+        </View>
+      )}
+
+      {/* ── Sticky Pay Button (Initial or Rent Completion) ── */}
+      {booking.approval_status === 'approved' && booking.payment_status === 'pending' && (
+        <View style={styles.footer}>
+          <View style={styles.footerInfo}>
+            <Text style={styles.footerLabel}>{t('bookings.initial_deposit_label')}</Text>
+            <Text style={styles.footerAmount}>
+              FCFA {((booking.caution_fee ?? 0) + 5000).toLocaleString()}
+            </Text>
+          </View>
+          <TouchableOpacity
+            style={styles.payButton}
+            onPress={handlePayNow}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="card-outline" size={20} color={COLORS.white} />
+            <Text style={styles.payButtonText}>{t('bookings.pay_now')}</Text>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.whyLink}
+            onPress={() => setShowWhyModal(true)}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="information-circle-outline" size={15} color={COLORS.gold} />
+            <Text style={styles.whyLinkText}>{t('bookings.why_am_i_paying')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Post-Payment Choice: Complete Rent vs Cancel */}
+      {booking.payment_status === 'completed' && booking.status === 'confirmed' && !(booking as any).student_confirmation && (
+        <View style={[styles.footer, { flexDirection: 'column', gap: 12, borderTopWidth: 1, borderColor: '#eee' }]}>
+          <TouchableOpacity
+            style={[styles.payButton, { width: '100%', backgroundColor: '#27AE60' }]}
+            onPress={confirmMoveIn}
+          >
+            <Text style={styles.payButtonText}>{t('bookings.i_have_moved_in')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {booking.payment_status === 'completed' && booking.status === 'confirmed' && (booking as any).rent_payment_status !== 'completed' && !['refund_pending', 'refund_queued', 'refund_paused', 'disputed'].includes(booking.caution_status as string) && (
+        <View style={[styles.footer, { flexDirection: 'column', gap: 12 }]}>
+          <TouchableOpacity
+            style={[styles.payButton, { width: '100%' }]}
+            onPress={handleCompleteRent}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="card-outline" size={20} color={COLORS.white} />
+            <Text style={styles.payButtonText}>{t('bookings.complete_rent_payment')}</Text>
+            <Ionicons name="arrow-forward" size={18} color={COLORS.white} />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.cancelButton, { width: '100%', marginBottom: 0, backgroundColor: 'transparent', borderWidth: 1, borderColor: COLORS.danger }]}
+            onPress={() => setShowSurveyModal(true)}
+            activeOpacity={0.8}
+          >
+            <Text style={[styles.cancelButtonText, { color: COLORS.danger }]}>{t('bookings.cancel_booking_refund_caution')}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Refund Processing Banner (72 hrs) */}
+      {booking.caution_status === 'refund_queued' && (
+        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
+          <Ionicons name="time-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>{t('bookings.refund_processing')}</Text>
+          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
+            {t('bookings.refund_processing_desc')}
+          </Text>
+        </View>
+      )}
+
+      {/* Refund Paused Banner */}
+      {booking.caution_status === 'refund_paused' && (
+        <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: '#FADBD8' }]}>
+          <Ionicons name="alert-circle-outline" size={24} color="#C0392B" style={{ marginBottom: 4 }} />
+          <Text style={{ fontSize: 16, fontWeight: '700', color: "#C0392B", textAlign: 'center' }}>{t('bookings.refund_paused')}</Text>
+          <Text style={{ fontSize: 13, color: "#C0392B", textAlign: 'center', marginTop: 4 }}>
+            {t('bookings.refund_paused_desc')}
+          </Text>
+        </View>
+      )}
+
+      {/* Why Am I Paying Modal */}
+      <Modal visible={showWhyModal} transparent animationType="fade" onRequestClose={() => setShowWhyModal(false)}>
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowWhyModal(false)} />
+          <View style={[styles.modalContent, { padding: 24, borderRadius: 20 }]}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 16, gap: 10 }}>
+              <Ionicons name="information-circle-outline" size={28} color={COLORS.gold} />
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_title')}</Text>
             </View>
-            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.new_password')}</Text>
-            <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder={t('profile.enter_new_password')} placeholderTextColor={colors.textSecondary} />
-            <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.confirm_password')}</Text>
-            <TextInput style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} secureTextEntry value={confirmPassword} onChangeText={setConfirmPassword} placeholder={t('profile.reenter_password')} placeholderTextColor={colors.textSecondary} />
-            <TouchableOpacity style={[styles.saveBtn, { backgroundColor: colors.primary }, loading && { opacity: 0.6 }]} onPress={handleUpdatePassword} disabled={loading}>
-              <Text style={styles.saveText}>{loading ? t('common.updating') : t('profile.update_password')}</Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_caution')}</Text>{t('bookings.why_payment_caution_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_fee')}</Text>{t('bookings.why_payment_fee_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 16, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_unlocks')}</Text>{t('bookings.why_payment_unlocks_desc')}
+            </Text>
+            <Text style={{ fontSize: 15, color: COLORS.greyDark, marginBottom: 24, lineHeight: 22 }}>
+              <Text style={{ fontWeight: 'bold', color: COLORS.greyDark }}>{t('bookings.why_payment_refund')}</Text>{t('bookings.why_payment_refund_desc')}
+            </Text>
+            <TouchableOpacity
+              style={[styles.payButton, { width: '100%', marginTop: 0 }]}
+              onPress={() => setShowWhyModal(false)}
+            >
+              <Text style={styles.payButtonText}>{t('bookings.i_understand')}</Text>
             </TouchableOpacity>
-          </KeyboardAvoidingView>
+          </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+
+      {/* Fullscreen Media Modal */}
+      <Modal
+        visible={fullscreenMedia !== null}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setFullscreenMedia(null)}
+      >
+        {fullscreenMedia?.type === 'video' ? (
+          <FullVideoPlayer
+            url={fullscreenMedia.url}
+            onClose={() => setFullscreenMedia(null)}
+            processingStatus={fullscreenMedia.processing_status as 'processing' | 'ready' | 'failed' | undefined}
+          />
+        ) : (
+          <View style={styles.fullscreenModal}>
+            <TouchableOpacity
+              style={styles.fullscreenClose}
+              onPress={() => setFullscreenMedia(null)}
+            >
+              <Ionicons name="close" size={30} color={COLORS.white} />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: fullscreenMedia?.url }}
+              style={styles.fullscreenImage}
+              resizeMode="contain"
+            />
+          </View>
+        )}
+      </Modal>
+
+      {/* Survey Modal */}
+      <Modal
+        visible={showSurveyModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowSurveyModal(false)}
+      >
+        <View style={styles.fullscreenModal}>
+          <View style={{ width: '90%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20 }}>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 16 }}>Cancellation Reason</Text>
+
+            {[
+              "The house doesn't look like the pictures.",
+              "Basic things are missing (e.g., no water, no electricity).",
+              "The landlord is asking for more money.",
+              "The area feels unsafe.",
+              "Other"
+            ].map(reason => (
+              <TouchableOpacity
+                key={reason}
+                style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border }}
+                onPress={() => setCancellationReason(reason)}
+              >
+                <Ionicons name={cancellationReason === reason ? "radio-button-on" : "radio-button-off"} size={24} color={cancellationReason === reason ? COLORS.gold : COLORS.greyMedium} />
+                <Text style={{ marginLeft: 12, fontSize: 15, color: COLORS.greyDark, flex: 1 }}>{reason}</Text>
+              </TouchableOpacity>
+            ))}
+
+            {cancellationReason === "Other" && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontSize: 13, color: COLORS.greyMedium, marginBottom: 4 }}>Please specify:</Text>
+                <View style={{ borderWidth: 1, borderColor: COLORS.border, borderRadius: 8, padding: 12 }}>
+                  <Text style={{ color: COLORS.greyDark }}>{cancellationDetails || "Tap here to type..."}</Text>
+                </View>
+              </View>
+            )}
+
+            <View style={{ flexDirection: 'row', marginTop: 24, gap: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }}
+                onPress={() => setShowSurveyModal(false)}
+              >
+                <Text style={{ color: COLORS.greyDark, fontWeight: '600' }}>Back</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: COLORS.danger }}
+                onPress={handleCancelAndRefund}
+              >
+                <Text style={{ color: COLORS.white, fontWeight: '600' }}>Submit & Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <MapPickerModal
+        visible={mapModalVisible}
+        onClose={() => setMapModalVisible(false)}
+        onLocationSelected={() => {}}
+        initialLocation={
+          listing?.latitude && listing?.longitude
+            ? { latitude: listing.latitude, longitude: listing.longitude }
+            : undefined
+        }
+        readOnly
+      />
+    </SafeAreaView>
   );
 }
 
-function ProfileButton({
-  icon, label, onPress, danger, disabled, colors
-}: {
-  icon: any; label: string; onPress: () => void; danger?: boolean; disabled?: boolean; colors: any;
-}) {
-  return (
-    <TouchableOpacity
-      style={[styles.actionBtn, { backgroundColor: colors.card, borderColor: colors.border }, danger && { backgroundColor: colors.error }, disabled && { opacity: 0.6 }]}
-      onPress={onPress}
-      disabled={disabled}
-    >
-      <Ionicons name={icon} size={22} color={danger ? "#fff" : colors.primary} />
-      <Text style={[styles.actionText, { color: colors.text }, danger && { color: "#fff" }]}>{label}</Text>
-    </TouchableOpacity>
-  );
-}
-
-const styles = StyleSheet.create({
-  scrollContainer: { paddingHorizontal: 20, paddingBottom: 40, padding: 12 },
-  title: { fontSize: 26, fontWeight: "700", color: "#333", marginVertical: 20, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 10 },
-  section: { backgroundColor: "#f7f7f7", borderRadius: 12, padding: 16, marginBottom: 20 },
-  label: { color: "#777", marginTop: 12, marginBottom: 4 },
-  input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, fontSize: 16 },
-  saveBtn: { marginTop: 16, backgroundColor: "#D4AF37", padding: 14, borderRadius: 10, alignItems: "center" },
-  saveText: { color: "#000", fontWeight: "700", fontSize: 16 },
-  langRow: { flexDirection: "row", gap: 10, marginTop: 8 },
-  langBtn: { paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, backgroundColor: "#fff", borderWidth: 1, borderColor: "#eee" },
-  langBtnActive: { backgroundColor: "#D4AF37", borderColor: "#D4AF37" },
-  langText: { fontSize: 13, fontWeight: "bold", color: "#999" },
-  langTextActive: { color: "#fff" },
-  actionBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#fff", paddingVertical: 14, paddingHorizontal: 16, borderRadius: 10, marginBottom: 12, borderWidth: 1, borderColor: "#e5e5e5" },
-  actionText: { marginLeft: 12, fontSize: 16, color: "#333" },
-  modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "center", alignItems: "center" },
-  modalContent: { width: "90%", backgroundColor: "#fff", borderRadius: 16, padding: 20, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 10, elevation: 5 },
-  modalHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  modalTitle: { fontSize: 20, fontWeight: "700", color: "#333" },
+const getStyles = (COLORS: any) => StyleSheet.create({
+  container: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
+  center: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: COLORS.greyMedium,
+  },
+  errorIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 24,
+  },
+  errorTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: COLORS.greyDark,
+    marginBottom: 8,
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 14,
+    color: COLORS.greyMedium,
+    textAlign: "center",
+    marginBottom: 24,
+    paddingHorizontal: 20,
+  },
+  errorActions: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  scrollContent: {
+    paddingBottom: 20,
+    flexGrow: 1,
+  },
+  retryButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.gold,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  retryButtonText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  backButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.white,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+  },
+  backButtonText: {
+    color: COLORS.gold,
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  header: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  headerButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: COLORS.offWhite,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: COLORS.greyDark,
+  },
+  gallerySection: {
+    position: "relative",
+    height: 220,
+  },
+  listingImage: {
+    width,
+    height: 220,
+    resizeMode: "cover",
+  },
+  paginationDots: {
+    flexDirection: "row",
+    position: "absolute",
+    bottom: 16,
+    alignSelf: "center",
+    gap: 8,
+  },
+  paginationDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: COLORS.white,
+    opacity: 0.5,
+  },
+  paginationDotActive: {
+    width: 20,
+    backgroundColor: COLORS.gold,
+    opacity: 1,
+  },
+  imageCount: {
+    position: "absolute",
+    top: 16,
+    right: 16,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+  },
+  imageCountText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "600",
+  },
+  noImageContainer: {
+    height: 200,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: COLORS.greyLight,
+  },
+  noImageText: {
+    marginTop: 12,
+    color: COLORS.greyMedium,
+    fontSize: 16,
+  },
+  footer: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  footerInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 10,
+  },
+  footerLabel: {
+    fontSize: 12,
+    color: COLORS.greyMedium,
+    flex: 1,
+    marginRight: 8,
+  },
+  footerAmount: {
+    fontSize: 17,
+    fontWeight: '700',
+    color: COLORS.gold,
+    flexShrink: 0,
+  },
+  payButton: {
+    backgroundColor: COLORS.gold,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    paddingVertical: 13,
+    borderRadius: 12,
+    gap: 8,
+    shadowColor: COLORS.gold,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  payButtonText: {
+    color: COLORS.white,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  whyLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+    paddingVertical: 2,
+  },
+  whyLinkText: {
+    fontSize: 11,
+    color: COLORS.gold,
+    textDecorationLine: 'underline',
+    fontWeight: '500',
+  },
+  content: {
+    padding: 20,
+  },
+  titleSection: {
+    marginBottom: 20,
+  },
+  titleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 4,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: COLORS.greyDark,
+    flex: 1,
+    marginRight: 12,
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 4,
+  },
+  statusBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  subtitle: {
+    fontSize: 15,
+    color: COLORS.greyMedium,
+  },
+  statsGrid: {
+    flexDirection: "row",
+    gap: 12,
+    marginBottom: 24,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: COLORS.greyDark,
+    marginTop: 8,
+    marginBottom: 2,
+  },
+  statLabel: {
+    fontSize: 12,
+    color: COLORS.greyMedium,
+  },
+  card: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 16,
+  },
+  cardTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.greyDark,
+  },
+  infoRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  infoIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  infoContent: {
+    flex: 1,
+  },
+  infoLabel: {
+    fontSize: 13,
+    color: COLORS.greyMedium,
+    marginBottom: 2,
+  },
+  infoValue: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.greyDark,
+    marginBottom: 2,
+  },
+  infoSubvalue: {
+    fontSize: 13,
+    color: COLORS.greyMedium,
+  },
+  infoDivider: {
+    alignItems: "center",
+    paddingVertical: 8,
+    marginLeft: 16,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: COLORS.border,
+    marginVertical: 16,
+  },
+  paymentRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  paymentItem: {
+    flex: 1,
+    alignItems: "center",
+    gap: 8,
+  },
+  paymentLabel: {
+    fontSize: 13,
+    color: COLORS.greyMedium,
+  },
+  paymentBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  paymentBadgeText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: "700",
+    textTransform: "uppercase",
+  },
+  description: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.greyMedium,
+    marginBottom: 16,
+  },
+  detailsGrid: {
+    flexDirection: "row",
+    justifyContent: "space-around",
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 16,
+    padding: 16,
+  },
+  detailItem: {
+    alignItems: "center",
+    gap: 4,
+  },
+  detailLabel: {
+    fontSize: 12,
+    color: COLORS.greyMedium,
+    marginTop: 4,
+  },
+  detailValue: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: COLORS.greyDark,
+  },
+  termsBox: {
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 12,
+    padding: 16,
+  },
+  termsText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.greyMedium,
+  },
+  cancelButton: {
+    backgroundColor: COLORS.danger,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginBottom: 12,
+  },
+  cancelButtonText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: "600",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: COLORS.offWhite,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginBottom: 8,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  actionButtonText: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    color: COLORS.greyDark,
+    marginLeft: 12,
+  },
+  actionArrow: {
+    opacity: 0.5,
+  },
+  helpSection: {
+    marginTop: 8,
+    marginBottom: 20,
+    padding: 20,
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 20,
+    alignItems: "center",
+  },
+  helpTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: COLORS.greyDark,
+    marginBottom: 16,
+  },
+  helpButtons: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  helpButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: COLORS.white,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  helpButtonText: {
+    fontSize: 14,
+    color: COLORS.greyDark,
+  },
+  videoContainer: {
+    width,
+    height: 220,
+    position: 'relative',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoFallback: {
+    backgroundColor: COLORS.offWhite,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  videoFallbackText: {
+    color: COLORS.greyMedium,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  playButton: {
+    position: 'absolute',
+    alignSelf: 'center',
+  },
+  fullscreenContainer: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenClose: {
+    position: 'absolute',
+    top: 50,
+    right: 20,
+    zIndex: 10,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenMedia: {
+    width,
+    height: '100%',
+  },
+  fullscreenModal: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  fullscreenImage: {
+    width: '100%',
+    height: '100%',
+  },
+  mapContainer: {
+    height: 160,
+    borderRadius: 12,
+    overflow: 'hidden',
+    marginBottom: 16,
+    backgroundColor: COLORS.offWhite,
+  },
+  landlordCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  landlordAvatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 12,
+  },
+  landlordInitials: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: COLORS.gold,
+  },
+  landlordInfo: {
+    flex: 1,
+  },
+  landlordName: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.greyDark,
+  },
+  lockedContainer: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+  lockedTitle: {
+    color: COLORS.greyDark,
+    fontWeight: '600',
+    marginTop: 12,
+    fontSize: 16,
+  },
+  lockedText: {
+    color: COLORS.greyMedium,
+    textAlign: 'center',
+    marginTop: 6,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalDismissArea: {
+    ...StyleSheet.absoluteFillObject,
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: COLORS.white,
+    padding: 20,
+    borderRadius: 16,
+  },
 });
+</file>
+
+<file path="src/screens/student/ListingDetailsScreen.tsx">
+// src/screens/student/ListingDetailsScreen.tsx
+import { Ionicons } from '@expo/vector-icons';
+import {
+  useFocusEffect,
+  useNavigation,
+  useRoute,
+} from '@react-navigation/native';
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  FlatList,
+  Image,
+  Linking,
+  Modal,
+  Platform,
+  ScrollView,
+  Share,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+
+import MapView from 'react-native-maps';
+import FullVideoPlayer from '../../components/FullVideoPlayer';
+import ListingReviews from '../../components/ListingReviews';
+import MapPickerModal from '../../components/MapPickerModal';
+import RatingsList from '../../components/RatingsList';
+import NetworkStatusBanner from '../../screens/common/NetworkStatusBanner';
+
+import { useAuth } from '../../hooks/useAuth';
+import { getOrCreateThread } from '../../services/chatService';
+import FavoritesManager from '../../storage/favouritesManager';
+import { fetchListingDetails } from '../../utils/listings';
+import { supabase } from '../../utils/supabaseClient';
+
+import { useTranslation } from 'react-i18next';
+
+import { RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import {
+  ListingDetails,
+  MediaItem,
+  StudentStackParamList,
+} from '../../types';
+import { LatLng } from '../../utils/location';
+
+type RouteProps = RouteProp<StudentStackParamList, 'ListingDetails'>;
+type NavProps = NativeStackNavigationProp<StudentStackParamList, 'ListingDetails'>;
+
+const { width: screenWidth } = Dimensions.get('window');
+
+import { useTheme } from '../../context/ThemeContext';
+
+const ListingDetailsScreen: React.FC = () => {
+  const { t } = useTranslation();
+  const route = useRoute<RouteProps>();
+  const navigation = useNavigation<NavProps>();
+  const listingId = route.params.listingId;
+
+  const { colors, isDark } = useTheme();
+  const COLORS = React.useMemo(() => ({
+    gold: colors.primary,
+    goldLight: isDark ? '#3d300e' : '#F5E7C8',
+    goldDark: colors.primary,
+    white: colors.background,
+    offWhite: colors.card,
+    greyDark: colors.text,
+    greyMedium: colors.textSecondary,
+    greyLight: isDark ? '#333' : '#ECF0F1',
+    border: colors.border,
+    shadow: '#000000',
+  }), [colors, isDark]);
+
+  const styles = React.useMemo(() => getStyles(COLORS), [COLORS]);
+
+  const { user } = useAuth();
+  const userId = user?.id ?? null;
+
+  const [listing, setListing] = useState<ListingDetails | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [mapVisible, setMapVisible] = useState(false);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
+  const [hasPaidBooking, setHasPaidBooking] = useState(false);
+  const [existingBookingId, setExistingBookingId] = useState<string | null>(null);
+
+  const flatListRef = React.useRef<FlatList>(null);
+
+  // Close fullscreen media when screen loses focus
+  useFocusEffect(
+    useCallback(() => {
+      return () => setFullscreenMedia(null);
+    }, [])
+  );
+
+  /* ─── Fetch ─── */
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      setLoading(true);
+      const data = await fetchListingDetails(listingId);
+      if (mounted) {
+        setListing(data);
+        setLoading(false);
+      }
+
+      // Check for paid booking map unlock & existing booking
+      if (userId && listingId) {
+        const { data: bookingData } = await supabase
+          .from('bookings')
+          .select('id, status, payment_status')
+          .eq('listing_id', listingId)
+          .eq('student_id', userId)
+          .not('status', 'eq', 'cancelled')
+          .not('status', 'eq', 'completed')
+          .order('created_at', { ascending: false })
+          .limit(1);
+
+        if (mounted && bookingData && bookingData.length > 0) {
+          if (bookingData[0].payment_status === 'completed') {
+            setHasPaidBooking(true);
+          }
+          setExistingBookingId(bookingData[0].id);
+        }
+      }
+    };
+    load();
+    return () => { mounted = false; };
+  }, [listingId, userId]);
+
+  /* ─── Favorites ─── */
+  useEffect(() => {
+    if (!userId || !listingId) return;
+    FavoritesManager.isFavorite(listingId, userId)
+      .then(setIsFavorite)
+      .catch(() => setIsFavorite(false));
+  }, [userId, listingId]);
+
+  // console.log("listing detailed data loaded");
+
+  const toggleFavorite = async () => {
+    if (!userId || !listing) {
+      Alert.alert(t('common.error'), 'Please sign in to save favorites.');
+      return;
+    }
+    try {
+      if (isFavorite) {
+        await FavoritesManager.removeFavorite(listing.id, userId);
+        setIsFavorite(false);
+      } else {
+        const favListing: any = {
+          ...listing,
+          image_url: listing.media?.[0]?.url || '',
+          images: listing.media || []
+        };
+        await FavoritesManager.addFavorite(listing.id, userId, favListing);
+        setIsFavorite(true);
+      }
+    } catch {
+      Alert.alert(t('common.error'), 'Failed to update favorites. Please try again.');
+    }
+  };
+
+  /* ─── Actions ─── */
+  const handleBooking = async () => {
+    if (!userId) {
+      Alert.alert(t('common.error'), 'Please sign in to book.');
+      return;
+    }
+
+    // Check Profile Gate
+    const { data: studentData } = await supabase
+      .from('student_profiles')
+      .select('age, profession, contact_number')
+      .eq('user_id', userId)
+      .single();
+
+    if (!studentData || !studentData.age || !studentData.profession || !studentData.contact_number) {
+      if (Platform.OS === 'web') {
+        const wantsToUpdate = window.confirm("Profile Verification Required\n\nLandlords require your age, profession/level, and Momo number before accepting bookings.\n\nClick OK to Update Profile.");
+        if (wantsToUpdate) {
+          navigation.navigate('StudentTabs', { screen: 'Profile' });
+        }
+      } else {
+        Alert.alert(
+          "Profile Verification Required",
+          "Landlords require your age, profession/level, and Momo number before accepting bookings.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Update Profile", onPress: () => navigation.navigate('StudentTabs', { screen: 'Profile' }) }
+          ]
+        );
+      }
+      return;
+    }
+
+    navigation.navigate('BookingScreen', {
+      listingId,
+    });
+  };
+
+
+
+
+
+
+
+
+
+
+
+  const handleShare = async () => {
+    // Web: share the edge function URL so WhatsApp/Telegram bots crawl
+    //      proper OG meta tags and show a rich preview card.
+    // Mobile (native): share the dhub:// deep link so the app opens
+    //      directly if installed; bots don't matter here as users tap
+    //      from their phone where the app is already present.
+    const shareUrl = Platform.OS === 'web'
+      ? `https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=${listingId}`
+      : `dhub://listing/${listingId}`;
+    const location = listing?.city || listing?.city || '';
+    const messageText = location
+      ? `Check out this listing for ${listing?.title} at ${location} on DHUB\n${shareUrl}`
+      : `Check out this listing for ${listing?.title} on DHUB\n${shareUrl}`;
+    try {
+      await Share.share({
+        message: messageText,
+        url: shareUrl,
+        title: listing?.title,
+      });
+    } catch (error: any) {
+      console.log('Error sharing:', error.message);
+    }
+  };
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  const handleChat = async () => {
+    const otherUserId = listing?.landlord?.id ?? listing?.landlord_id;
+    if (!otherUserId || !userId) return;
+    try {
+      const threadId = await getOrCreateThread(userId, otherUserId);
+      navigation.navigate('StudentTabs', {
+        screen: 'Chat',
+        params: { threadId },
+      });
+    } catch (err) {
+      Alert.alert(t('common.error'), 'Could not initiate chat. Please try again later.');
+    }
+  };
+
+  const handleCall = () => {
+    // Lock communications to DHUB to avoid bypassing
+    Linking.openURL(`tel:+237682366472`);
+  };
+
+  const onViewableItemsChanged = useCallback(({ viewableItems }: any) => {
+    if (viewableItems.length > 0) {
+      setActiveImageIndex(viewableItems[0].index);
+    }
+  }, []);
+
+
+
+
+
+
+
+
+  /* ─── Media helpers ─── */
+  const images = listing?.media.filter(m => m.type === 'image') ?? [];
+  const videos = listing?.media.filter(m => m.type === 'video') ?? [];
+  const allMedia = [...images, ...videos];
+
+  const handleNextImage = () => {
+    if (activeImageIndex < allMedia.length - 1) {
+      flatListRef.current?.scrollToIndex({ index: activeImageIndex + 1, animated: true });
+    }
+  };
+
+  const handlePrevImage = () => {
+    if (activeImageIndex > 0) {
+      flatListRef.current?.scrollToIndex({ index: activeImageIndex - 1, animated: true });
+    }
+  };
+
+  const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => {
+    if (!listing) return null;
+    // thumbUrl is a real image only when it differs from the video URL.
+    // Old DB records have thumbUrl === url (both .mp4) — show a styled placeholder.
+    const hasRealThumb =
+      item.type === 'video' &&
+      item.thumbUrl &&
+      item.thumbUrl !== item.url &&
+      !item.thumbUrl.endsWith('.mp4');
+
+    return (
+      <TouchableOpacity
+        onPress={() => setFullscreenMedia(item)}
+        activeOpacity={0.9}
+        style={styles.mediaItemContainer}
+      >
+        {item.type === 'image' ? (
+          <Image source={{ uri: item.url }} style={styles.mediaItem} />
+        ) : (
+          <View style={styles.videoContainer}>
+            {hasRealThumb ? (
+              <Image source={{ uri: item.thumbUrl }} style={styles.mediaItem} />
+            ) : (
+              <View style={[styles.mediaItem, styles.videoFallback]}>
+                <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
+                <Text style={styles.videoFallbackText}>Video</Text>
+              </View>
+            )}
+
+            {item.processing_status === 'processing' ? (
+              <View style={styles.processingOverlay}>
+                <ActivityIndicator size="small" color={COLORS.white} />
+                <Text style={styles.processingText}>{t('common.loading')}</Text>
+              </View>
+            ) : item.processing_status === 'failed' ? (
+              <View style={styles.processingOverlay}>
+                <Ionicons name="close-circle-outline" size={32} color={COLORS.white} />
+                <Text style={styles.processingText}>{t('common.error')}</Text>
+              </View>
+            ) : (
+              <View style={styles.playButton}>
+                <Ionicons name="play-circle" size={48} color={COLORS.white} />
+              </View>
+            )}
+          </View>
+        )}
+        <View style={styles.mediaCounter}>
+          <Text style={styles.mediaCounterText}>{index + 1} / {allMedia.length}</Text>
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
+  /* ─── Loading / error states ─── */
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <NetworkStatusBanner />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.gold} />
+          <Text style={styles.loadingText}>{t('common.loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!listing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <NetworkStatusBanner />
+        <View style={styles.centered}>
+          <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
+          <Text style={styles.errorText}>{t('common.error')}</Text>
+          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
+            <Text style={styles.errorButtonText}>{t('common.back')}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  const hasCoords = listing.latitude != null && listing.longitude != null;
+  const coords: LatLng | null = hasCoords
+    ? { latitude: listing.latitude!, longitude: listing.longitude! }
+    : null;
+
+  const isBoosted = listing.boost_until && new Date(listing.boost_until) > new Date();
+  const canViewFullMap = hasCoords && (hasPaidBooking || isBoosted);
+
+  /* ─── Render ─── */
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <StatusBar barStyle="dark-content" backgroundColor={COLORS.white} />
+
+      {/* Network status banner — slides in automatically on poor/no connection */}
+      <NetworkStatusBanner />
+
+      {/* HEADER */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerBtn}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
+        </TouchableOpacity>
+
+        <View style={styles.headerTitleContainer}>
+          <Text style={styles.headerTitle} numberOfLines={1}>{listing.title}</Text>
+          {listing.is_verified && (
+            <View style={styles.verifiedBadge}>
+              <Ionicons name="checkmark-circle" size={16} color={COLORS.white} />
+            </View>
+          )}
+        </View>
+
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <TouchableOpacity onPress={handleShare} style={styles.headerBtn}>
+            <Ionicons name="share-outline" size={24} color={COLORS.greyDark} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={toggleFavorite} style={styles.headerBtn}>
+            <Ionicons
+              name={isFavorite ? 'heart' : 'heart-outline'}
+              size={24}
+              color={isFavorite ? COLORS.gold : COLORS.greyDark}
+            />
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+        {/* MEDIA GALLERY */}
+        {allMedia.length > 0 ? (
+          <View style={styles.gallerySection}>
+            <FlatList
+              ref={flatListRef}
+              data={allMedia}
+              renderItem={renderMediaItem}
+              keyExtractor={(item, idx) => `${item.url}-${idx}`}
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onViewableItemsChanged={onViewableItemsChanged}
+              viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+            />
+            {/* Gallery Navigation Arrows */}
+            {allMedia.length > 1 && (
+              <>
+                <TouchableOpacity style={styles.navArrowLeft} onPress={handlePrevImage} disabled={activeImageIndex === 0}>
+                  <Ionicons name="chevron-back" size={30} color={activeImageIndex === 0 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.navArrowRight} onPress={handleNextImage} disabled={activeImageIndex === allMedia.length - 1}>
+                  <Ionicons name="chevron-forward" size={30} color={activeImageIndex === allMedia.length - 1 ? 'rgba(255,255,255,0.3)' : COLORS.white} />
+                </TouchableOpacity>
+              </>
+            )}
+            {allMedia.length > 1 && (
+              <View style={styles.paginationDots}>
+                {allMedia.map((_, index) => (
+                  <View
+                    key={index}
+                    style={[
+                      styles.paginationDot,
+                      index === activeImageIndex && styles.paginationDotActive,
+                    ]}
+                  />
+                ))}
+              </View>
+            )}
+          </View>
+        ) : (
+          <View style={styles.noMediaContainer}>
+            <Ionicons name="images-outline" size={48} color={COLORS.greyLight} />
+            <Text style={styles.noMediaText}>{t('listing.no_media')}</Text>
+          </View>
+        )}
+
+        {/* CONTENT */}
+        <View style={styles.content}>
+
+          {/* Title & Price */}
+          <View style={styles.titleSection}>
+            <View style={styles.titleRow}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, paddingRight: 8 }}>
+                <Text style={[styles.title, { flexShrink: 1 }]} numberOfLines={2}>{listing.title}</Text>
+                {listing.is_verified && (
+                  <View style={[styles.verifiedBadge, { marginLeft: 8, width: 24, height: 24, borderRadius: 12 }]}>
+                    <Ionicons name="checkmark-circle" size={18} color={COLORS.white} />
+                  </View>
+                )}
+              </View>
+              <View style={[
+                styles.availabilityBadge,
+                listing.available ? styles.availableBadge : styles.unavailableBadge,
+              ]}>
+                <Text style={styles.availabilityText}>
+                  {listing.available ? t('listing.available') : t('listing.rented')}
+                </Text>
+              </View>
+            </View>
+            <Text style={styles.price}>
+              {t('listing.fcfa')} {listing.price.toLocaleString()}
+              <Text style={styles.perMonth}> {t('listing.per_month')}</Text>
+            </Text>
+          </View>
+
+          {/* QUICK ACTIONS */}
+          <View style={styles.quickActions}>
+            <TouchableOpacity style={styles.quickActionBtn} onPress={handleChat}>
+              <Ionicons name="chatbubble-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.quickActionText}>{t('listing.message')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickActionBtn} onPress={handleCall}>
+              <Ionicons name="call-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.quickActionText}>{t('listing.call')}</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.quickActionBtn} onPress={toggleFavorite}>
+              <Ionicons
+                name={isFavorite ? 'heart' : 'heart-outline'}
+                size={20}
+                color={COLORS.gold}
+              />
+              <Text style={styles.quickActionText}>
+                {isFavorite ? t('listing.saved') : t('listing.save')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {/* Premium Fat Share Button */}
+          <TouchableOpacity
+            style={[styles.quickActionBtn, {
+              width: '100%',
+              marginTop: -12,
+              marginBottom: 24,
+              backgroundColor: COLORS.gold,
+              borderColor: COLORS.gold,
+              paddingVertical: 14,
+              shadowColor: COLORS.gold,
+              shadowOffset: { width: 0, height: 4 },
+              shadowOpacity: 0.3,
+              shadowRadius: 8,
+              elevation: 6
+            }]}
+            onPress={handleShare}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="arrow-redo" size={24} color={COLORS.white} />
+            <Text style={[styles.quickActionText, { color: COLORS.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
+          </TouchableOpacity>
+
+          {/* Description */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.sectionTitle}>{t('listing.description')}</Text>
+            </View>
+            <Text style={styles.description}>
+              {listing.description || t('listing.no_description')}
+            </Text>
+          </View>
+
+          {/* Key Details */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="information-circle-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.sectionTitle}>{t('listing.key_details')}</Text>
+            </View>
+            <View style={styles.detailsGrid}>
+              <View style={styles.detailCard}>
+                <Ionicons name="location-outline" size={24} color={COLORS.gold} />
+                <Text style={styles.detailCardLabel}>{t('listing.city')}</Text>
+                <Text style={styles.detailCardValue}>{listing.city || 'N/A'}</Text>
+              </View>
+              <View style={styles.detailCard}>
+                <Ionicons name="bed-outline" size={24} color={COLORS.gold} />
+                <Text style={styles.detailCardLabel}>{t('listing.rooms')}</Text>
+                <Text style={styles.detailCardValue}>{listing.rooms || '—'}</Text>
+              </View>
+              <View style={styles.detailCard}>
+                <Ionicons
+                  name={listing.available ? 'checkmark-circle' : 'close-circle'}
+                  size={24}
+                  color={listing.available ? COLORS.gold : COLORS.greyMedium}
+                />
+                <Text style={styles.detailCardLabel}>{t('listing.status')}</Text>
+                <Text style={styles.detailCardValue}>
+                  {listing.available ? t('listing.available') : t('listing.rented')}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Location Map */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="map-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.sectionTitle}>{t('listing.location')}</Text>
+            </View>
+            <TouchableOpacity
+              style={styles.mapContainer}
+              onPress={() => {
+                if (canViewFullMap) {
+                  setMapVisible(true);
+                } else {
+                  Alert.alert(
+                    t('listing.location_locked'),
+                    t('listing.location_locked_msg'),
+                    [
+                      { text: t('common.cancel'), style: 'cancel' },
+                      { text: t('listing.book_now'), onPress: handleBooking }
+                    ]
+                  );
+                }
+              }}
+              activeOpacity={0.9}
+            >
+              {hasCoords ? (
+                <View style={styles.mapPlaceholder}>
+                  <MapView
+                    style={StyleSheet.absoluteFillObject}
+                    region={{ latitude: coords!.latitude, longitude: coords!.longitude, latitudeDelta: 0.05, longitudeDelta: 0.05 }}
+                    scrollEnabled={false}
+                    zoomEnabled={false}
+                    pitchEnabled={false}
+                    rotateEnabled={false}
+                    showsUserLocation={false}
+                    showsMyLocationButton={false}
+                    showsCompass={false}
+                  />
+                  <View style={styles.processingOverlay}>
+                    <Ionicons name="expand-outline" size={32} color={COLORS.white} />
+                    <Text style={styles.processingText}>{t('listing.click_fullscreen')}</Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={[styles.mapPlaceholder, styles.lockedMap]}>
+                  <Ionicons name="map-outline" size={32} color={COLORS.greyMedium} />
+                  <Text style={styles.lockedMapText}>{t('listing.no_location')}</Text>
+                  <Text style={styles.lockedMapSubtext}>{t('listing.no_coords_msg')}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Landlord Info */}
+          {listing.landlord && (
+            <View style={styles.section}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="person-outline" size={20} color={COLORS.gold} />
+                <Text style={styles.sectionTitle}>{t('listing.landlord')}</Text>
+              </View>
+              <View style={styles.landlordCard}>
+                <View style={styles.landlordAvatar}>
+                  {listing.landlord.profile_pic ? (
+                    <Image
+                      source={{ uri: listing.landlord.profile_pic }}
+                      style={styles.landlordAvatarImage}
+                    />
+                  ) : (
+                    <Text style={styles.landlordInitials}>
+                      {listing.landlord.full_name
+                        ?.split(' ')
+                        .map(n => n[0])
+                        .join('')
+                        .toUpperCase() || 'L'}
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.landlordInfo}>
+                  <Text style={styles.landlordName}>{listing.landlord.full_name}</Text>
+                  <Text style={styles.landlordResponse}>{t('listing.responds_within')}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Reviews */}
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Ionicons name="star-outline" size={20} color={COLORS.gold} />
+              <Text style={styles.sectionTitle}>{t('listing.reviews')}</Text>
+            </View>
+            <RatingsList ratings={listing.ratings} />
+            <ListingReviews listingId={listing.id} />
+          </View>
+
+          <View style={styles.bottomPadding} />
+        </View>
+      </ScrollView>
+
+      {/* Book Button */}
+      <View style={styles.bookContainer}>
+        {existingBookingId ? (
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity
+              style={[styles.bookButton, { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border }]}
+              onPress={() => navigation.navigate('BookingDetails', { bookingId: existingBookingId })}
+            >
+              <Ionicons name="eye-outline" size={20} color={COLORS.greyDark} />
+              <Text style={[styles.bookButtonText, { color: COLORS.greyDark, fontSize: 15 }]}>View Booking</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity style={styles.bookButton} onPress={handleBooking}>
+            <Ionicons name="calendar-outline" size={20} color={COLORS.white} />
+            <Text style={styles.bookButtonText}>{t('listing.book_now')}</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* Map Modal */}
+      {canViewFullMap && (
+        <MapPickerModal
+          visible={mapVisible}
+          readOnly
+          disableInteraction
+          initialLocation={coords || undefined}
+          onClose={() => setMapVisible(false)}
+          onLocationSelected={() => { }}
+        />
+      )}
+
+      {/* Fullscreen Media Modal */}
+      <Modal visible={!!fullscreenMedia} transparent animationType="fade">
+        {fullscreenMedia?.type === 'video' ? (
+          <FullVideoPlayer
+            url={fullscreenMedia.url}
+            processingStatus={fullscreenMedia.processing_status}
+            onClose={() => setFullscreenMedia(null)}
+          />
+        ) : fullscreenMedia?.type === 'image' ? (
+          <View style={styles.fullscreenContainer}>
+            <TouchableOpacity
+              style={styles.fullscreenClose}
+              onPress={() => setFullscreenMedia(null)}
+            >
+              <Ionicons name="close" size={32} color={COLORS.white} />
+            </TouchableOpacity>
+            <Image
+              source={{ uri: fullscreenMedia.url }}
+              style={styles.fullscreenMedia}
+              resizeMode="contain"
+            />
+          </View>
+        ) : (
+          <View />
+        )}
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const getStyles = (COLORS: any) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: COLORS.white },
+  centered: {
+    flex: 1, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: COLORS.white, padding: 20,
+  },
+  loadingText: { marginTop: 12, fontSize: 16, color: COLORS.greyMedium },
+  errorText: {
+    fontSize: 18, fontWeight: '600', color: COLORS.greyDark,
+    marginTop: 16, marginBottom: 24,
+  },
+  errorButton: {
+    paddingHorizontal: 24, paddingVertical: 12,
+    backgroundColor: COLORS.gold, borderRadius: 12,
+  },
+  errorButtonText: { color: COLORS.white, fontSize: 16, fontWeight: '600' },
+  scrollContent: { paddingBottom: 100 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  headerTitleContainer: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginHorizontal: 12, gap: 4
+  },
+  headerTitle: {
+    fontSize: 18, fontWeight: '600', color: COLORS.greyDark, textAlign: 'center', flexShrink: 1
+  },
+  verifiedBadge: {
+    backgroundColor: COLORS.gold,
+    borderRadius: 12,
+    width: 20,
+    height: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.white,
+  },
+  headerBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.offWhite, justifyContent: 'center', alignItems: 'center',
+  },
+  gallerySection: { position: 'relative' },
+  mediaItemContainer: { position: 'relative', width: screenWidth, height: 300 },
+  mediaItem: { width: screenWidth, height: 300, resizeMode: 'cover' },
+  videoContainer: { position: 'relative' },
+  videoFallback: { backgroundColor: COLORS.greyLight, justifyContent: 'center', alignItems: 'center', gap: 6 },
+  videoFallbackText: { fontSize: 13, color: COLORS.greyMedium, fontWeight: '500' },
+  playButton: {
+    position: 'absolute', top: '50%', left: '50%',
+    transform: [{ translateX: -24 }, { translateY: -24 }],
+    backgroundColor: 'rgba(0,0,0,0.3)', borderRadius: 40,
+  },
+  mediaCounter: {
+    position: 'absolute', bottom: 16, right: 16,
+    backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 20, borderWidth: 1, borderColor: COLORS.gold,
+  },
+  mediaCounterText: { color: COLORS.white, fontSize: 12, fontWeight: '600' },
+  paginationDots: {
+    flexDirection: 'row', position: 'absolute', bottom: 16,
+    left: 0, right: 0, justifyContent: 'center', alignItems: 'center', gap: 8,
+  },
+  paginationDot: {
+    width: 8, height: 8, borderRadius: 4, backgroundColor: COLORS.white, opacity: 0.5,
+  },
+  paginationDotActive: { width: 20, backgroundColor: COLORS.gold, opacity: 1 },
+  noMediaContainer: {
+    height: 200, justifyContent: 'center', alignItems: 'center',
+    backgroundColor: COLORS.greyLight,
+  },
+  noMediaText: { marginTop: 12, color: COLORS.greyMedium, fontSize: 16 },
+  content: { padding: 20 },
+  titleSection: { marginBottom: 16 },
+  titleRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 8,
+  },
+  title: {
+    fontSize: 26, fontWeight: '700', color: COLORS.greyDark,
+    letterSpacing: 0.5, flex: 1, marginRight: 12,
+  },
+  availabilityBadge: { paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 },
+  availableBadge: {
+    backgroundColor: COLORS.goldLight, borderWidth: 1, borderColor: COLORS.gold,
+  },
+  unavailableBadge: {
+    backgroundColor: COLORS.greyLight, borderWidth: 1, borderColor: COLORS.greyMedium,
+  },
+  availabilityText: { fontSize: 12, fontWeight: '600', color: COLORS.greyDark },
+  price: { fontSize: 28, fontWeight: '700', color: COLORS.gold },
+  perMonth: { fontSize: 16, fontWeight: '400', color: COLORS.greyMedium },
+  quickActions: {
+    flexDirection: 'row', gap: 12, marginBottom: 24,
+    paddingVertical: 16, borderTopWidth: 1, borderBottomWidth: 1, borderColor: COLORS.border,
+  },
+  quickActionBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 8, borderRadius: 8, backgroundColor: COLORS.offWhite,
+  },
+  quickActionText: { fontSize: 13, fontWeight: '500', color: COLORS.greyDark },
+  section: { marginBottom: 24 },
+  sectionHeader: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 },
+  sectionTitle: {
+    fontSize: 18, fontWeight: '600', color: COLORS.greyDark, letterSpacing: 0.3,
+  },
+  description: {
+    fontSize: 15, lineHeight: 22, color: COLORS.greyMedium,
+    backgroundColor: COLORS.offWhite, padding: 16, borderRadius: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  detailsGrid: { flexDirection: 'row', gap: 12 },
+  detailCard: {
+    flex: 1, backgroundColor: COLORS.offWhite, borderRadius: 16, padding: 16,
+    alignItems: 'center', borderWidth: 1, borderColor: COLORS.border,
+  },
+  detailCardLabel: { fontSize: 13, color: COLORS.greyMedium, marginTop: 8, marginBottom: 4 },
+  detailCardValue: { fontSize: 15, fontWeight: '600', color: COLORS.greyDark },
+  mapContainer: { borderRadius: 16, overflow: 'hidden', borderWidth: 1, borderColor: COLORS.border },
+  mapPlaceholder: {
+    height: 160, backgroundColor: COLORS.offWhite,
+    justifyContent: 'center', alignItems: 'center', gap: 8,
+  },
+  mapPlaceholderText: { fontSize: 14, color: COLORS.greyMedium, fontWeight: '500' },
+  lockedMap: { backgroundColor: COLORS.greyLight },
+  lockedMapText: { fontSize: 16, fontWeight: '600', color: COLORS.greyMedium, marginTop: 8 },
+  lockedMapSubtext: { fontSize: 13, color: COLORS.greyMedium },
+  mapOverlay: {
+    position: 'absolute', top: 12, right: 12,
+    backgroundColor: 'rgba(212, 175, 55, 0.9)',
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingHorizontal: 10, paddingVertical: 6, borderRadius: 20,
+  },
+  mapOverlayText: { fontSize: 12, fontWeight: '600', color: COLORS.white },
+  landlordCard: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: COLORS.offWhite,
+    borderRadius: 16, padding: 16, borderWidth: 1, borderColor: COLORS.border,
+  },
+  landlordAvatar: {
+    width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.goldLight,
+    justifyContent: 'center', alignItems: 'center', marginRight: 16,
+  },
+  landlordAvatarImage: { width: 56, height: 56, borderRadius: 28 },
+  landlordInitials: { fontSize: 20, fontWeight: '700', color: COLORS.gold },
+  landlordInfo: { flex: 1 },
+  landlordName: { fontSize: 16, fontWeight: '600', color: COLORS.greyDark, marginBottom: 4 },
+  landlordResponse: { fontSize: 13, color: COLORS.greyMedium },
+  bookContainer: {
+    backgroundColor: COLORS.white, paddingHorizontal: 20, paddingVertical: 16,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 10,
+  },
+  bookButton: {
+    backgroundColor: COLORS.gold, borderRadius: 16, paddingVertical: 18,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8,
+    shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3, shadowRadius: 8, elevation: 5,
+  },
+  bookButtonText: { color: COLORS.white, fontSize: 18, fontWeight: '700', letterSpacing: 0.5 },
+  fullscreenContainer: {
+    flex: 1, backgroundColor: '#000', justifyContent: 'center', alignItems: 'center',
+  },
+  fullscreenClose: {
+    position: 'absolute', top: 50, right: 20, zIndex: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center',
+  },
+  fullscreenMedia: { width: screenWidth, height: '100%' },
+  processingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 4,
+  },
+  processingText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  navArrowLeft: {
+    position: 'absolute',
+    left: 10,
+    top: '45%',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  navArrowRight: {
+    position: 'absolute',
+    right: 10,
+    top: '45%',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    borderRadius: 20,
+    padding: 2,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  bottomPadding: { height: 20 },
+  shareCtaCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: COLORS.goldLight,
+    padding: 16,
+    borderRadius: 12,
+    marginHorizontal: 16,
+    marginVertical: 12,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+  },
+  shareCtaLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  shareCtaTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.greyDark,
+  },
+  shareCtaSubtitle: {
+    fontSize: 12,
+    color: COLORS.greyMedium,
+    marginTop: 2,
+  },
+});
+
+export default ListingDetailsScreen;
+</file>
+
+<file path="netlify.toml">
+[build]
+  command = "npx expo export --platform web"
+  publish = "dist"
+
+[[redirects]]
+  from = "/listing/*"
+  to = "https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/listing/*"
+  [headers.values]
+    Cache-Control = "public, max-age=86400, s-maxage=604800"
+    X-Content-Type-Options = "nosniff"
 </file>
 
 <file path="package.json">
@@ -33028,6 +33671,333 @@ const styles = StyleSheet.create({
   },
   "private": true
 }
+</file>
+
+<file path="src/services/paymentService.ts">
+// src/services/paymentService.ts
+
+import { supabase } from "../utils/supabaseClient";
+
+const API_BASE_URL =
+  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URLg;
+
+export interface Payment {
+  id: string;
+
+  transactionId: string;
+
+  amount: number;
+
+  sender: string;
+
+  receiver: string;
+
+  status: "pending" | "completed" | "failed";
+
+  date: string;
+
+  description: string;
+
+  fee?: number;
+
+  netAmount?: number;
+}
+
+export interface InitiateTransferArgs {
+  payerPhone: string;
+
+  receiverPhone: string;
+
+  amount?: string;
+
+  reason: string;
+
+  transferType: string;
+
+  planId?: string;
+
+  tierId?: string;
+
+  client: {
+    name: string;
+
+    description: string;
+
+    payer_id: string;
+
+    payee_id: string;
+
+    listing_id: string;
+
+    booking_id: string;
+
+    idempotency_key: string;
+  };
+}
+
+export interface InitiateCollectionArgs {
+  payerPhone: string;
+
+  amount?: string;
+
+  reason: string;
+
+  planId?: string;
+
+  tierId?: string;
+
+  client: {
+    name: string;
+
+    id: string;
+
+    payer_id: string;
+
+    listing_id: string;
+
+    plan_id?: string | null;
+
+    idempotency_key: string;
+  };
+}
+
+export interface InitiateBookingPaymentArgs {
+  bookingId: string;
+
+  payerPhone: string;
+
+  paymentKind: "initial" | "rent_completion" | "renewal";
+
+  idempotencyKey: string;
+}
+
+export interface InitiateVerificationPaymentArgs {
+  payerPhone: string;
+
+  listingId: string;
+
+  payerId: string;
+}
+
+/**
+
+ * Retrieves the active Supabase session and constructs standard Auth headers.
+
+ */
+
+const getAuthHeaders = async () => {
+  const {
+    data: { session },
+    error,
+  } = await supabase.auth.getSession();
+
+  if (error || !session?.access_token) {
+    console.error("🔒 [PaymentService] Auth Error: No active session found.");
+
+    throw new Error("Your session has expired. Please sign in again.");
+  }
+
+  return {
+    "Content-Type": "application/json",
+
+    Authorization: `Bearer ${session.access_token}`,
+  };
+};
+
+export const paymentService = {
+  async initiateCollection(args: InitiateCollectionArgs) {
+    console.info(
+      "💸 [PaymentService] Initiating Collection:",
+      args.client.idempotency_key,
+    );
+
+    const headers = await getAuthHeaders();
+
+    const response = await fetch(`${API_BASE_URL}/api/payments/collection`, {
+      method: "POST",
+
+      headers,
+
+      body: JSON.stringify(args),
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("❌ [PaymentService] Collection Failed:", body);
+
+      throw new Error(
+        body?.message ||
+          body?.error ||
+          `Request failed with status ${response.status}`,
+      );
+    }
+
+    console.info("✅ [PaymentService] Collection Success:", body);
+
+    return body;
+  },
+
+  async initiateTransfer(args: InitiateTransferArgs) {
+    console.info(
+      "💸 [PaymentService] Initiating Transfer:",
+      args.client.idempotency_key,
+    );
+
+    const headers = await getAuthHeaders();
+
+    const response = await fetch(`${API_BASE_URL}/api/payments/transfer`, {
+      method: "POST",
+
+      headers,
+
+      body: JSON.stringify(args),
+    });
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("❌ [PaymentService] Transfer Failed:", body);
+
+      throw new Error(
+        body?.message ||
+          body?.error ||
+          `Request failed with status ${response.status}`,
+      );
+    }
+
+    console.info("✅ [PaymentService] Transfer Success:", body);
+
+    return body;
+  },
+
+  async initiateBookingPayment(args: InitiateBookingPaymentArgs) {
+    console.info(
+      "💸 [PaymentService] Initiating Booking Payment for:",
+      args.bookingId,
+    );
+
+    const headers = await getAuthHeaders();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/payments/booking-intents`,
+      {
+        method: "POST",
+
+        headers,
+
+        body: JSON.stringify(args),
+      },
+    );
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("❌ [PaymentService] Booking Payment Failed:", body);
+
+      throw new Error(body?.error || "Unable to start payment.");
+    }
+
+    console.info("✅ [PaymentService] Booking Payment Success:", body.data);
+
+    return body.data;
+  },
+
+  async initiateVerificationPayment(args: InitiateVerificationPaymentArgs) {
+    console.info(
+      "💸 [PaymentService] Initiating Verification Payment for listing:",
+      args.listingId,
+    );
+
+    const headers = await getAuthHeaders();
+
+    const response = await fetch(
+      `${API_BASE_URL}/api/payments/verification-intent`,
+      {
+        method: "POST",
+
+        headers,
+
+        body: JSON.stringify(args),
+      },
+    );
+
+    const body = await response.json().catch(() => ({}));
+
+    if (!response.ok) {
+      console.error("❌ [PaymentService] Verification Payment Failed:", body);
+
+      throw new Error(body?.error || "Unable to start verification payment.");
+    }
+
+    console.info(
+      "✅ [PaymentService] Verification Payment Success:",
+      body.data,
+    );
+
+    return body.data;
+  },
+
+  async fetchPayments(userId: string): Promise<Payment[]> {
+    console.info(`🔄 [PaymentService] Fetching history for user: ${userId}`);
+
+    const { data, error } = await supabase
+
+      .from("payments")
+
+      .select("*")
+
+      .eq("payer_id", userId)
+
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("❌ [PaymentService] Supabase Fetch Error:", error);
+
+      throw new Error(error.message || "Failed to fetch payment history");
+    }
+
+    console.info(
+      `✅ [PaymentService] Fetched ${data?.length || 0} payment records.`,
+    );
+
+    return (data || []).map((row: any) => ({
+      id: row.id,
+
+      transactionId: row.transaction_ref || row.id,
+
+      amount: parseFloat(row.amount),
+
+      sender: row.payer_id === userId ? "You" : row.payer_id,
+
+      receiver: (() => {
+        // For rent_completion: show landlord name + phone if available
+        if (row.payment_kind === 'rent_completion') {
+          const name = row.receiver_name;
+          const phone = row.receiver_phone;
+          if (name && phone) return `${name} (${phone})`;
+          if (name) return name;
+          if (phone) return phone;
+          return 'Landlord';
+        }
+        // For initial booking / verification: money goes to Dhub
+        return 'Dhub';
+      })(),
+
+      status: row.status as any,
+
+      date: row.created_at,
+
+      description: row.currency ? `${row.currency} Payment` : "Payment",
+
+      fee: row.fee ? parseFloat(row.fee) : 0,
+
+      netAmount: row.net_amount
+        ? parseFloat(row.net_amount)
+        : parseFloat(row.amount),
+    }));
+  },
+};
 </file>
 
 </files>

@@ -338,6 +338,8 @@ export const signUpWithPhone = async (
 // ----------------------
 // DEEP LINK / OAUTH HANDOVER
 // ----------------------
+// src/utils/login.ts
+
 export const createSessionFromUrl = async (url: string) => {
   const STEP = 'DEEP_LINK';
   const requestId = Math.random().toString(36).substring(2, 10);
@@ -378,6 +380,14 @@ export const createSessionFromUrl = async (url: string) => {
       console.log(`[${STEP}] Exchanging code for session...`);
       const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
       if (exchangeError) throw exchangeError;
+
+      // ✅ CLEAN THE URL AFTER SUCCESSFUL EXCHANGE (Web only)
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.pathname === '/auth/callback') {
+        cleanUrl.search = ''; // removes all query parameters
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+      }
+
       return data.session;
     }
 
@@ -388,6 +398,14 @@ export const createSessionFromUrl = async (url: string) => {
         refresh_token,
       });
       if (setError) throw setError;
+
+      // ✅ CLEAN THE URL AFTER SUCCESSFUL SET SESSION (Web only)
+      const cleanUrl = new URL(window.location.href);
+      if (cleanUrl.pathname === '/auth/callback') {
+        cleanUrl.search = '';
+        window.history.replaceState({}, document.title, cleanUrl.toString());
+      }
+
       return data.session;
     }
 

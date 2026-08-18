@@ -223,7 +223,7 @@ const ListingDetailsScreen: React.FC = () => {
     //      directly if installed; bots don't matter here as users tap
     //      from their phone where the app is already present.
     const shareUrl = Platform.OS === 'web'
-      ? `https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/listing-og?id=${listingId}`
+      ? `https://dhubweb.diracmr.com/listing/${listingId}`
       : `dhub://listing/${listingId}`;
     const location = listing?.city || listing?.city || '';
     const messageText = location

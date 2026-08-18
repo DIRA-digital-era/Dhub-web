@@ -19,6 +19,14 @@ import RootNavigator from "./src/navigation/RootNavigator";
 import UpdateRequiredScreen from "./src/screens/common/UpdateRequiredScreen";
 import store, { RootState } from "./src/store/store";
 
+const linking = {
+  prefixes: ['https://dhubweb.diracmr.com', 'dhub://'],
+  config: {
+    screens: {
+      ListingDetails: 'app/listing/:listingId',
+    },
+  },
+};
 /**
  * ✅ This component blocks the app until Supabase session
  * is fully hydrated into Redux.
@@ -70,7 +78,7 @@ function ThemedApp() {
   const { colors, isDark } = useTheme();
 
   const baseTheme = isDark ? DarkTheme : DefaultTheme;
-  
+
   const navigationTheme = {
     ...baseTheme,
     dark: isDark,
@@ -90,6 +98,7 @@ function ThemedApp() {
       <NavigationContainer
         ref={navigationRef}
         theme={navigationTheme}
+        linking={linking}
         onReady={() => {
           // 🟢 Web-only: parse the URL for a listing ID and navigate
           if (Platform.OS === 'web' && typeof window !== 'undefined') {
