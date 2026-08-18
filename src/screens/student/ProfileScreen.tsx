@@ -5,7 +5,6 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
@@ -228,7 +227,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView 
         contentContainerStyle={[styles.scrollContainer, Platform.OS === 'web' && { maxWidth: 680, alignSelf: 'center', width: '100%' }]} 
         keyboardShouldPersistTaps="handled"
@@ -344,7 +343,7 @@ export default function ProfileScreen() {
         secondaryButtonText={t('common.cancel')}
         onClose={() => setShowEmailGate(false)}
       />
-    </SafeAreaView>
+    </View>
   );
 }
 
