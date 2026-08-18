@@ -20,13 +20,18 @@ import UpdateRequiredScreen from "./src/screens/common/UpdateRequiredScreen";
 import store, { RootState } from "./src/store/store";
 
 const linking = {
-  prefixes: ['https://dhubweb.diracmr.com', 'dhub://'],
+  prefixes: [
+    'https://dhubweb.diracmr.com',
+    'http://localhost:8081',
+    'http://localhost:19006',
+  ],
   config: {
     screens: {
       ListingDetails: 'app/listing/:listingId',
     },
   },
 };
+
 /**
  * ✅ This component blocks the app until Supabase session
  * is fully hydrated into Redux.
