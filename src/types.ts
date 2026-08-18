@@ -303,7 +303,7 @@ export type StudentStackParamList = {
   };
   Support: { currentUserId: string };
   Legal: undefined;
-  ViewBookingsScreen: undefined;
+  ViewBookingsScreen: { fromProfile?: boolean } | undefined;
   BookingDetails: { bookingId: string };
   PendingScreen: { bookingId: string };
   ListingReview: { listing_id: string };

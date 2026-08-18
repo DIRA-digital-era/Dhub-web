@@ -5,6 +5,7 @@ import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
@@ -227,12 +228,12 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: colors.background }}>
       <ScrollView 
         contentContainerStyle={[styles.scrollContainer, Platform.OS === 'web' && { maxWidth: 680, alignSelf: 'center', width: '100%' }]} 
         keyboardShouldPersistTaps="handled"
       >
-        <Text style={[styles.title, { color: colors.text }, Platform.OS === 'web' && { paddingTop: 16 }]}>{t('profile.title')}</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
 
         <View style={[styles.section, { backgroundColor: colors.card }]}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.full_name')}</Text>
@@ -296,7 +297,7 @@ export default function ProfileScreen() {
 
         {/* Quick Actions */}
         <View style={[styles.section, { backgroundColor: colors.card }]}>
-          <ProfileButton icon="calendar" label={t('profile.view_bookings')} onPress={() => navigation.navigate("ViewBookingsScreen" as never)} colors={colors} />
+          <ProfileButton icon="calendar" label={t('profile.view_bookings')} onPress={() => (navigation as any).navigate("ViewBookingsScreen", { fromProfile: true })} colors={colors} />
           <ProfileButton icon="card" label="My Payments" onPress={() => navigation.navigate("Payments" as never)} colors={colors} />
           <ProfileButton icon="notifications" label={t('common.notifications')} onPress={() => navigation.navigate("Notifications" as never)} colors={colors} />
           {/* ✅ Added Terms & Privacy Policy button */}
@@ -343,7 +344,7 @@ export default function ProfileScreen() {
         secondaryButtonText={t('common.cancel')}
         onClose={() => setShowEmailGate(false)}
       />
-    </View>
+    </SafeAreaView>
   );
 }
 
@@ -366,7 +367,7 @@ function ProfileButton({
 
 const styles = StyleSheet.create({
   scrollContainer: { paddingHorizontal: 20, paddingBottom: 40, padding: 12 },
-  title: { fontSize: 26, fontWeight: "700", color: "#333", marginVertical: 20, paddingHorizontal: 20, paddingTop: 50, paddingBottom: 10 },
+  title: { fontSize: 26, fontWeight: "700", color: "#333", marginVertical: 16, paddingHorizontal: 20, paddingBottom: 10 },
   section: { backgroundColor: "#f7f7f7", borderRadius: 12, padding: 16, marginBottom: 20 },
   label: { color: "#777", marginTop: 12, marginBottom: 4 },
   input: { backgroundColor: "#fff", borderWidth: 1, borderColor: "#ddd", borderRadius: 8, padding: 12, fontSize: 16 },

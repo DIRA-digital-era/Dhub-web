@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useFocusEffect, useNavigation } from "@react-navigation/native";
+import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { differenceInDays, format } from "date-fns";
 import React, { useCallback, useState } from "react";
@@ -62,6 +62,8 @@ export default function ViewBookingsScreen() {
   const { t } = useTranslation();
   const { user } = useAuth();
   const navigation = useNavigation<ViewBookingsNavProp>();
+  const route = useRoute<any>();
+  const fromProfile = route.params?.fromProfile === true;
   
   const [bookings, setBookings] = useState<BookingWithListing[]>([]);
   const [loading, setLoading] = useState(true);
@@ -335,7 +337,19 @@ export default function ViewBookingsScreen() {
   const renderHeader = () => (
     <View style={styles.header}>
       <View style={styles.headerTop}>
+        {fromProfile ? (
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() => navigation.goBack()}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
+          </TouchableOpacity>
+        ) : (
+          <View style={styles.backButton} />
+        )}
         <Text style={styles.headerTitle}>{t('bookings.title')}</Text>
+        <View style={styles.backButton} />
       </View>
       
       {/* Top Tabs */}
