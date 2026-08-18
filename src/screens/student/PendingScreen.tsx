@@ -1,19 +1,11 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/PendingScreen.tsx
 
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { StudentStackNavigationProp, StudentStackRouteProp } from '../../types';
@@ -74,7 +66,7 @@ const PendingScreen: React.FC = () => {
           .single();
 
         if (error || !data) {
-          Alert.alert(t('common.error'), t('booking.not_found'));
+          showAlert(t('common.error'), t('booking.not_found'));
           goHome(); // ✅ go home on error
           return;
         }
@@ -82,7 +74,7 @@ const PendingScreen: React.FC = () => {
         setBooking(data);
 
         if (data.approval_status === 'rejected' || data.status === 'cancelled') {
-          Alert.alert(t('booking.declined_title'), t('booking.declined_msg'));
+          showAlert(t('booking.declined_title'), t('booking.declined_msg'));
           goHome();
           return;
         }
@@ -91,7 +83,7 @@ const PendingScreen: React.FC = () => {
         setPaid(data.payment_status === 'completed');
       } catch (err) {
         console.error('[PendingScreen] fetch error:', err);
-        Alert.alert(t('common.error'), t('booking.failed_msg'));
+        showAlert(t('common.error'), t('booking.failed_msg'));
         goHome();
       } finally {
         setLoading(false);
@@ -118,7 +110,7 @@ const PendingScreen: React.FC = () => {
           setBooking((prev: any) => ({ ...prev, ...updated }));
 
           if (updated.approval_status === 'rejected' || updated.status === 'cancelled') {
-            Alert.alert(t('booking.declined_title'), t('booking.declined_msg'));
+            showAlert(t('booking.declined_title'), t('booking.declined_msg'));
             goHome();
           }
 
@@ -134,7 +126,7 @@ const PendingScreen: React.FC = () => {
   // ── Navigate to payment ────────────────────────────────────────────────────
   const handleProceedToPayment = () => {
     if (!canPay) {
-      Alert.alert(t('booking.not_approved_title'), t('booking.not_approved_msg'));
+      showAlert(t('booking.not_approved_title'), t('booking.not_approved_msg'));
       return;
     }
     const caution = booking.caution_fee ?? 0;

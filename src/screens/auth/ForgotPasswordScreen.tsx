@@ -1,19 +1,6 @@
+import { showAlert } from '../../utils/alert';
 import React, { useState } from 'react';
-import {
-  View,
-  TextInput,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  ActivityIndicator,
-  Alert,
-  TouchableWithoutFeedback,
-  Keyboard,
-  StatusBar,
-} from 'react-native';
+import { View, TextInput, StyleSheet, Text, TouchableOpacity, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator, TouchableWithoutFeedback, Keyboard, StatusBar } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -92,7 +79,7 @@ const ForgotPasswordScreen: React.FC = () => {
     Keyboard.dismiss();
 
     if (!identifier.trim()) {
-      Alert.alert(t('common.error'), t('auth.enter_email_or_phone') || 'Please enter your email or phone number.');
+      showAlert(t('common.error'), t('auth.enter_email_or_phone') || 'Please enter your email or phone number.');
       return;
     }
 
@@ -108,7 +95,7 @@ const ForgotPasswordScreen: React.FC = () => {
         await handlePhoneReset(identifier);
       }
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || t('auth.reset_failed'));
+      showAlert(t('common.error'), err.message || t('auth.reset_failed'));
     } finally {
       setLoading(false);
     }

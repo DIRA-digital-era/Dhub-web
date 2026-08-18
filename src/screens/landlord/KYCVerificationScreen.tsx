@@ -1,15 +1,6 @@
+import { showAlert } from '../../utils/alert';
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-  Image,
-  TextInput,
-  Linking,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Linking } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -95,7 +86,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
 
     if (status === 'denied' && canAskAgain) {
       return new Promise((resolve) => {
-        Alert.alert(
+        showAlert(
           'Permission Required',
           'We need access to your media library to upload documents. Please allow access.',
           [
@@ -113,7 +104,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
       });
     }
 
-    Alert.alert(
+    showAlert(
       'Permission Required',
       'Access to your photos has been blocked. Please enable permission from Settings.',
       [
@@ -143,7 +134,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
       }
     } catch (error) {
       console.error('Error picking document:', error);
-      Alert.alert('Error', 'Failed to pick document');
+      showAlert('Error', 'Failed to pick document');
     }
   };
 
@@ -185,7 +176,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
     
     // Basic validation
     if (!documents.idFront || !documents.idBack || !documents.proofOfOwnership || !documents.proofOfAddress) {
-      Alert.alert('Incomplete', 'Please upload all required documents.');
+      showAlert('Incomplete', 'Please upload all required documents.');
       return;
     }
 
@@ -220,14 +211,14 @@ const fetchLandlordProfile = async (): Promise<void> => {
     // Remove cache so next fetch gets fresh status
     await AsyncStorage.removeItem(KYC_CACHE_KEY);
 
-    Alert.alert(
+    showAlert(
       'Success',
       'KYC verification submitted! We will review your documents and update your status soon.',
       [{ text: 'OK', onPress: () => navigation.goBack() }]
     );
   } catch (error) {
     console.error('Error submitting KYC:', error);
-    Alert.alert('Error', 'Failed to submit KYC verification');
+    showAlert('Error', 'Failed to submit KYC verification');
   } finally {
     setLoading(false);
   }

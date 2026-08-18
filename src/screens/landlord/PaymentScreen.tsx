@@ -1,19 +1,10 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/PaymentsScreen.tsx
 import { useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Payment } from '../../services/paymentService';
@@ -114,7 +105,7 @@ const PaymentsScreen: React.FC = () => {
     setDescription('');
     setActiveTab('history');
     dispatch(clearInitiateState());
-    Alert.alert(
+    showAlert(
       'Payment Initiated ✅',
       boostParams
         ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
@@ -125,24 +116,24 @@ const PaymentsScreen: React.FC = () => {
   // Failure → show alert
   useEffect(() => {
     if (!initiateError) return;
-    Alert.alert('Payment Failed', initiateError);
+    showAlert('Payment Failed', initiateError);
     dispatch(clearInitiateState());
   }, [initiateError]);
 
   // ---------- Payment Handler ----------
   const handleSendPayment = async () => {
     if (!amount) {
-      Alert.alert('Validation Error', 'Please enter an amount');
+      showAlert('Validation Error', 'Please enter an amount');
       return;
     }
     const numAmount = parseFloat(amount);
     if (isNaN(numAmount) || numAmount <= 0) {
-      Alert.alert('Validation Error', 'Enter a valid amount');
+      showAlert('Validation Error', 'Enter a valid amount');
       return;
     }
 
     if (!user?.id) {
-      Alert.alert('Error', 'User account details missing. Please sign in again.');
+      showAlert('Error', 'User account details missing. Please sign in again.');
       return;
     }
 
@@ -158,7 +149,7 @@ const PaymentsScreen: React.FC = () => {
       }
 
       if (!payerPhone) {
-        Alert.alert('Error', 'Add a mobile-money number to your profile before paying.');
+        showAlert('Error', 'Add a mobile-money number to your profile before paying.');
         return;
       }
 
@@ -171,7 +162,7 @@ const PaymentsScreen: React.FC = () => {
     }
 
     if (!user.phone) {
-      Alert.alert('Error', 'User account details missing. Please sign in again.');
+      showAlert('Error', 'User account details missing. Please sign in again.');
       return;
     }
 
@@ -279,10 +270,10 @@ const PaymentsScreen: React.FC = () => {
       if (await Sharing.isAvailableAsync()) {
         await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Receipt' });
       } else {
-        Alert.alert('Saved', `PDF saved to: ${uri}`);
+        showAlert('Saved', `PDF saved to: ${uri}`);
       }
     } catch {
-      Alert.alert('Error', 'Failed to generate PDF');
+      showAlert('Error', 'Failed to generate PDF');
     } finally {
       setPdfLoading(false);
     }

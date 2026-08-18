@@ -1,18 +1,8 @@
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
-import {
-  ActivityIndicator,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../utils/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
@@ -46,11 +36,11 @@ export default function ReportUserScreen() {
 
   const handleSubmitReport = async () => {
     if (!targetName.trim() || !explanation.trim()) {
-      return Alert.alert("Required Fields", `Please specify the ${targetLabel}'s name and your explanation.`);
+      return showAlert("Required Fields", `Please specify the ${targetLabel}'s name and your explanation.`);
     }
 
     if (!user) {
-      return Alert.alert("Error", "You must be logged in to submit a report.");
+      return showAlert("Error", "You must be logged in to submit a report.");
     }
 
     setLoading(true);
@@ -71,14 +61,14 @@ export default function ReportUserScreen() {
       });
 
       if (error) {
-        Alert.alert("Submission Failed", error.message);
+        showAlert("Submission Failed", error.message);
       } else {
-        Alert.alert("Report Submitted", "Your report has been received by our admin team.", [
+        showAlert("Report Submitted", "Your report has been received by our admin team.", [
           { text: "OK", onPress: () => navigation.goBack() }
         ]);
       }
     } catch (err: any) {
-      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      showAlert("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setLoading(false);
     }

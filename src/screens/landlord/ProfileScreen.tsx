@@ -4,22 +4,35 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from '../../utils/supabaseClient';
+
+const showAlert = (title: string, message?: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    const msg = message ? `${title}\n${message}` : title;
+    if (buttons && buttons.length > 0) {
+      const isConfirm = buttons.length > 1;
+      if (isConfirm) {
+        if (window.confirm(msg)) {
+          const confirmBtn = buttons.find(b => b.style !== 'cancel') || buttons[0];
+          if (confirmBtn.onPress) confirmBtn.onPress();
+        } else {
+          const cancelBtn = buttons.find(b => b.style === 'cancel');
+          if (cancelBtn && cancelBtn.onPress) cancelBtn.onPress();
+        }
+      } else {
+        window.alert(msg);
+        if (buttons[0].onPress) buttons[0].onPress();
+      }
+    } else {
+      window.alert(msg);
+    }
+    return;
+  }
+  showAlert(title, message, buttons);
+};
 
 export default function LandlordProfileScreen() {
   const navigation = useNavigation();
@@ -61,7 +74,7 @@ export default function LandlordProfileScreen() {
       }
     } catch (err: any) {
       console.error("Fetch landlord profile error:", err);
-      Alert.alert(t('common.error'), err.message || "Unknown error");
+      showAlert(t('common.error'), err.message || "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -81,23 +94,23 @@ export default function LandlordProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!fullName.trim()) return Alert.alert(t('common.error'), t('profile.full_name') + " is required");
-    if (email && !validateEmail(email)) return Alert.alert(t('common.error'), "Invalid email format");
-    if (!validateMomo(momo)) return Alert.alert(t('common.error'), "Momo must be 9 digits");
-    if (!user) return Alert.alert(t('common.error'), "User session missing");
+    if (!fullName.trim()) return showAlert(t('common.error'), t('profile.full_name') + " is required");
+    if (email && !validateEmail(email)) return showAlert(t('common.error'), "Invalid email format");
+    if (!validateMomo(momo)) return showAlert(t('common.error'), "Momo must be 9 digits");
+    if (!user) return showAlert(t('common.error'), "User session missing");
 
     setLoading(true);
     try {
       const { data: sessionData } = await supabase.auth.getSession();
       if (!sessionData?.session) {
         setLoading(false);
-        return Alert.alert(t('profile.session_missing'), t('profile.session_missing_msg'));
+        return showAlert(t('profile.session_missing'), t('profile.session_missing_msg'));
       }
 
       if (email !== user.email) {
         const { error: authError } = await supabase.auth.updateUser({ email });
         if (authError) throw new Error(authError.message);
-        Alert.alert(
+        showAlert(
           t('profile.verification_required'),
           t('profile.verification_msg'),
           [
@@ -120,11 +133,11 @@ export default function LandlordProfileScreen() {
       if (error) throw new Error(error.message);
 
       await AsyncStorage.setItem("appLanguage", preferredLanguage);
-      Alert.alert(t('common.success'), t('profile.saved'));
+      showAlert(t('common.success'), t('profile.saved'));
       await fetchLandlordData();
     } catch (err: any) {
       console.error("Save profile error:", err);
-      Alert.alert(t('common.error'), err.message || "Unknown error");
+      showAlert(t('common.error'), err.message || "Unknown error");
     } finally {
       setLoading(false);
     }
@@ -136,25 +149,25 @@ export default function LandlordProfileScreen() {
       await signOut();
       navigation.reset({ index: 0, routes: [{ name: "SignIn" as never }] });
     } catch {
-      Alert.alert(t('common.error'), "Logout failed. Please try again.");
+      showAlert(t('common.error'), "Logout failed. Please try again.");
     } finally {
       setLoading(false);
     }
   };
 
   const handleUpdatePassword = async () => {
-    if (!newPassword || !confirmPassword) return Alert.alert(t('common.error'), "Please fill in all fields");
-    if (newPassword !== confirmPassword) return Alert.alert(t('common.error'), "Passwords do not match");
-    if (newPassword.length < 6) return Alert.alert(t('common.error'), "Password must be at least 6 characters");
+    if (!newPassword || !confirmPassword) return showAlert(t('common.error'), "Please fill in all fields");
+    if (newPassword !== confirmPassword) return showAlert(t('common.error'), "Passwords do not match");
+    if (newPassword.length < 6) return showAlert(t('common.error'), "Password must be at least 6 characters");
 
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
 
     if (error) {
-      Alert.alert(t('common.error'), error.message);
+      showAlert(t('common.error'), error.message);
     } else {
-      Alert.alert(t('common.success'), "Password updated successfully");
+      showAlert(t('common.success'), "Password updated successfully");
       setChangePasswordVisible(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -162,7 +175,7 @@ export default function LandlordProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       t('profile.delete_confirm_title'),
       t('profile.delete_confirm_msg'),
       [
@@ -176,7 +189,7 @@ export default function LandlordProfileScreen() {
             const { error } = await supabase.from('users').update({ is_active: false }).eq('id', user.id);
             if (error) {
               setLoading(false);
-              return Alert.alert(t('common.error'), error.message);
+              return showAlert(t('common.error'), error.message);
             }
             await signOut();
           }
@@ -198,12 +211,12 @@ export default function LandlordProfileScreen() {
   ];
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView 
+        contentContainerStyle={[styles.scrollContainer, Platform.OS === 'web' && { maxWidth: 680, alignSelf: 'center', width: '100%' }]} 
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.title, { color: colors.text }, Platform.OS === 'web' && { paddingTop: 16 }]}>{t('profile.title')}</Text>
 
         {/* Editable Info */}
         <View style={[styles.section, { backgroundColor: colors.card }]}>
@@ -349,7 +362,7 @@ export default function LandlordProfileScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

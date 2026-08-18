@@ -5,21 +5,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  KeyboardAvoidingView,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { ActivityIndicator, Dimensions, Image, KeyboardAvoidingView, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import MapPickerModal from '../../components/MapPickerModal';
 import { useTheme } from '../../context/ThemeContext';
@@ -43,7 +29,7 @@ const showAlert = (title: string, message?: string, buttons?: any[]) => {
     }
     return;
   }
-  Alert.alert(title, message, buttons);
+  showAlert(title, message, buttons);
 };
 
 const UploadListingScreen: React.FC = () => {

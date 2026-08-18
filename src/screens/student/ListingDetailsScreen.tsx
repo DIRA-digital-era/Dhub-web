@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/ListingDetailsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import {
@@ -6,23 +7,7 @@ import {
   useRoute,
 } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Linking, Modal, Platform, ScrollView, Share, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView from 'react-native-maps';
@@ -91,6 +76,9 @@ const ListingDetailsScreen: React.FC = () => {
   const [hasPaidBooking, setHasPaidBooking] = useState(false);
   const [existingBookingId, setExistingBookingId] = useState<string | null>(null);
 
+  const [showProfileGate, setShowProfileGate] = useState(false);
+  const [showLocationGate, setShowLocationGate] = useState(false);
+
   const flatListRef = React.useRef<FlatList>(null);
 
   // Close fullscreen media when screen loses focus
@@ -147,7 +135,7 @@ const ListingDetailsScreen: React.FC = () => {
 
   const toggleFavorite = async () => {
     if (!userId || !listing) {
-      Alert.alert(t('common.error'), 'Please sign in to save favorites.');
+      showAlert(t('common.error'), 'Please sign in to save favorites.');
       return;
     }
     try {
@@ -164,14 +152,15 @@ const ListingDetailsScreen: React.FC = () => {
         setIsFavorite(true);
       }
     } catch {
-      Alert.alert(t('common.error'), 'Failed to update favorites. Please try again.');
+      showAlert(t('common.error'), 'Failed to update favorites. Please try again.');
     }
   };
 
   /* ─── Actions ─── */
   const handleBooking = async () => {
     if (!userId) {
-      Alert.alert(t('common.error'), 'Please sign in to book.');
+      if (Platform.OS === 'web') window.alert('Please sign in to book.');
+      else showAlert(t('common.error'), 'Please sign in to book.');
       return;
     }
 
@@ -183,21 +172,7 @@ const ListingDetailsScreen: React.FC = () => {
       .single();
 
     if (!studentData || !studentData.age || !studentData.profession || !studentData.contact_number) {
-      if (Platform.OS === 'web') {
-        const wantsToUpdate = window.confirm("Profile Verification Required\n\nLandlords require your age, profession/level, and Momo number before accepting bookings.\n\nClick OK to Update Profile.");
-        if (wantsToUpdate) {
-          navigation.navigate('StudentTabs', { screen: 'Profile' });
-        }
-      } else {
-        Alert.alert(
-          "Profile Verification Required",
-          "Landlords require your age, profession/level, and Momo number before accepting bookings.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Update Profile", onPress: () => navigation.navigate('StudentTabs', { screen: 'Profile' }) }
-          ]
-        );
-      }
+      setShowProfileGate(true);
       return;
     }
 
@@ -263,7 +238,7 @@ const ListingDetailsScreen: React.FC = () => {
         params: { threadId },
       });
     } catch (err) {
-      Alert.alert(t('common.error'), 'Could not initiate chat. Please try again later.');
+      showAlert(t('common.error'), 'Could not initiate chat. Please try again later.');
     }
   };
 
@@ -606,14 +581,7 @@ const ListingDetailsScreen: React.FC = () => {
                 if (canViewFullMap) {
                   setMapVisible(true);
                 } else {
-                  Alert.alert(
-                    t('listing.location_locked'),
-                    t('listing.location_locked_msg'),
-                    [
-                      { text: t('common.cancel'), style: 'cancel' },
-                      { text: t('listing.book_now'), onPress: handleBooking }
-                    ]
-                  );
+                  setShowLocationGate(true);
                 }
               }}
               activeOpacity={0.9}
@@ -750,6 +718,68 @@ const ListingDetailsScreen: React.FC = () => {
           <View />
         )}
       </Modal>
+
+      {/* Profile Verification Gate Modal */}
+      <Modal visible={showProfileGate} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Verification Required</Text>
+              <TouchableOpacity onPress={() => setShowProfileGate(false)}>
+                <Ionicons name="close" size={24} color={COLORS.greyDark} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalBody}>
+              Landlords require your age, profession/level, and Momo number before accepting bookings.
+            </Text>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowProfileGate(false)}>
+                <Text style={styles.modalCancelBtnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  setShowProfileGate(false);
+                  navigation.navigate('StudentTabs', { screen: 'Profile' });
+                }}
+              >
+                <Text style={styles.modalPrimaryBtnText}>Update Profile</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Location Gate Modal */}
+      <Modal visible={showLocationGate} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>{t('listing.location_locked')}</Text>
+              <TouchableOpacity onPress={() => setShowLocationGate(false)}>
+                <Ionicons name="close" size={24} color={COLORS.greyDark} />
+              </TouchableOpacity>
+            </View>
+            <Text style={styles.modalBody}>
+              {t('listing.location_locked_msg')}
+            </Text>
+            <View style={styles.modalFooter}>
+              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowLocationGate(false)}>
+                <Text style={styles.modalCancelBtnText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalPrimaryBtn}
+                onPress={() => {
+                  setShowLocationGate(false);
+                  handleBooking();
+                }}
+              >
+                <Text style={styles.modalPrimaryBtnText}>{t('listing.book_now')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -770,10 +800,10 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     backgroundColor: COLORS.gold, borderRadius: 12,
   },
   errorButtonText: { color: COLORS.white, fontSize: 16, fontWeight: '600' },
-  scrollContent: { paddingBottom: 100 },
+  scrollContent: { paddingBottom: 100, maxWidth: 680, alignSelf: 'center', width: '100%' },
   header: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
+    paddingHorizontal: 16, paddingVertical: Platform.OS === 'web' ? 12 : 20,
     backgroundColor: COLORS.white, borderBottomWidth: 1, borderBottomColor: COLORS.border,
   },
   headerTitleContainer: {
@@ -987,6 +1017,26 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     color: COLORS.greyMedium,
     marginTop: 2,
   },
+  modalOverlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center', alignItems: 'center',
+    padding: 20
+  },
+  modalContent: {
+    width: '100%', maxWidth: 400, backgroundColor: COLORS.white,
+    borderRadius: 16, padding: 20,
+    shadowColor: '#000', shadowOpacity: 0.1, shadowRadius: 10, elevation: 5
+  },
+  modalHeader: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16
+  },
+  modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.greyDark },
+  modalBody: { fontSize: 15, color: COLORS.greyMedium, lineHeight: 22, marginBottom: 24 },
+  modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
+  modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
+  modalCancelBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.greyMedium },
+  modalPrimaryBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, backgroundColor: COLORS.gold },
+  modalPrimaryBtnText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
 });
 
 export default ListingDetailsScreen;

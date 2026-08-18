@@ -1,18 +1,8 @@
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  RefreshControl,
-  Linking,
-} from 'react-native';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View, RefreshControl, Linking } from 'react-native';
 import Markdown from 'react-native-markdown-display';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -124,7 +114,7 @@ const NotificationsScreen: React.FC = () => {
   const handleClearAll = async () => {
     if (!user || notifications.length === 0) return;
     
-    Alert.alert(
+    showAlert(
       t('notifications.clear_all_confirm_title'),
       t('notifications.clear_all_confirm_msg'),
       [

@@ -1,22 +1,11 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/auth/VerifyOtpScreen.tsx
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  TouchableWithoutFeedback,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import ButtonPrimary from '../../components/ButtonPrimary';
 import { AuthStackParamList, RootStackParamList } from '../../types';
 import { sendOtp as sendOtpHelper, verifyOtp as verifyOtpHelper } from '../../utils/otp';
@@ -190,7 +179,7 @@ const VerifyOtpScreen: React.FC = () => {
     try {
       const result = await verifyOtpHelper(whatsappNumber, otp); // ✅ Use otp.ts helper
       if (!result.success) {
-        Alert.alert('Verification Failed', result.message);
+        showAlert('Verification Failed', result.message);
         setOtp('');
         inputsRef.current[0]?.focus();
         setVerifying(false);
@@ -200,7 +189,7 @@ const VerifyOtpScreen: React.FC = () => {
       let userRole: string;
       if (mode === 'signup') {
         userRole = await handleSignupAfterOtp();
-        Alert.alert('Success!', 'Your account has been created successfully!');
+        showAlert('Success!', 'Your account has been created successfully!');
       } else {
         throw new Error('Login mode not supported in this flow');
       }
@@ -208,7 +197,7 @@ const VerifyOtpScreen: React.FC = () => {
       navigateToApp(userRole);
     } catch (err: any) {
       console.error('Verification error:', err);
-      Alert.alert('Error', err.message || 'Something went wrong. Please try again.');
+      showAlert('Error', err.message || 'Something went wrong. Please try again.');
       setVerifying(false);
     }
   };
@@ -228,11 +217,11 @@ const VerifyOtpScreen: React.FC = () => {
     setTimer(60);
     try {
       const result = await sendOtpHelper(whatsappNumber); // ✅ Use otp.ts helper
-      if (!result.success) Alert.alert('Error', result.message || 'Failed to resend OTP');
-      else Alert.alert('OTP Sent', 'A new code has been sent to your WhatsApp.');
+      if (!result.success) showAlert('Error', result.message || 'Failed to resend OTP');
+      else showAlert('OTP Sent', 'A new code has been sent to your WhatsApp.');
     } catch (err) {
       console.error('Resend OTP error:', err);
-      Alert.alert('Error', 'Failed to resend OTP. Please try again.');
+      showAlert('Error', 'Failed to resend OTP. Please try again.');
     }
   };
 

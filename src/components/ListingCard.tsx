@@ -1,6 +1,7 @@
+import { showAlert } from '../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
-import { Alert, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export interface Listing {
   id: string;
@@ -88,7 +89,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
         {listing.is_verified && (
           <TouchableOpacity
             style={styles.verifiedBadge}
-            onPress={() => Alert.alert(
+            onPress={() => showAlert(
               '✅ DHUB Verified Property',
               'This listing was physically inspected and confirmed by a DHUB agent.\n\n• Photos match the real property\n• Promised amenities are present\n• Price is fair and accurate\n\nYou can rent with confidence!'
             )}

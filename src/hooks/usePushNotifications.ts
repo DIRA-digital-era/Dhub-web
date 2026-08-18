@@ -1,5 +1,6 @@
+import { showAlert } from '../utils/alert';
 import { useEffect, useRef, useState } from 'react';
-import { AppState, AppStateStatus, Platform, Alert, Linking } from 'react-native';
+import { AppState, AppStateStatus, Platform, Linking } from 'react-native';
 import * as Notifications from 'expo-notifications';
 import * as Device from 'expo-device';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -145,7 +146,7 @@ export const usePushNotifications = (userId?: string) => {
             await AsyncStorage.setItem(PUSH_DENIED_TIMESTAMP_KEY, now.toString());
             
             // If they explicitly denied, we can prompt them to go to settings
-            Alert.alert(
+            showAlert(
               'Enable Notifications',
               'You previously denied notifications. To stay updated on your rent, bookings, and messages, please enable them in your device settings.',
               [

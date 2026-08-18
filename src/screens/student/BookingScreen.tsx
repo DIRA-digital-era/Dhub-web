@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import * as Device from 'expo-device'; // ✅ Added missing import
@@ -6,21 +7,7 @@ import * as Sharing from 'expo-sharing';
 import { sha256 } from 'js-sha256';
 import React, { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  ActivityIndicator,
-  Alert,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import uuid from 'react-native-uuid';
@@ -100,7 +87,7 @@ const BookingScreen: React.FC = () => {
         setTerms(data.terms_text || '');
       } catch (err) {
         console.error('[BookingScreen] fetchListing error:', err);
-        Alert.alert(t('common.error'), t('booking.not_found'));
+        showAlert(t('common.error'), t('booking.not_found'));
       } finally {
         setLoading(false);
       }
@@ -331,7 +318,7 @@ const handleDownloadPDF = async () => {
           win.focus();
           win.print();
         } else {
-          Alert.alert('Error', 'Unable to open print dialog. Please allow popups.');
+          showAlert('Error', 'Unable to open print dialog. Please allow popups.');
         }
         setPdfLoading(false);
       }, 100);
@@ -346,11 +333,11 @@ const handleDownloadPDF = async () => {
         dialogTitle: t('booking.download_pdf'),
       });
     } else {
-      Alert.alert(t('common.success'), `${t('common.success')}: ${uri}`);
+      showAlert(t('common.success'), `${t('common.success')}: ${uri}`);
     }
   } catch (err) {
     console.error('[BookingScreen] PDF error:', err);
-    Alert.alert(t('common.error'), t('booking.failed'));
+    showAlert(t('common.error'), t('booking.failed'));
   } finally {
     setPdfLoading(false);
   }
@@ -445,7 +432,7 @@ const handleDownloadPDF = async () => {
         }
       }
       const details = err?.message ? `\n\n${err.message}` : '';
-      Alert.alert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
+      showAlert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
     } finally {
       setSubmitting(false);
     }
@@ -455,22 +442,22 @@ const handleDownloadPDF = async () => {
     console.log('[BookingScreen] handleCreateBooking called');
     if (!signatureAccepted || !agreementId || !agreementHash) {
       console.warn('[BookingScreen] Missing signature or agreement');
-      Alert.alert(t('booking.signature_required_title'), t('booking.signature_required_msg'));
+      showAlert(t('booking.signature_required_title'), t('booking.signature_required_msg'));
       return;
     }
     if (!listing || !user?.id) {
       console.warn('[BookingScreen] Missing listing or user');
-      Alert.alert(t('common.error'), t('booking.not_found'));
+      showAlert(t('common.error'), t('booking.not_found'));
       return;
     }
     if (!listing.landlord) {
       console.warn('[BookingScreen] Missing landlord');
-      Alert.alert(t('common.error'), t('booking.not_found'));
+      showAlert(t('common.error'), t('booking.not_found'));
       return;
     }
     if (!totals) {
       console.warn('[BookingScreen] Missing totals');
-      Alert.alert(t('common.error'), t('booking.invalid_dates_msg'));
+      showAlert(t('common.error'), t('booking.invalid_dates_msg'));
       return;
     }
 
@@ -1287,14 +1274,15 @@ const getStyles = (COLORS: any) => StyleSheet.create({
   modalContent: {
     backgroundColor: COLORS.white,
     borderRadius: 22,
-    padding: 20,
+    padding: 24,
     shadowColor: COLORS.shadow,
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.18,
     shadowRadius: 16,
     elevation: 20,
     width: '100%',
-    maxWidth: 460,
+    maxWidth: 400,
+    alignSelf: 'center',
   },
   signatureModalContent: {
     alignSelf: 'center',
@@ -1312,7 +1300,7 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     backgroundColor: COLORS.gold,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1321,7 +1309,7 @@ const getStyles = (COLORS: any) => StyleSheet.create({
     backgroundColor: COLORS.offWhite,
     paddingHorizontal: 18,
     paddingVertical: 12,
-    borderRadius: 14,
+    borderRadius: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     alignItems: 'center',

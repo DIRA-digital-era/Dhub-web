@@ -1,7 +1,8 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/ApprovalScreen.tsx
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, TouchableWithoutFeedback, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -54,7 +55,7 @@ const ApprovalScreen: React.FC = () => {
 
       if (error) throw error;
       if (!data) {
-        Alert.alert('Not Found', 'This booking no longer exists or you do not have permission to view it.');
+        showAlert('Not Found', 'This booking no longer exists or you do not have permission to view it.');
         navigation.goBack();
         return;
       }
@@ -81,7 +82,7 @@ const ApprovalScreen: React.FC = () => {
       }
     } catch (err) {
       console.error('[ApprovalScreen] Error fetching booking:', err);
-      Alert.alert('Error', 'Failed to load booking details.');
+      showAlert('Error', 'Failed to load booking details.');
       navigation.goBack();
     } finally {
       setLoading(false);
@@ -107,7 +108,7 @@ const ApprovalScreen: React.FC = () => {
           });
         }
 
-        Alert.alert('Approved ✓', 'Booking approved! The tenant can now proceed to payment.');
+        showAlert('Approved ✓', 'Booking approved! The tenant can now proceed to payment.');
       } else {
         const { error } = await supabase.rpc('set_booking_approval', {
           p_booking_id: bookingId,
@@ -115,13 +116,13 @@ const ApprovalScreen: React.FC = () => {
         });
 
         if (error) throw error;
-        Alert.alert('Declined', 'Booking was declined.');
+        showAlert('Declined', 'Booking was declined.');
       }
       triggerPushNotifications();
       navigation.goBack();
     } catch (err) {
       console.error('[ApprovalScreen] Action error:', err);
-      Alert.alert('Error', 'Failed to update booking.');
+      showAlert('Error', 'Failed to update booking.');
     } finally {
       setUpdating(false);
     }
@@ -133,14 +134,14 @@ const ApprovalScreen: React.FC = () => {
     const netAfterFee = Math.max(0, currentEscrow - DISPUTE_AGENT_FEE);
 
     if (currentEscrow < DISPUTE_AGENT_FEE) {
-      Alert.alert(
+      showAlert(
         'Insufficient Escrow',
         `The remaining escrow balance (${currentEscrow.toLocaleString()} FCFA) is below the 5,000 FCFA agent fee required. A dispute cannot be filed.`
       );
       return;
     }
 
-    Alert.alert(
+    showAlert(
       '⚠️  File Formal Dispute',
       [
         'Initiating a formal dispute will lock XAF 5,000 from the caution pool to cover the cost of a DHUB physical audit. The party found at fault will bear this cost.\n',
@@ -164,7 +165,7 @@ const ApprovalScreen: React.FC = () => {
                 dispute_locked_funds: DISPUTE_AGENT_FEE,
               }).eq('id', bookingId);
               if (error) throw error;
-              Alert.alert(
+              showAlert(
                 'Dispute Filed ✓',
                 `5,000 FCFA is now locked as the DHUB Agent Credit. The net escrow of ${netAfterFee.toLocaleString()} FCFA is frozen pending the field audit.`
               );
@@ -172,7 +173,7 @@ const ApprovalScreen: React.FC = () => {
               fetchBookingDetails();
             } catch (err) {
               console.error(err);
-              Alert.alert('Error', 'Failed to file dispute. The new columns may need to be migrated first.');
+              showAlert('Error', 'Failed to file dispute. The new columns may need to be migrated first.');
             } finally {
               setUpdating(false);
             }
@@ -183,7 +184,7 @@ const ApprovalScreen: React.FC = () => {
   };
 
   const handleApproveRefund = () => {
-    Alert.alert(
+    showAlert(
       'Approve Refund',
       'Are you sure there are no damages? This will release the full escrow balance back to the tenant.',
       [
@@ -197,12 +198,12 @@ const ApprovalScreen: React.FC = () => {
                 caution_status: 'refunded',
               }).eq('id', bookingId);
               if (error) throw error;
-              Alert.alert('Refund Approved ✓', 'The caution escrow has been released to the tenant.');
+              showAlert('Refund Approved ✓', 'The caution escrow has been released to the tenant.');
               triggerPushNotifications();
               fetchBookingDetails();
             } catch (err) {
               console.error(err);
-              Alert.alert('Error', 'Failed to approve refund.');
+              showAlert('Error', 'Failed to approve refund.');
             } finally {
               setUpdating(false);
             }
@@ -214,7 +215,7 @@ const ApprovalScreen: React.FC = () => {
 
   // ─── Landlord Override: Terminate Lease ──────────────────────────────────
   const handleTerminateLease = () => {
-    Alert.alert(
+    showAlert(
       '🛑 Terminate Lease',
       'This will immediately end this tenancy. The tenant\'s "Extend Stay" button will be disabled and both parties will be moved into the Move-Out Handshake. Are you sure?',
       [
@@ -231,7 +232,7 @@ const ApprovalScreen: React.FC = () => {
 
               if (error) throw error;
 
-              Alert.alert(
+              showAlert(
                 'Lease Terminated',
                 'The tenancy has ended. Please complete the Move-Out Handshake to finalize the caution refund.'
               );
@@ -239,7 +240,7 @@ const ApprovalScreen: React.FC = () => {
               fetchBookingDetails();
             } catch (err) {
               console.error(err);
-              Alert.alert('Error', 'Failed to terminate lease.');
+              showAlert('Error', 'Failed to terminate lease.');
             } finally {
               setUpdating(false);
             }
@@ -260,14 +261,14 @@ const ApprovalScreen: React.FC = () => {
         review,
       });
       if (error) throw error;
-      Alert.alert('Rating Submitted ✓', 'Severe low ratings may result in automatic tenant account review.');
+      showAlert('Rating Submitted ✓', 'Severe low ratings may result in automatic tenant account review.');
       setRatingModalVisible(false);
     } catch (err: any) {
       if (err.code === '23505') {
-        Alert.alert('Already Rated', 'You have already submitted a rating for this tenant for this booking.');
+        showAlert('Already Rated', 'You have already submitted a rating for this tenant for this booking.');
         setRatingModalVisible(false);
       } else {
-        Alert.alert('Error', 'Failed to submit rating.');
+        showAlert('Error', 'Failed to submit rating.');
       }
     } finally {
       setUpdating(false);
@@ -487,12 +488,12 @@ const ApprovalScreen: React.FC = () => {
                           p_role: 'landlord'
                         });
                         if (error) throw error;
-                        Alert.alert('Confirmed ✓', 'You have confirmed the tenant has moved in.');
+                        showAlert('Confirmed ✓', 'You have confirmed the tenant has moved in.');
                         triggerPushNotifications();
                         fetchBookingDetails();
                       } catch (err: any) {
                         console.error(err);
-                        Alert.alert('Error', err.message || 'Failed to confirm move-in.');
+                        showAlert('Error', err.message || 'Failed to confirm move-in.');
                       } finally {
                         setUpdating(false);
                       }

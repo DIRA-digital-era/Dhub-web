@@ -1,16 +1,8 @@
+import { showAlert } from '../utils/alert';
 // src/components/MapPickerModal.tsx
 import polyline from '@mapbox/polyline'; // decode Google Directions polyline
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Modal, Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import MapView, { MapType, Marker, Polyline, Region } from 'react-native-maps';
 import { LatLng, requestLocationPermission } from '../utils/location';
 
@@ -58,7 +50,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
         longitudeDelta: 0.01,
       });
     } else {
-      Alert.alert('Permission Denied', 'Cannot access location. Please enable GPS.');
+      showAlert('Permission Denied', 'Cannot access location. Please enable GPS.');
       onClose();
     }
     setLoading(false);
@@ -106,7 +98,7 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
   // Done button for landlords
   const handleDone = () => {
     if (!markerCoords) {
-      Alert.alert('No location selected', 'Tap on the map.');
+      showAlert('No location selected', 'Tap on the map.');
       return;
     }
     onLocationSelected(markerCoords);

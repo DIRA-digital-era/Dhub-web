@@ -1,25 +1,9 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/ListingDetailsScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, RouteProp, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  Share,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Linking, Modal, Platform, ScrollView, Share, StatusBar, StyleSheet, Switch, Text, TouchableOpacity, View } from 'react-native';
 import MapPickerModal from '../../components/MapPickerModal';
 import { useTheme } from '../../context/ThemeContext';
 import { useAuth } from '../../hooks/useAuth';
@@ -95,7 +79,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
       if (error) throw error;
     } catch (err) {
       console.error('Error updating availability:', err);
-      Alert.alert('Error', 'Failed to update availability.');
+      showAlert('Error', 'Failed to update availability.');
       setListing({ ...listing, available: !newValue });
     }
   };
@@ -119,7 +103,7 @@ const handleShare = async () => {
   const handleEdit = () => navigation.navigate('EditListing', { listingId });
 
   const handleDelete = () => {
-    Alert.alert(
+    showAlert(
       'Delete Property',
       'Are you sure you want to permanently delete this property? This action cannot be undone.',
       [
@@ -129,11 +113,11 @@ const handleShare = async () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              Alert.alert('Success', 'Property deleted successfully');
+              showAlert('Success', 'Property deleted successfully');
               navigation.navigate('ManageListings');
             } catch (err) {
               console.error('Error deleting listing:', err);
-              Alert.alert('Error', 'Failed to delete listing');
+              showAlert('Error', 'Failed to delete listing');
             }
           },
         },
@@ -163,7 +147,7 @@ const handleShare = async () => {
       setShowVerificationModal(true);
     } catch (err) {
       console.error('Error fetching verification fee:', err);
-      Alert.alert('Error', 'Could not fetch verification fee. Please try again.');
+      showAlert('Error', 'Could not fetch verification fee. Please try again.');
     } finally {
       setRequestingVerif(false);
     }
@@ -190,7 +174,7 @@ const handleShare = async () => {
   const handleContactLandlord = () => {
     if (!listing?.landlord) return;
     const { phone, email } = listing.landlord;
-    Alert.alert(
+    showAlert(
       'Contact Landlord',
       'Choose contact method',
       [

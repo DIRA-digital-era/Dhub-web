@@ -1,18 +1,6 @@
+import { showAlert } from '../../utils/alert';
 import React, { useState, useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  StyleSheet,
-  TouchableOpacity,
-  Keyboard,
-  Alert,
-  KeyboardAvoidingView,
-  Platform,
-  TouchableWithoutFeedback,
-  ActivityIndicator,
-  StatusBar,
-} from 'react-native';
+import { View, Text, TextInput, StyleSheet, TouchableOpacity, Keyboard, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, ActivityIndicator, StatusBar } from 'react-native';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -84,17 +72,17 @@ const ResetPasswordScreen: React.FC = () => {
 
   const handleResetPassword = async () => {
     if (otp.length !== 6) {
-      Alert.alert(t('common.error'), t('auth.enter_otp_error') || 'Enter the 6-digit OTP.');
+      showAlert(t('common.error'), t('auth.enter_otp_error') || 'Enter the 6-digit OTP.');
       return;
     }
 
     if (newPassword.length < 6) {
-      Alert.alert(t('common.error'), t('auth.password_min_length') || 'Password must be at least 6 characters.');
+      showAlert(t('common.error'), t('auth.password_min_length') || 'Password must be at least 6 characters.');
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      Alert.alert(t('common.error'), t('auth.passwords_no_match') || 'Passwords do not match.');
+      showAlert(t('common.error'), t('auth.passwords_no_match') || 'Passwords do not match.');
       return;
     }
 
@@ -114,11 +102,11 @@ const ResetPasswordScreen: React.FC = () => {
       const result = await res.json();
       if (!result.success) throw new Error(result.message);
 
-      Alert.alert(t('common.success'), t('auth.password_reset_success') || 'Password reset successfully.', [
+      showAlert(t('common.success'), t('auth.password_reset_success') || 'Password reset successfully.', [
         { text: 'OK', onPress: () => navigation.navigate('SignIn') },
       ]);
     } catch (err: any) {
-      Alert.alert(t('common.error'), err.message || t('auth.reset_failed'));
+      showAlert(t('common.error'), err.message || t('auth.reset_failed'));
     } finally {
       setResetting(false);
     }
@@ -132,7 +120,7 @@ const ResetPasswordScreen: React.FC = () => {
 
     const result = await sendOtp(phone);
     if (!result.success) {
-      Alert.alert(t('common.error'), result.message);
+      showAlert(t('common.error'), result.message);
     }
   };
 

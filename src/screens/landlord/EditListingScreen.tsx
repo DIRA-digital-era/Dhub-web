@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/EditListingScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -5,21 +6,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import * as ImagePicker from 'expo-image-picker';
 import * as VideoThumbnails from 'expo-video-thumbnails';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Modal,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Switch,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Modal, ScrollView, StatusBar, StyleSheet, Switch, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import FullVideoPlayer from '../../components/FullVideoPlayer';
 import { MEDIA_BASE_URL } from '../../config/media';
 import { useTheme } from '../../context/ThemeContext';
@@ -82,7 +69,7 @@ const EditListingScreen: React.FC = () => {
           .single();
 
         if (error || !data) {
-          Alert.alert('Error', 'Unable to fetch listing details.');
+          showAlert('Error', 'Unable to fetch listing details.');
           return;
         }
 
@@ -160,7 +147,7 @@ const EditListingScreen: React.FC = () => {
     const updatedRooms = rooms ? Number(rooms) : null;
 
     if (isNaN(updatedPrice) || updatedPrice <= 0) {
-      Alert.alert('Validation', 'Price must be a number greater than 0.');
+      showAlert('Validation', 'Price must be a number greater than 0.');
       return;
     }
 
@@ -227,18 +214,18 @@ const EditListingScreen: React.FC = () => {
         .eq('landlord_id', listing.landlord_id);
 
       if (error) {
-        Alert.alert('Update Failed', error.message);
+        showAlert('Update Failed', error.message);
         return;
       }
 
-      Alert.alert('Success', 'Your property has been updated.');
+      showAlert('Success', 'Your property has been updated.');
       navigation.goBack();
     } catch (err: any) {
       console.error('Update error:', err);
       if (err?.name === 'AbortError') {
         console.log('[EditListing] Upload cancelled by user');
       } else {
-        Alert.alert('Error', 'Failed to update property details.');
+        showAlert('Error', 'Failed to update property details.');
       }
     } finally {
       setSaving(false);
@@ -249,7 +236,7 @@ const EditListingScreen: React.FC = () => {
 
   // Delete the listing row
   const handleDelete = async () => {
-    Alert.alert(
+    showAlert(
       'Delete Property',
       'This will permanently remove your property listing. This action cannot be undone.',
       [
@@ -270,11 +257,11 @@ const EditListingScreen: React.FC = () => {
                 .eq('landlord_id', listing?.landlord_id);
 
               if (error) {
-                Alert.alert('Delete Failed', error.message);
+                showAlert('Delete Failed', error.message);
                 return;
               }
 
-              Alert.alert('Deleted', 'Your property has been removed.');
+              showAlert('Deleted', 'Your property has been removed.');
               navigation.goBack();
             } finally {
               setSaving(false);

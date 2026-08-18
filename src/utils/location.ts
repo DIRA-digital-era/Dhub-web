@@ -1,6 +1,7 @@
+import { showAlert } from './/alert';
 // src/utils/location.ts
 import * as Location from 'expo-location';
-import { Alert, Linking, Platform } from 'react-native';
+import { Linking, Platform } from 'react-native';
 
 export type LatLng = { latitude: number; longitude: number };
 
@@ -8,7 +9,7 @@ export async function requestLocationPermission(): Promise<LatLng | null> {
   try {
     const { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert(
+      showAlert(
         'Location Permission Needed',
         'Please allow access to your location to pick a point on the map.',
         [
@@ -32,7 +33,7 @@ export async function requestLocationPermission(): Promise<LatLng | null> {
     return { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
   } catch (err) {
     console.error('Error requesting location', err);
-    Alert.alert('Error', 'Could not fetch location. Try again.');
+    showAlert('Error', 'Could not fetch location. Try again.');
     return null;
   }
 }

@@ -1,19 +1,6 @@
+import { showAlert } from '../../utils/alert';
 import React, { useState } from 'react';
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  StyleSheet, 
-  ActivityIndicator, 
-  Alert, 
-  KeyboardAvoidingView, 
-  Platform, 
-  TouchableWithoutFeedback, 
-  Keyboard,
-  StatusBar,
-  ScrollView
-} from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, KeyboardAvoidingView, Platform, TouchableWithoutFeedback, Keyboard, StatusBar, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../../utils/supabaseClient';
 import { useDispatch } from 'react-redux';
@@ -47,11 +34,11 @@ export const UpdatePasswordScreen: React.FC = () => {
 
   const handleUpdatePassword = async () => {
     if (password.length < 6) {
-      Alert.alert(t('common.error'), t('auth.password_min_length') || 'Password must be at least 6 characters.');
+      showAlert(t('common.error'), t('auth.password_min_length') || 'Password must be at least 6 characters.');
       return;
     }
     if (password !== confirmPassword) {
-      Alert.alert(t('common.error'), t('auth.passwords_no_match') || 'Passwords do not match.');
+      showAlert(t('common.error'), t('auth.passwords_no_match') || 'Passwords do not match.');
       return;
     }
 
@@ -60,11 +47,11 @@ export const UpdatePasswordScreen: React.FC = () => {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       
-      Alert.alert(t('common.success'), t('profile.saved') || 'Your password has been updated.');
+      showAlert(t('common.success'), t('profile.saved') || 'Your password has been updated.');
       dispatch(setRequiresPasswordUpdate(false));
     } catch (error: any) {
       console.error('Password update failed:', error);
-      Alert.alert(t('common.error'), error.message || t('auth.update_failed'));
+      showAlert(t('common.error'), error.message || t('auth.update_failed'));
     } finally {
       setLoading(false);
     }

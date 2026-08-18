@@ -1,24 +1,9 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/HomeScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 import React, { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  FlatList,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  RefreshControl,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, FlatList, KeyboardAvoidingView, Linking, Modal, Platform, RefreshControl, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DiraBranding } from '../../components/DiraBranding';
 import { useTheme } from '../../context/ThemeContext';
@@ -251,7 +236,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 
   const submitHousingRequest = async () => {
     if (!requestLocation.trim() || !requestDetails.trim()) {
-      Alert.alert('Missing Details', 'Please provide a location and requirements.');
+      showAlert('Missing Details', 'Please provide a location and requirements.');
       return;
     }
     setSubmittingRequest(true);
@@ -263,14 +248,14 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
         details: requestDetails,
       });
       if (error) throw error;
-      Alert.alert('Request Sent', 'We have received your request and will notify you when a matching property becomes available!');
+      showAlert('Request Sent', 'We have received your request and will notify you when a matching property becomes available!');
       setRequestModalVisible(false);
       setRequestLocation('');
       setRequestBudget('');
       setRequestDetails('');
     } catch (err) {
       console.error(err);
-      Alert.alert('Error', 'Failed to submit request. Please try again.');
+      showAlert('Error', 'Failed to submit request. Please try again.');
     } finally {
       setSubmittingRequest(false);
     }

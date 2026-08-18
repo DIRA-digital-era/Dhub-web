@@ -4,22 +4,36 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from "react-native";
+import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
+
+const showAlert = (title: string, message?: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    const msg = message ? `${title}\n${message}` : title;
+    // For simple ok/cancel, find the first button that isn't cancel
+    if (buttons && buttons.length > 0) {
+      const isConfirm = buttons.length > 1;
+      if (isConfirm) {
+        if (window.confirm(msg)) {
+          const confirmBtn = buttons.find(b => b.style !== 'cancel') || buttons[0];
+          if (confirmBtn.onPress) confirmBtn.onPress();
+        } else {
+          const cancelBtn = buttons.find(b => b.style === 'cancel');
+          if (cancelBtn && cancelBtn.onPress) cancelBtn.onPress();
+        }
+      } else {
+        window.alert(msg);
+        if (buttons[0].onPress) buttons[0].onPress();
+      }
+    } else {
+      window.alert(msg);
+    }
+    return;
+  }
+  showAlert(title, message, buttons);
+};
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -50,7 +64,7 @@ export default function ProfileScreen() {
       .single();
 
     setLoading(false);
-    if (error) return Alert.alert(t('common.error'), error.message);
+    if (error) return showAlert(t('common.error'), error.message);
 
     setFullName(data.full_name ?? "");
     setEmail(data.email ?? "");
@@ -90,28 +104,28 @@ export default function ProfileScreen() {
   };
 
   const handleSaveProfile = async () => {
-    if (!fullName.trim()) return Alert.alert(t('common.error'), t('profile.full_name') + " is required");
-    if (email && !validateEmail(email)) return Alert.alert(t('common.error'), "Invalid email format");
-    if (!validateMomo(momo)) return Alert.alert(t('common.error'), "Momo must be 9 digits");
-    if (!age || isNaN(Number(age))) return Alert.alert(t('common.error'), "Valid Age is required for verification");
-    if (!profession.trim()) return Alert.alert(t('common.error'), "Profession/Level is required for verification");
-    if (!user) return Alert.alert(t('common.error'), "User session missing");
+    if (!fullName.trim()) return showAlert(t('common.error'), t('profile.full_name') + " is required");
+    if (email && !validateEmail(email)) return showAlert(t('common.error'), "Invalid email format");
+    if (!validateMomo(momo)) return showAlert(t('common.error'), "Momo must be 9 digits");
+    if (!age || isNaN(Number(age))) return showAlert(t('common.error'), "Valid Age is required for verification");
+    if (!profession.trim()) return showAlert(t('common.error'), "Profession/Level is required for verification");
+    if (!user) return showAlert(t('common.error'), "User session missing");
 
     setLoading(true);
 
     const { data: sessionData } = await supabase.auth.getSession();
     if (!sessionData?.session) {
       setLoading(false);
-      return Alert.alert(t('profile.session_missing'), t('profile.session_missing_msg'));
+      return showAlert(t('profile.session_missing'), t('profile.session_missing_msg'));
     }
 
     if (email !== user.email) {
       const { error: authError } = await supabase.auth.updateUser({ email });
       if (authError) {
         setLoading(false);
-        return Alert.alert(t('common.error'), authError.message);
+        return showAlert(t('common.error'), authError.message);
       }
-      Alert.alert(
+      showAlert(
         t('profile.verification_required'),
         t('profile.verification_msg'),
         [
@@ -145,10 +159,10 @@ export default function ProfileScreen() {
     }
 
     setLoading(false);
-    if (error) return Alert.alert(t('common.error'), error.message);
-    if (studentError) return Alert.alert(t('common.error'), studentError.message);
+    if (error) return showAlert(t('common.error'), error.message);
+    if (studentError) return showAlert(t('common.error'), studentError.message);
 
-    Alert.alert(t('common.success'), t('profile.saved'));
+    showAlert(t('common.success'), t('profile.saved'));
     fetchUserData();
   };
 
@@ -157,24 +171,24 @@ export default function ProfileScreen() {
       setLoading(true);
       await signOut();
     } catch {
-      Alert.alert(t('common.error'), "Logout failed. Please try again.");
+      showAlert(t('common.error'), "Logout failed. Please try again.");
       setLoading(false);
     }
   };
 
   const handleUpdatePassword = async () => {
-    if (!newPassword || !confirmPassword) return Alert.alert(t('common.error'), "Please fill in all fields");
-    if (newPassword !== confirmPassword) return Alert.alert(t('common.error'), "Passwords do not match");
-    if (newPassword.length < 6) return Alert.alert(t('common.error'), "Password must be at least 6 characters");
+    if (!newPassword || !confirmPassword) return showAlert(t('common.error'), "Please fill in all fields");
+    if (newPassword !== confirmPassword) return showAlert(t('common.error'), "Passwords do not match");
+    if (newPassword.length < 6) return showAlert(t('common.error'), "Password must be at least 6 characters");
 
     setLoading(true);
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     setLoading(false);
 
     if (error) {
-      Alert.alert(t('common.error'), error.message);
+      showAlert(t('common.error'), error.message);
     } else {
-      Alert.alert(t('common.success'), "Password updated successfully");
+      showAlert(t('common.success'), "Password updated successfully");
       setChangePasswordVisible(false);
       setNewPassword("");
       setConfirmPassword("");
@@ -182,7 +196,7 @@ export default function ProfileScreen() {
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert(
+    showAlert(
       t('profile.delete_confirm_title'),
       t('profile.delete_confirm_msg'),
       [
@@ -196,7 +210,7 @@ export default function ProfileScreen() {
             const { error } = await supabase.from('users').update({ is_active: false }).eq('id', user.id);
             if (error) {
               setLoading(false);
-              return Alert.alert(t('common.error'), error.message);
+              return showAlert(t('common.error'), error.message);
             }
             await signOut();
           }
@@ -218,12 +232,12 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
-      <Text style={[styles.title, { color: colors.text }]}>{t('profile.title')}</Text>
-      <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <ScrollView 
+        contentContainerStyle={[styles.scrollContainer, Platform.OS === 'web' && { maxWidth: 680, alignSelf: 'center', width: '100%' }]} 
+        keyboardShouldPersistTaps="handled"
+      >
+        <Text style={[styles.title, { color: colors.text }, Platform.OS === 'web' && { paddingTop: 16 }]}>{t('profile.title')}</Text>
 
         <View style={[styles.section, { backgroundColor: colors.card }]}>
           <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.full_name')}</Text>
@@ -320,7 +334,7 @@ export default function ProfileScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 

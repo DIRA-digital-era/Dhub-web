@@ -1,18 +1,11 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/BoostScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CompositeNavigationProp, useNavigation, useRoute } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useDispatch } from 'react-redux';
 import { useTheme } from '../../context/ThemeContext';
 import { setBoost } from '../../store/boostSlice';
@@ -71,7 +64,7 @@ const BoostScreen: React.FC = () => {
 
   const handlePay = () => {
     if (!selectedPlan) {
-      Alert.alert('Select Plan', 'Please select a boost plan to continue.');
+      showAlert('Select Plan', 'Please select a boost plan to continue.');
       return;
     }
 

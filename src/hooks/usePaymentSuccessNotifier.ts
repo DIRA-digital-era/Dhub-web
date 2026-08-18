@@ -1,3 +1,4 @@
+import { showAlert } from '../utils/alert';
 /**
  * usePaymentSuccessNotifier
  *
@@ -8,14 +9,14 @@
  *   Fapshi webhook → payment.service.ts handleWebhook
  *     → inserts notifications row in Supabase
  *       → Supabase Realtime pushes INSERT to this hook
- *         → Alert.alert + optional navigation
+ *         → showAlert + optional navigation
  *
  * No Edge Function or server function is required.
  * The payment backend writes directly to Supabase, and Supabase Realtime
  * delivers it to this hook in real time.
  */
 import { useEffect, useRef } from 'react';
-import { Alert } from 'react-native';
+
 import { supabase } from '../utils/supabaseClient';
 import { useAuth } from './useAuth';
 import { triggerPushNotifications } from './usePushNotifications';
@@ -59,7 +60,7 @@ export function usePaymentSuccessNotifier(navigationRef: NavigationRef) {
 
           const nav = navRef.current;
 
-          Alert.alert(
+          showAlert(
             notif.title,
             notif.body,
             [

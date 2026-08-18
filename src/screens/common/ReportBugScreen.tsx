@@ -1,18 +1,8 @@
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
 import React, { useState } from "react";
-import {
-  Alert,
-  KeyboardAvoidingView,
-  Linking,
-  Platform,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../utils/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
@@ -40,11 +30,11 @@ export default function ReportBugScreen() {
 
   const handleSubmitBug = async () => {
     if (!description.trim()) {
-      return Alert.alert("Required Fields", "Please describe the bug before submitting.");
+      return showAlert("Required Fields", "Please describe the bug before submitting.");
     }
 
     if (!user) {
-      return Alert.alert("Error", "You must be logged in to submit a bug report.");
+      return showAlert("Error", "You must be logged in to submit a bug report.");
     }
 
     const email = "dhubcmr@gmail.com";
@@ -79,10 +69,10 @@ export default function ReportBugScreen() {
         // We do not go back automatically because navigating to the email app puts this app in the background.
         // We can just trust they sent it or let them go back manually.
       } else {
-        Alert.alert("Error", "No email client is installed on your device. Only the database copy was submitted.");
+        showAlert("Error", "No email client is installed on your device. Only the database copy was submitted.");
       }
     } catch (error) {
-      Alert.alert("Error", "An unexpected error occurred while processing your bug report.");
+      showAlert("Error", "An unexpected error occurred while processing your bug report.");
     }
   };
 

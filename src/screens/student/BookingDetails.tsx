@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/BookingDetails.tsx
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -7,22 +8,7 @@ import { differenceInDays, format } from "date-fns";
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  Image,
-  Linking,
-  Modal,
-  Platform,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-} from "react-native";
+import { ActivityIndicator, Dimensions, Image, Linking, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import MapView from 'react-native-maps';
 import MapPickerModal from '../../components/MapPickerModal';
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -151,7 +137,7 @@ export default function BookingDetails() {
       const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
 
       if (!cameraPermission.granted || !libraryPermission.granted) {
-        Alert.alert('Permission Needed', 'Enable camera and media permissions to take and save pictures.');
+        showAlert('Permission Needed', 'Enable camera and media permissions to take and save pictures.');
         return;
       }
 
@@ -180,7 +166,7 @@ export default function BookingDetails() {
 
         // Ensure max 3 photos for disputes
         if (type === 'dispute' && currentMediaArray.length >= 3) {
-          Alert.alert('Limit Reached', 'You can only upload up to 3 photos for evidence.');
+          showAlert('Limit Reached', 'You can only upload up to 3 photos for evidence.');
           setUploadingMedia(false);
           return;
         }
@@ -197,12 +183,12 @@ export default function BookingDetails() {
 
         setBooking((prev: any) => ({ ...prev, [type === 'dispute' ? 'dispute_tenant_photos' : `${type}_media`]: updatedArray }));
 
-        Alert.alert('Success', `${type === 'entry' ? 'Entry' : (type === 'exit' ? 'Exit' : 'Evidence')} picture captured successfully.`);
+        showAlert('Success', `${type === 'entry' ? 'Entry' : (type === 'exit' ? 'Exit' : 'Evidence')} picture captured successfully.`);
         fetchBookingDetails(true);
       }
     } catch (err: any) {
       console.error(err);
-      Alert.alert('Error', 'Failed to capture media: ' + (err.message || ''));
+      showAlert('Error', 'Failed to capture media: ' + (err.message || ''));
     } finally {
       setUploadingMedia(false);
     }
@@ -326,7 +312,7 @@ export default function BookingDetails() {
           const { data } = JSON.parse(cached);
           if (data?.id) {
             setBooking(data);
-            Alert.alert(t('bookings.offline_mode'), t('bookings.offline_msg'));
+            showAlert(t('bookings.offline_mode'), t('bookings.offline_msg'));
           }
         } catch {
           // Silent fail
@@ -381,7 +367,7 @@ export default function BookingDetails() {
           });
 
           if (updated.approval_status === 'rejected' || updated.status === 'cancelled') {
-            Alert.alert('Booking Update', 'Your booking status has changed.');
+            showAlert('Booking Update', 'Your booking status has changed.');
           }
         }
       )
@@ -456,7 +442,7 @@ export default function BookingDetails() {
   const RENEWAL_PROCESSING_FEE = 5000;
   const handleRenewLease = () => {
     if (!booking) return;
-    Alert.alert(
+    showAlert(
       '🔄 Renew Your Lease',
       `Tap "Proceed" to pay the XAF ${RENEWAL_PROCESSING_FEE.toLocaleString()} Rent Processing Fee. Once confirmed, your lease end date will be extended.`,
       [
@@ -488,7 +474,7 @@ export default function BookingDetails() {
 
   // ── Confirm Checkout handler ─────────────────────────────────────────────
   const handleConfirmCheckout = () => {
-    Alert.alert(
+    showAlert(
       '🚪 Confirm Move-Out',
       'Are you sure you have vacated the property? The landlord will be notified to complete the handshake and release your caution.',
       [
@@ -503,10 +489,10 @@ export default function BookingDetails() {
                 p_booking_id: bookingId
               });
               if (error) throw error;
-              Alert.alert('Move-Out Requested', 'The landlord has been notified. Your caution refund is pending their confirmation.');
+              showAlert('Move-Out Requested', 'The landlord has been notified. Your caution refund is pending their confirmation.');
               fetchBookingDetails(true);
             } catch (err: any) {
-              Alert.alert('Error', err.message || 'Failed to submit move-out.');
+              showAlert('Error', err.message || 'Failed to submit move-out.');
             } finally {
               setUpdating(false);
             }
@@ -526,7 +512,7 @@ export default function BookingDetails() {
 
   const handleSubmitDisputeEvidence = async () => {
     if (!disputeText.trim()) {
-      Alert.alert('Missing Info', 'Please provide a description of the issue.');
+      showAlert('Missing Info', 'Please provide a description of the issue.');
       return;
     }
     
@@ -538,17 +524,17 @@ export default function BookingDetails() {
       
       if (error) throw error;
       
-      Alert.alert('Evidence Submitted', 'Your evidence has been submitted to DHUB for review.');
+      showAlert('Evidence Submitted', 'Your evidence has been submitted to DHUB for review.');
       fetchBookingDetails(true);
     } catch (err: any) {
-      Alert.alert('Error', err.message || 'Failed to submit evidence.');
+      showAlert('Error', err.message || 'Failed to submit evidence.');
     } finally {
       setIsSubmittingDispute(false);
     }
   };
 
   const confirmMoveIn = () => {
-    Alert.alert(
+    showAlert(
       "Confirm Move-In",
       "Are you sure you have moved into the property? This confirms the start of your tenancy.",
       [
@@ -568,10 +554,10 @@ export default function BookingDetails() {
               setBooking((prev: any) => prev ? { ...prev, student_confirmation: true } : prev);
               
               fetchBookingDetails();
-              Alert.alert('Confirmed', 'Enjoy your stay!');
+              showAlert('Confirmed', 'Enjoy your stay!');
             } catch (err) {
               console.error(err);
-              Alert.alert('Error', 'Failed to confirm move in.');
+              showAlert('Error', 'Failed to confirm move in.');
             } finally {
               setUpdating(false);
             }
@@ -582,7 +568,7 @@ export default function BookingDetails() {
   };
 
   const handleCancelBooking = () => {
-    Alert.alert(
+    showAlert(
       t('bookings.cancel_booking'),
       "Are you sure you want to cancel this booking? This action cannot be undone.",
       [
@@ -596,9 +582,9 @@ export default function BookingDetails() {
               p_reason: 'User cancelled before payment'
             });
             if (error) {
-              Alert.alert('Error', error.message);
+              showAlert('Error', error.message);
             } else {
-              Alert.alert(t('common.success'), "Booking cancelled successfully");
+              showAlert(t('common.success'), "Booking cancelled successfully");
               triggerPushNotifications();
               fetchBookingDetails(true);
             }
@@ -610,7 +596,7 @@ export default function BookingDetails() {
 
   const handleCancelAndRefund = async () => {
     if (!cancellationReason) {
-      Alert.alert('Reason Required', 'Please select a reason for cancellation.');
+      showAlert('Reason Required', 'Please select a reason for cancellation.');
       return;
     }
 
@@ -625,10 +611,10 @@ export default function BookingDetails() {
 
     setLoading(false);
     if (error) {
-      Alert.alert('Error', error.message);
+      showAlert('Error', error.message);
     } else {
       setShowSurveyModal(false);
-      Alert.alert('Cancellation Submitted', 'Your cancellation has been received. Geo-Auditing will begin immediately.');
+      showAlert('Cancellation Submitted', 'Your cancellation has been received. Geo-Auditing will begin immediately.');
       triggerPushNotifications();
       fetchBookingDetails(true);
 
@@ -638,7 +624,7 @@ export default function BookingDetails() {
   };
 
   const handleConfirmMoveIn = () => {
-    Alert.alert(
+    showAlert(
       "Confirm Move-In",
       "Are you sure you have moved into the property? This will trigger the release of your caution fee from Escrow to the Landlord.",
       [
@@ -654,9 +640,9 @@ export default function BookingDetails() {
 
             setLoading(false);
             if (error) {
-              Alert.alert('Error', error.message);
+              showAlert('Error', error.message);
             } else {
-              Alert.alert('Success', 'You have confirmed your move-in.');
+              showAlert('Success', 'You have confirmed your move-in.');
               triggerPushNotifications();
               fetchBookingDetails(true);
             }
@@ -1288,7 +1274,7 @@ export default function BookingDetails() {
 
               <TouchableOpacity
                 style={styles.actionButton}
-                onPress={() => Alert.alert("Report", "This feature will be available soon")}
+                onPress={() => showAlert("Report", "This feature will be available soon")}
                 activeOpacity={0.7}
               >
                 <Ionicons name="flag-outline" size={20} color={COLORS.gold} />

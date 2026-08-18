@@ -1,20 +1,9 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/FavoritesScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { useIsFocused, useNavigation } from '@react-navigation/native';
 import React, { useCallback, useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  RefreshControl,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, RefreshControl, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import FavoritesManager, { FavoriteRecord } from '../../storage/favouritesManager';
@@ -116,7 +105,7 @@ const FavoritesScreen: React.FC = () => {
   const removeFromFavorites = async (listingId: string) => {
     if (!userId) return;
 
-    Alert.alert(
+    showAlert(
       'Remove from Favorites',
       'Are you sure you want to remove this property from your favorites?',
       [
@@ -130,7 +119,7 @@ const FavoritesScreen: React.FC = () => {
               setFavorites(prev => prev.filter(l => l.id !== listingId));
             } catch (err) {
               console.error('Failed to remove favorite:', err);
-              Alert.alert('Error', 'Failed to remove from favorites');
+              showAlert('Error', 'Failed to remove from favorites');
             }
           },
         },

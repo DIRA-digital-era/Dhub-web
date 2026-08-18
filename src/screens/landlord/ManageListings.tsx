@@ -2,19 +2,32 @@
 import { Ionicons } from '@expo/vector-icons';
 import { NavigationProp, useNavigation } from '@react-navigation/native';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  FlatList,
-  Image,
-  ScrollView,
-  StatusBar,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+
+const showAlert = (title: string, message?: string, buttons?: any[]) => {
+  if (Platform.OS === 'web') {
+    const msg = message ? `${title}\n${message}` : title;
+    if (buttons && buttons.length > 0) {
+      const isConfirm = buttons.length > 1;
+      if (isConfirm) {
+        if (window.confirm(msg)) {
+          const confirmBtn = buttons.find((b: any) => b.style !== 'cancel') || buttons[0];
+          if (confirmBtn.onPress) confirmBtn.onPress();
+        } else {
+          const cancelBtn = buttons.find((b: any) => b.style === 'cancel');
+          if (cancelBtn && cancelBtn.onPress) cancelBtn.onPress();
+        }
+      } else {
+        window.alert(msg);
+        if (buttons[0].onPress) buttons[0].onPress();
+      }
+    } else {
+      window.alert(msg);
+    }
+    return;
+  }
+  showAlert(title, message, buttons);
+};
 import ListingCard from '../../components/ListingCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -111,7 +124,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
 
   const handleAddListing = () => {
     if (landlordProfile?.kyc_status !== 'approved') {
-      Alert.alert(
+      showAlert(
         'KYC Required',
         'Please complete your KYC verification before creating listings.',
         [
@@ -133,7 +146,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
   };
 
   const handleDeleteListing = (listingId: string) => {
-    Alert.alert(
+    showAlert(
       'Delete Listing',
       'Are you sure you want to delete this listing?',
       [
@@ -146,10 +159,10 @@ const listingsWithImages = (listingData || []).map((l: any) => {
               const { error } = await supabase.from('listings').delete().eq('id', listingId);
               if (error) throw error;
               setListings((prev) => prev.filter((l) => l.id !== listingId));
-              Alert.alert('Deleted', 'Listing has been deleted.');
+              showAlert('Deleted', 'Listing has been deleted.');
             } catch (err) {
               console.error('Error deleting listing:', err);
-              Alert.alert('Error', 'Failed to delete listing.');
+              showAlert('Error', 'Failed to delete listing.');
             }
           },
         },
@@ -311,7 +324,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 60,
+    paddingTop: Platform.OS === 'web' ? 20 : 60,
     paddingBottom: 20,
     backgroundColor: colors.background,
     borderBottomWidth: 1,

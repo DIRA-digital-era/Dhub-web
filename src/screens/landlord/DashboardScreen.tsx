@@ -1,13 +1,7 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/landlord/DashboardScreen.tsx
 import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  Alert,
-} from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { supabase } from '../../utils/supabaseClient';
 import { useAuth } from '../../hooks/useAuth';
@@ -73,7 +67,7 @@ const DashboardScreen: React.FC = () => {
 
   const handleCreateListing = () => {
     if (landlordProfile?.kyc_status !== 'approved') {
-      Alert.alert(
+      showAlert(
         'KYC Required',
         'Please complete your KYC verification before creating listings.',
         [

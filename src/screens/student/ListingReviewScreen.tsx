@@ -1,14 +1,7 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/student/ListingReviewScreen.tsx
 import React, { useState } from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  TextInput,
-  Alert,
-  ScrollView,
-} from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, TextInput, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "../../hooks/useAuth";
@@ -38,8 +31,8 @@ export default function ListingReviewScreen() {
   const styles = React.useMemo(() => getStyles(colors, isDark), [colors, isDark]);
 
   const submitRating = async () => {
-    if (!user?.id) return Alert.alert("Error", "User not logged in.");
-    if (stars < 1 || stars > 5) return Alert.alert("Error", "Please select a rating (1–5 stars).");
+    if (!user?.id) return showAlert("Error", "User not logged in.");
+    if (stars < 1 || stars > 5) return showAlert("Error", "Please select a rating (1–5 stars).");
 
     setLoading(true);
 
@@ -68,7 +61,7 @@ export default function ListingReviewScreen() {
         if (updateErr) throw updateErr;
       }
 
-      Alert.alert(
+      showAlert(
         "Thank You!",
         "Your rating helps improve DHUB.",
         [
@@ -83,7 +76,7 @@ export default function ListingReviewScreen() {
       setComment("");
     } catch (err: any) {
       console.error("Rating submission error:", err);
-      Alert.alert("Error", err.message || "Failed to submit rating.");
+      showAlert("Error", err.message || "Failed to submit rating.");
     } finally {
       setLoading(false);
     }

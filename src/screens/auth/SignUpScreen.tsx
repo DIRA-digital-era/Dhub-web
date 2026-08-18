@@ -1,3 +1,4 @@
+import { showAlert } from '../../utils/alert';
 // src/screens/auth/SignUpScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
 import { yupResolver } from '@hookform/resolvers/yup';
@@ -6,11 +7,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import React, { useEffect, useState } from 'react';
 import { Controller, useForm } from 'react-hook-form';
-import {
-  ActivityIndicator, Alert,
-  Linking, Modal, Platform,
-  ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View
-} from 'react-native';
+import { ActivityIndicator, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useSelector } from 'react-redux';
 import * as yup from 'yup';
 import ButtonPrimary from '../../components/ButtonPrimary';
@@ -120,7 +117,7 @@ const SignUpScreen: React.FC = () => {
       }
     } catch (err: any) {
       if (err.message?.includes('already registered')) {
-        Alert.alert('Account Exists', 'Already registered? Sign In instead.', [
+        showAlert('Account Exists', 'Already registered? Sign In instead.', [
           { text: 'No', style: 'cancel' },
           { text: 'Yes, Sign In', onPress: () => navigation.navigate('SignIn') },
         ]);
