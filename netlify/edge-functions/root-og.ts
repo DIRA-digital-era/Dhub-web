@@ -210,7 +210,7 @@ export default async () => {
       Discover verified rentals across Cameroon. Book directly with landlords, pay securely, and move in with confidence.
     </p>
 
-    <a class="btn" href="https://dhubweb.diracmr.com">
+    <a class="btn" href="/explore">
       <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round">
         <path d="M5 12h14M12 5l7 7-7 7" />
       </svg>
