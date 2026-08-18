@@ -273,8 +273,7 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   header: {
     backgroundColor: colors.white,
     paddingHorizontal: 20,
-    paddingTop: 60,
-    paddingBottom: 20,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: colors.greyLight,
     shadowColor: isDark ? '#FFF' : '#000',

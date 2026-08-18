@@ -126,9 +126,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   header: {
     flexDirection: "row",
     alignItems: "center",
-    paddingTop: Platform.OS === "ios" ? 50 : 30,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    paddingBottom: 15,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,
     backgroundColor: colors.background,

@@ -335,9 +335,8 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
   container: { flexGrow: 1, padding: 24, paddingBottom: 80 },
   formContainer: { width: '100%' },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 80 : 60,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    paddingBottom: 20,
     backgroundColor: colors.background,
     borderBottomWidth: 1,
     borderBottomColor: colors.border,

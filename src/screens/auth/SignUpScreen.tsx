@@ -452,9 +452,8 @@ const SignUpScreen: React.FC = () => {
 const styles = StyleSheet.create({
   container: { padding: 16, paddingBottom: 100 },
   header: {
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingVertical: 16,
     paddingHorizontal: 20,
-    paddingBottom: 16,
     backgroundColor: '#fff',
     borderBottomWidth: 1,
     borderBottomColor: '#f0f0f0',
