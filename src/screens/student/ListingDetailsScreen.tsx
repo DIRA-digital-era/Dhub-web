@@ -11,6 +11,7 @@ import { ActivityIndicator, Dimensions, FlatList, Image, Linking, Modal, Platfor
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import MapView from 'react-native-maps';
+import ActionGateModal from '../../components/ActionGateModal';
 import FullVideoPlayer from '../../components/FullVideoPlayer';
 import ListingReviews from '../../components/ListingReviews';
 import MapPickerModal from '../../components/MapPickerModal';
@@ -720,66 +721,34 @@ const ListingDetailsScreen: React.FC = () => {
       </Modal>
 
       {/* Profile Verification Gate Modal */}
-      <Modal visible={showProfileGate} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Verification Required</Text>
-              <TouchableOpacity onPress={() => setShowProfileGate(false)}>
-                <Ionicons name="close" size={24} color={COLORS.greyDark} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalBody}>
-              Landlords require your age, profession/level, and Momo number before accepting bookings.
-            </Text>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowProfileGate(false)}>
-                <Text style={styles.modalCancelBtnText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalPrimaryBtn}
-                onPress={() => {
-                  setShowProfileGate(false);
-                  navigation.navigate('StudentTabs', { screen: 'Profile' });
-                }}
-              >
-                <Text style={styles.modalPrimaryBtnText}>Update Profile</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ActionGateModal
+        visible={showProfileGate}
+        iconName="person-circle-outline"
+        title="Verification Required"
+        message="Landlords require your age, profession/level, and Momo number before accepting bookings."
+        primaryButtonText="Update Profile"
+        onPrimaryPress={() => {
+          setShowProfileGate(false);
+          navigation.navigate('StudentTabs', { screen: 'Profile' });
+        }}
+        secondaryButtonText={t('common.cancel')}
+        onClose={() => setShowProfileGate(false)}
+      />
 
       {/* Location Gate Modal */}
-      <Modal visible={showLocationGate} transparent animationType="fade">
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>{t('listing.location_locked')}</Text>
-              <TouchableOpacity onPress={() => setShowLocationGate(false)}>
-                <Ionicons name="close" size={24} color={COLORS.greyDark} />
-              </TouchableOpacity>
-            </View>
-            <Text style={styles.modalBody}>
-              {t('listing.location_locked_msg')}
-            </Text>
-            <View style={styles.modalFooter}>
-              <TouchableOpacity style={styles.modalCancelBtn} onPress={() => setShowLocationGate(false)}>
-                <Text style={styles.modalCancelBtnText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalPrimaryBtn}
-                onPress={() => {
-                  setShowLocationGate(false);
-                  handleBooking();
-                }}
-              >
-                <Text style={styles.modalPrimaryBtnText}>{t('listing.book_now')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
+      <ActionGateModal
+        visible={showLocationGate}
+        iconName="location-outline"
+        title={t('listing.location_locked')}
+        message={t('listing.location_locked_msg')}
+        primaryButtonText={t('booking.title')}
+        onPrimaryPress={() => {
+          setShowLocationGate(false);
+          handleBooking();
+        }}
+        secondaryButtonText={t('common.cancel')}
+        onClose={() => setShowLocationGate(false)}
+      />
     </SafeAreaView>
   );
 };

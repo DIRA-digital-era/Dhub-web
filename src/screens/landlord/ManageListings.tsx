@@ -28,6 +28,7 @@ const showAlert = (title: string, message?: string, buttons?: any[]) => {
   }
   showAlert(title, message, buttons);
 };
+import ActionGateModal from '../../components/ActionGateModal';
 import ListingCard from '../../components/ListingCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
@@ -66,6 +67,7 @@ const ManageListings: React.FC = () => {
   const [listings, setListings] = useState<any[]>([]);
   const [landlordProfile, setLandlordProfile] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [showKycGate, setShowKycGate] = useState(false);
 
   if (!user) {
     return (
@@ -124,14 +126,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
 
   const handleAddListing = () => {
     if (landlordProfile?.kyc_status !== 'approved') {
-      showAlert(
-        'KYC Required',
-        'Please complete your KYC verification before creating listings.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Verify Now', onPress: () => navigation.navigate('KYCVerification') },
-        ]
-      );
+      setShowKycGate(true);
       return;
     }
     navigation.navigate('UploadListing');
@@ -310,6 +305,20 @@ const listingsWithImages = (listingData || []).map((l: any) => {
           </TouchableOpacity>
         </>
       )}
+
+      <ActionGateModal
+        visible={showKycGate}
+        iconName="shield-checkmark-outline"
+        title="KYC Required"
+        message="Please complete your KYC verification before creating listings."
+        primaryButtonText="Verify Now"
+        onPrimaryPress={() => {
+          setShowKycGate(false);
+          navigation.navigate('KYCVerification');
+        }}
+        secondaryButtonText="Cancel"
+        onClose={() => setShowKycGate(false)}
+      />
     </View>
   );
 };

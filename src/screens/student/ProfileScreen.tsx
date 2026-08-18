@@ -8,6 +8,7 @@ import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet,
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
+import ActionGateModal from '../../components/ActionGateModal';
 
 const showAlert = (title: string, message?: string, buttons?: any[]) => {
   if (Platform.OS === 'web') {
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
   const [changePasswordVisible, setChangePasswordVisible] = useState(false);
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
+  const [showEmailGate, setShowEmailGate] = useState(false);
 
   const fetchUserData = async () => {
     if (!user) return;
@@ -125,14 +127,7 @@ export default function ProfileScreen() {
         setLoading(false);
         return showAlert(t('common.error'), authError.message);
       }
-      showAlert(
-        t('profile.verification_required'),
-        t('profile.verification_msg'),
-        [
-          { text: t('common.cancel'), style: "cancel" },
-          { text: t('profile.open_gmail'), onPress: () => Linking.openURL('googlegmail://').catch(() => Linking.openURL('mailto:')) }
-        ]
-      );
+      setShowEmailGate(true);
     }
 
     const { error } = await supabase
@@ -334,6 +329,20 @@ export default function ProfileScreen() {
           </KeyboardAvoidingView>
         </View>
       </Modal>
+
+      <ActionGateModal
+        visible={showEmailGate}
+        iconName="mail-unread-outline"
+        title={t('profile.verification_required')}
+        message={t('profile.verification_msg')}
+        primaryButtonText={t('profile.open_gmail')}
+        onPrimaryPress={() => {
+          setShowEmailGate(false);
+          Linking.openURL('googlegmail://').catch(() => Linking.openURL('mailto:'));
+        }}
+        secondaryButtonText={t('common.cancel')}
+        onClose={() => setShowEmailGate(false)}
+      />
     </View>
   );
 }
