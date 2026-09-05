@@ -7,6 +7,8 @@ const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diracm
 const WEB_BASE_URL = 'https://dhubweb.diracmr.com';
 const SUPABASE_PROJECT_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co';
 const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
+// ── Bump this string on every deploy to auto-bust CDN cache via ETag change ──
+const DEPLOY_VERSION = '20260906-2';
 
 // ── XSS-safe HTML escaping ────────────────────────────────────────────────
 function esc(s: string): string {
@@ -163,6 +165,7 @@ serve(async (req) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="x-deploy-version" content="${DEPLOY_VERSION}">
 <title>${esc(title)} - DHUB</title>
 
 <!-- Open Graph: WhatsApp, Facebook, LinkedIn, Telegram, Discord, Slack -->
@@ -261,14 +264,7 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 .brand strong { color: var(--gold); opacity: .6; }
 </style>
 
-<!-- Attempt to open the native app silently before page renders -->
-<script>
-(function() {
-  if (/Android|iPhone|iPad/i.test(navigator.userAgent)) {
-    window.location.href = '${deepLink}';
-  }
-})();
-</script>
+
 </head>
 <body>
 <div class="card">
@@ -303,10 +299,48 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
   var ua = navigator.userAgent;
   var isIos = /iPhone|iPad|iPod/i.test(ua);
   var isAndroid = /Android/i.test(ua);
+  var isMobile = isIos || isAndroid;
   var btnIos = document.getElementById('btn-ios');
   var btnAndroid = document.getElementById('btn-android');
+  var btnWeb = document.getElementById('btn-web');
+
+  // Hide irrelevant store button based on OS
   if (isIos && btnAndroid) btnAndroid.style.display = 'none';
   if (isAndroid && btnIos) btnIos.style.display = 'none';
+
+  // On desktop show both store buttons prominently and skip deep link
+  if (!isMobile) return;
+
+  // ── Smart deep-link with fallback ──────────────────────────────────────
+  // We wait until the page is rendered and visible, THEN try the deep link.
+  // If the app is installed, the OS will intercept and open it.
+  // If not installed, the browser ignores the unknown scheme and the user
+  // sees the fully-rendered page with the store download button.
+  window.addEventListener('load', function() {
+    // Small delay so the user sees the card before anything happens
+    setTimeout(function() {
+      var appOpened = false;
+      // Use a visibility trick: if the app opens, the page goes to background
+      // and the blur/pagehide event fires. We use this to skip the store redirect.
+      function onBlur() {
+        appOpened = true;
+      }
+      window.addEventListener('blur', onBlur);
+      document.addEventListener('pagehide', function() { appOpened = true; });
+
+      // Attempt to open the native app via the custom URI scheme
+      var iframe = document.createElement('iframe');
+      iframe.style.display = 'none';
+      iframe.src = '${deepLink}';
+      document.body.appendChild(iframe);
+
+      // After 2s, if app didn't open, clean up listener. Page stays visible.
+      setTimeout(function() {
+        window.removeEventListener('blur', onBlur);
+        document.body.removeChild(iframe);
+      }, 2000);
+    }, 300);
+  });
 })();
 </script>
 </body>
