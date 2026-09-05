@@ -143,7 +143,13 @@ const paymentsSlice = createSlice({
         state.initiating = false;
         state.initiateData = action.payload;
         if (action.payload?.data) {
-          state.history.unshift(action.payload.data);
+          const newPayment = action.payload.data;
+          const index = state.history.findIndex(p => p.id === newPayment.id);
+          if (index !== -1) {
+            state.history[index] = newPayment;
+          } else {
+            state.history.unshift(newPayment);
+          }
         }
       })
       .addCase(initiateTransfer.rejected, (state, action) => {
@@ -159,7 +165,13 @@ const paymentsSlice = createSlice({
         state.initiating = false;
         state.initiateData = action.payload;
         if (action.payload?.data) {
-          state.history.unshift(action.payload.data);
+          const newPayment = action.payload.data;
+          const index = state.history.findIndex(p => p.id === newPayment.id);
+          if (index !== -1) {
+            state.history[index] = newPayment;
+          } else {
+            state.history.unshift(newPayment);
+          }
         }
       })
       .addCase(initiateCollection.rejected, (state, action) => {
@@ -175,7 +187,13 @@ const paymentsSlice = createSlice({
         state.initiating = false;
         state.initiateData = action.payload;
         if (action.payload?.data) {
-          state.history.unshift(action.payload.data);
+          const newPayment = action.payload.data;
+          const index = state.history.findIndex(p => p.id === newPayment.id);
+          if (index !== -1) {
+            state.history[index] = newPayment;
+          } else {
+            state.history.unshift(newPayment);
+          }
         }
       })
       .addCase(initiateBookingPayment.rejected, (state, action) => {
