@@ -2,18 +2,19 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import React, { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
 import {
   ActivityIndicator,
   Alert,
   Modal,
+  Platform,
   ScrollView,
   StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
-  Platform
+  View
 } from "react-native";
 import QRCode from "react-native-qrcode-svg";
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -23,7 +24,6 @@ import { useAppDispatch, useAppSelector } from "../../store/hooks";
 import { clearInitiateState, fetchPayments, initiateBookingPayment, initiateTransfer, upsertPayment } from '../../store/paymentsSlice';
 import type { RootState } from "../../store/store";
 import { supabase } from '../../utils/supabaseClient';
-import { useTranslation } from "react-i18next";
 import DownloadAppScreen from '../common/DownloadAppScreen';
 
 // ─── SECURITY NOTE ─────────────────────────────────────────────────────────────
@@ -93,19 +93,18 @@ const PaymentScreen: React.FC = () => {
   // FEATURE FLAG STATE
   const [checkingFlag, setCheckingFlag] = useState(true);
   const [webPaymentEnabled, setWebPaymentEnabled] = useState(false);
-  const [downloadLinks, setDownloadLinks] = useState<{ios?: string, android?: string}>({});
+  const [downloadLinks, setDownloadLinks] = useState<{ ios?: string, android?: string }>({});
 
   const [activeTab, setActiveTab] = useState<"history" | "send">("history");
   const [amount, setAmount] = useState<string>("");
-  const [payerPhone, setPayerPhone] = useState<string>(""); 
-  const [receiverPhone, setReceiverPhone] = useState<string>(""); 
-  const [receiverDisplayName, setReceiverDisplayName] = useState<string>(""); 
+  const [payerPhone, setPayerPhone] = useState<string>("");
+  const [receiverPhone, setReceiverPhone] = useState<string>("");
+  const [receiverDisplayName, setReceiverDisplayName] = useState<string>("");
   const [description, setDescription] = useState<string>("");
   const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
   const [showReceiptModal, setShowReceiptModal] = useState<boolean>(false);
   const paymentModeLoaded = true;
 
-  // FETCH FEATURE FLAG
   useEffect(() => {
     const fetchFlag = async () => {
       try {
@@ -115,20 +114,25 @@ const PaymentScreen: React.FC = () => {
           .eq('key', 'allow_payment_via_web_app')
           .maybeSingle();
 
+        console.log('🚩 [FeatureFlag] data:', JSON.stringify(data), '| error:', JSON.stringify(error));
+
         if (error) {
           console.error("Error fetching feature flag:", error);
-          // Default to false on error to be safe
           setWebPaymentEnabled(false);
         } else if (data) {
-          setWebPaymentEnabled(data.enabled);
+          console.log('🚩 [FeatureFlag] enabled:', data.enabled, '| value:', data.value);
+          setWebPaymentEnabled(!!data.enabled);
           try {
-            const links = JSON.parse(data.value);
-            setDownloadLinks(links);
-          } catch(e) {
+            if (data.value) {
+              const links = JSON.parse(data.value);
+              setDownloadLinks(links);
+            }
+          } catch (e) {
             console.error("Error parsing feature flag value JSON:", e);
           }
         } else {
-          // Flag doesn't exist yet — default to disabled (show download screen)
+          // Flag row doesn't exist — default disabled
+          console.warn('🚩 [FeatureFlag] Row not found — defaulting to disabled');
           setWebPaymentEnabled(false);
         }
       } catch (err) {
@@ -214,18 +218,14 @@ const PaymentScreen: React.FC = () => {
         initiateBookingPayment({
           bookingId: incoming.bookingId,
           payerPhone,
-          paymentKind: incoming.paymentType === 'renewal' ? 'rent_completion' : incoming.paymentType,
+          paymentKind: incoming.paymentType, // backend handles 'initial' | 'rent_completion' | 'renewal' natively
           idempotencyKey,
         })
       );
 
       if (initiateBookingPayment.fulfilled.match(result)) {
         dispatch(clearInitiateState());
-        if (navigation.canGoBack()) {
-          navigation.goBack();
-        } else {
-          setActiveTab('history');
-        }
+        setActiveTab('history');
         const alreadyProcessing = (result.payload as any)?.already_processing;
         if (alreadyProcessing) {
           Alert.alert(
@@ -269,8 +269,8 @@ const PaymentScreen: React.FC = () => {
         payerPhone,
         receiverPhone,
         amount,
-        reason: paymentReason,      
-        transferType: transferType, 
+        reason: paymentReason,
+        transferType: transferType,
         client: {
           name: 'Dhub',
           description,
@@ -367,10 +367,10 @@ const PaymentScreen: React.FC = () => {
   // FEATURE FLAG REDIRECT GUARD
   if (!webPaymentEnabled) {
     return (
-      <DownloadAppScreen 
-        onClose={() => navigation.goBack()} 
-        iosLink={downloadLinks.ios} 
-        androidLink={downloadLinks.android} 
+      <DownloadAppScreen
+        onClose={() => navigation.goBack()}
+        iosLink={downloadLinks.ios}
+        androidLink={downloadLinks.android}
       />
     );
   }
@@ -491,75 +491,196 @@ const PaymentScreen: React.FC = () => {
             )}
           </ScrollView>
         ) : (
-          <ScrollView style={styles.sendContainer}>
-            <Text style={styles.sectionTitle}>{t('payment.send_tab')}</Text>
+          <ScrollView style={styles.sendContainer} contentContainerStyle={{ paddingBottom: 40 }}>
 
-            {/* Payer Phone */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('payment.momo_number_label')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('payment.momo_placeholder')}
-                value={payerPhone}
-                onChangeText={setPayerPhone}
-                keyboardType="phone-pad"
-                editable={!initiating}
-              />
-            </View>
+            {/* ── BOOKING CONTEXT: show a clean payment summary card ── */}
+            {incoming?.bookingId ? (
+              <>
+                {/* Payment Type Badge */}
+                <View style={styles.paymentTypeBadge}>
+                  <Ionicons
+                    name={
+                      incoming.paymentType === 'initial' ? 'home-outline' :
+                        incoming.paymentType === 'rent_completion' ? 'checkmark-circle-outline' :
+                          'refresh-circle-outline'
+                    }
+                    size={20}
+                    color={COLORS.primary}
+                    style={{ marginRight: 8 }}
+                  />
+                  <Text style={styles.paymentTypeBadgeText}>
+                    {incoming.paymentType === 'initial' && 'Initial Booking Payment'}
+                    {incoming.paymentType === 'rent_completion' && 'Rent Completion Payment'}
+                    {incoming.paymentType === 'renewal' && 'Lease Renewal Fee'}
+                  </Text>
+                </View>
 
-            {/* Amount */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('payment.amount_label')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('payment.amount_placeholder')}
-                value={amount}
-                onChangeText={setAmount}
-                keyboardType="numeric"
-                editable={!initiating && !incoming?.amount}
-              />
-            </View>
+                {/* Summary Card */}
+                <View style={styles.summaryCard}>
+                  <Text style={styles.summaryTitle}>{incoming.description}</Text>
 
-            {/* Receiver Locked */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('payment.receiver_label')}</Text>
-              <TextInput
-                style={styles.input}
-                value={receiverDisplayName || receiverPhone}
-                editable={false}
-              />
-            </View>
+                  <View style={styles.summaryDivider} />
 
-            {/* Description */}
-            <View style={styles.inputGroup}>
-              <Text style={styles.label}>{t('payment.description_label')}</Text>
-              <TextInput
-                style={[styles.input, styles.textArea, (initiating || incoming?.description) && styles.inputDisabled]}
-                placeholder={t('payment.description_placeholder')}
-                value={description}
-                onChangeText={setDescription}
-                multiline
-                numberOfLines={3}
-                editable={!initiating && !incoming?.description}
-              />
-            </View>
+                  <View style={styles.summaryRow}>
+                    <Text style={styles.summaryLabel}>Amount</Text>
+                    <Text style={styles.summaryAmount}>
+                      {formatCurrency(incoming.amount ?? 0)}
+                    </Text>
+                  </View>
 
-            <TouchableOpacity
-              style={[styles.sendButton, (initiating || !paymentModeLoaded) && styles.buttonDisabled]}
-              onPress={handleSendPayment}
-              disabled={initiating || !paymentModeLoaded}
-            >
-              {initiating ? (
-                <ActivityIndicator color={COLORS.onPrimary} />
-              ) : (
-                <Text style={styles.sendButtonText}>{t('payment.send_button')}</Text>
-              )}
-            </TouchableOpacity>
+                  {incoming.receiverName ? (
+                    <View style={styles.summaryRow}>
+                      <Text style={styles.summaryLabel}>Payable To</Text>
+                      <Text style={styles.summaryValue}>{incoming.receiverName}</Text>
+                    </View>
+                  ) : null}
 
-            {/* Error */}
+                  {incoming.paymentType === 'initial' && (
+                    <View style={styles.summaryNote}>
+                      <Ionicons name="lock-open-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.summaryNoteText}>
+                        This is the <Text style={{ fontWeight: '700' }}>Initial Deposit</Text>: your caution fee (held in escrow) + XAF 5,000 service fee.{"\n\n"}Once payment is confirmed by MoMo, the property's exact map location and landlord contact will be unlocked. You can then visit the property and choose to complete your rent or request a caution refund.
+                      </Text>
+                    </View>
+                  )}
+                  {incoming.paymentType === 'rent_completion' && (
+                    <View style={styles.summaryNote}>
+                      <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.summaryNoteText}>
+                        This is your <Text style={{ fontWeight: '700' }}>remaining rent balance</Text> after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property.
+                      </Text>
+                    </View>
+                  )}
+                  {incoming.paymentType === 'renewal' && (
+                    <View style={styles.summaryNote}>
+                      <Ionicons name="refresh-circle-outline" size={16} color={COLORS.primary} />
+                      <Text style={styles.summaryNoteText}>
+                        A <Text style={{ fontWeight: '700' }}>XAF 5,000 lease renewal fee</Text>. Once confirmed, your lease end date will be extended and you can continue your stay.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+
+                {/* MoMo Phone Input */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>Your MoMo Phone Number</Text>
+                  <TextInput
+                    style={[styles.input, initiating && styles.inputDisabled]}
+                    placeholder="e.g. 237XXXXXXXXX"
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={payerPhone}
+                    onChangeText={setPayerPhone}
+                    keyboardType="phone-pad"
+                    editable={!initiating}
+                    autoCorrect={false}
+                  />
+                  <Text style={styles.inputHint}>
+                    Enter the MoMo number that will receive the payment prompt.
+                  </Text>
+                </View>
+
+                {/* Pay Button */}
+                <TouchableOpacity
+                  style={[styles.sendButton, (initiating || !payerPhone) && styles.buttonDisabled]}
+                  onPress={handleSendPayment}
+                  disabled={initiating || !payerPhone}
+                >
+                  {initiating ? (
+                    <ActivityIndicator color={COLORS.onPrimary} />
+                  ) : (
+                    <>
+                      <Ionicons name="phone-portrait-outline" size={20} color={COLORS.onPrimary} style={{ marginRight: 8 }} />
+                      <Text style={styles.sendButtonText}>
+                        Pay Rent Processing fee {formatCurrency(incoming.amount ?? 0)}
+                      </Text>
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {initiating && (
+                  <Text style={styles.initiatingHint}>
+                    A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment.
+                  </Text>
+                )}
+              </>
+            ) : (
+              /* ── GENERIC FREE-FORM TRANSFER (no booking context) ── */
+              <>
+                <Text style={styles.sectionTitle}>{t('payment.send_tab')}</Text>
+
+                {/* Payer Phone */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('payment.momo_number_label')}</Text>
+                  <TextInput
+                    style={[styles.input, initiating && styles.inputDisabled]}
+                    placeholder={t('payment.momo_placeholder')}
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={payerPhone}
+                    onChangeText={setPayerPhone}
+                    keyboardType="phone-pad"
+                    editable={!initiating}
+                  />
+                </View>
+
+                {/* Amount */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('payment.amount_label')}</Text>
+                  <TextInput
+                    style={[styles.input, (initiating || !!incoming?.amount) && styles.inputDisabled]}
+                    placeholder={t('payment.amount_placeholder')}
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={amount}
+                    onChangeText={setAmount}
+                    keyboardType="numeric"
+                    editable={!initiating && !incoming?.amount}
+                  />
+                </View>
+
+                {/* Receiver */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('payment.receiver_label')}</Text>
+                  <TextInput
+                    style={[styles.input, styles.inputDisabled]}
+                    value={receiverDisplayName || receiverPhone}
+                    editable={false}
+                    placeholderTextColor={COLORS.textSecondary}
+                  />
+                </View>
+
+                {/* Description */}
+                <View style={styles.inputGroup}>
+                  <Text style={styles.label}>{t('payment.description_label')}</Text>
+                  <TextInput
+                    style={[styles.input, styles.textArea, (initiating || !!incoming?.description) && styles.inputDisabled]}
+                    placeholder={t('payment.description_placeholder')}
+                    placeholderTextColor={COLORS.textSecondary}
+                    value={description}
+                    onChangeText={setDescription}
+                    multiline
+                    numberOfLines={3}
+                    editable={!initiating && !incoming?.description}
+                  />
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.sendButton, initiating && styles.buttonDisabled]}
+                  onPress={handleSendPayment}
+                  disabled={initiating}
+                >
+                  {initiating ? (
+                    <ActivityIndicator color={COLORS.onPrimary} />
+                  ) : (
+                    <Text style={styles.sendButtonText}>{t('payment.send_button')}</Text>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Error display */}
             {initiateError && (
               <View style={styles.errorContainer}>
-                <Text style={styles.errorText}>{initiateError}</Text>
+                <Ionicons name="alert-circle-outline" size={18} color={COLORS.danger} style={{ marginRight: 8 }} />
+                <Text style={[styles.errorText, { flex: 1 }]}>{initiateError}</Text>
               </View>
             )}
           </ScrollView>
@@ -907,8 +1028,10 @@ const getStyles = (COLORS: any) =>
     sendButton: {
       backgroundColor: COLORS.primary,
       padding: 16,
-      borderRadius: 8,
-      alignItems: "center",
+      borderRadius: 12,
+      alignItems: 'center',
+      justifyContent: 'center',
+      flexDirection: 'row',
       marginTop: 10,
     },
     buttonDisabled: {
@@ -926,10 +1049,105 @@ const getStyles = (COLORS: any) =>
       marginTop: 20,
       borderLeftWidth: 4,
       borderLeftColor: COLORS.danger,
+      flexDirection: 'row',
+      alignItems: 'flex-start',
     },
     errorText: {
       color: COLORS.danger,
       fontSize: 14,
+    },
+    // ── Booking Payment Summary Styles ──────────────────────────
+    paymentTypeBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: COLORS.primaryLight,
+      borderRadius: 20,
+      paddingHorizontal: 16,
+      paddingVertical: 8,
+      alignSelf: 'flex-start',
+      marginBottom: 16,
+    },
+    paymentTypeBadgeText: {
+      color: COLORS.primary,
+      fontWeight: '700',
+      fontSize: 14,
+    },
+    summaryCard: {
+      backgroundColor: COLORS.surface,
+      borderRadius: 16,
+      padding: 20,
+      marginBottom: 24,
+      borderWidth: 1,
+      borderColor: COLORS.border,
+      shadowColor: COLORS.shadow,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.08,
+      shadowRadius: 8,
+      elevation: 4,
+    },
+    summaryTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: COLORS.text,
+      marginBottom: 16,
+      lineHeight: 24,
+    },
+    summaryDivider: {
+      height: 1,
+      backgroundColor: COLORS.border,
+      marginBottom: 16,
+    },
+    summaryRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 12,
+    },
+    summaryLabel: {
+      fontSize: 14,
+      color: COLORS.textSecondary,
+      fontWeight: '500',
+    },
+    summaryValue: {
+      fontSize: 14,
+      color: COLORS.text,
+      fontWeight: '600',
+      textAlign: 'right',
+      flex: 1,
+      marginLeft: 10,
+    },
+    summaryAmount: {
+      fontSize: 22,
+      fontWeight: '800',
+      color: COLORS.primary,
+    },
+    summaryNote: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      backgroundColor: COLORS.primaryLight,
+      borderRadius: 8,
+      padding: 12,
+      marginTop: 12,
+      gap: 8,
+    },
+    summaryNoteText: {
+      flex: 1,
+      fontSize: 13,
+      color: COLORS.text,
+      lineHeight: 18,
+    },
+    inputHint: {
+      fontSize: 12,
+      color: COLORS.textSecondary,
+      marginTop: 6,
+    },
+    initiatingHint: {
+      textAlign: 'center',
+      color: COLORS.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+      marginTop: 16,
+      paddingHorizontal: 12,
     },
     modalContainer: {
       flex: 1,

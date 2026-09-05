@@ -3,7 +3,7 @@
 import { supabase } from "../utils/supabaseClient";
 
 const API_BASE_URL =
-  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URLg;
+  process.env.EXPO_PUBLIC_DIRA_PAYMENT_URL;
 
 export interface Payment {
   id: string;
@@ -222,9 +222,9 @@ export const paymentService = {
       throw new Error(body?.error || "Unable to start payment.");
     }
 
-    console.info("✅ [PaymentService] Booking Payment Success:", body.data);
+    console.info("✅ [PaymentService] Booking Payment Success:", body);
 
-    return body.data;
+    return body;
   },
 
   async initiateVerificationPayment(args: InitiateVerificationPaymentArgs) {

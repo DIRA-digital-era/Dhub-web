@@ -8,11 +8,11 @@ import { differenceInDays, format } from "date-fns";
 import * as ImagePicker from 'expo-image-picker';
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { ActivityIndicator, Dimensions, Image, Linking, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Dimensions, Image, Linking, Modal, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import MapView from 'react-native-maps';
-import MapPickerModal from '../../components/MapPickerModal';
 import { SafeAreaView } from "react-native-safe-area-context";
 import FullVideoPlayer from "../../components/FullVideoPlayer";
+import MapPickerModal from '../../components/MapPickerModal';
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { triggerPushNotifications } from '../../hooks/usePushNotifications';
@@ -397,11 +397,16 @@ export default function BookingDetails() {
   const handlePayNow = () => {
     if (!booking) return;
 
+    // Initial Payment = Caution Fee (escrow) + 5,000 XAF service fee
+    // The backend will verify this amount from the booking record via /api/payments/booking-intents
+    const caution = booking.caution_fee ?? 0;
+    const initialPaymentAmount = caution + 5000;
+
     navigation.navigate('Payments', {
       listingId: booking.listing_id,
       bookingId: booking.id,
-      amount: Number(booking.total_amount ?? booking.amount),
-      description: `Booking payment for ${booking.listing?.title || "Property"}`,
+      amount: initialPaymentAmount,
+      description: `Initial Deposit (Caution + 5000 Service Fee) for ${booking.listing?.title || "Property"}`,
       receiverPhone: booking.listing?.landlord?.phone || "",
       receiverName: booking.listing?.landlord?.full_name || "",
       landlordId: booking.landlord_id,
@@ -502,15 +507,15 @@ export default function BookingDetails() {
       showAlert('Missing Info', 'Please provide a description of the issue.');
       return;
     }
-    
+
     setIsSubmittingDispute(true);
     try {
       const { error } = await supabase.from('bookings').update({
         dispute_tenant_text: disputeText
       }).eq('id', bookingId);
-      
+
       if (error) throw error;
-      
+
       showAlert('Evidence Submitted', 'Your evidence has been submitted to DHUB for review.');
       fetchBookingDetails(true);
     } catch (err: any) {
@@ -536,10 +541,10 @@ export default function BookingDetails() {
                 p_role: 'student'
               });
               if (error) throw error;
-              
+
               // Optimistically update UI so the button vanishes instantly
               setBooking((prev: any) => prev ? { ...prev, student_confirmation: true } : prev);
-              
+
               fetchBookingDetails();
               showAlert('Confirmed', 'Enjoy your stay!');
             } catch (err) {
@@ -1107,12 +1112,12 @@ export default function BookingDetails() {
               <Text style={{ fontSize: 13, color: COLORS.greyDark, marginBottom: 12 }}>
                 {t('bookings.dispute_resolution_desc')}
               </Text>
-              
+
               {(booking as any).dispute_tenant_text ? (
                 <View style={{ backgroundColor: COLORS.greyLight, padding: 12, borderRadius: 8 }}>
                   <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.your_evidence_submitted')}</Text>
                   <Text style={{ color: COLORS.greyDark }}>{(booking as any).dispute_tenant_text}</Text>
-                  
+
                   {((booking as any).dispute_tenant_photos?.length > 0) && (
                     <View style={{ marginTop: 10 }}>
                       <Text style={{ fontWeight: 'bold', marginBottom: 4 }}>{t('bookings.photos_count', { count: ((booking as any).dispute_tenant_photos).length })}</Text>
@@ -1123,7 +1128,7 @@ export default function BookingDetails() {
                       </View>
                     </View>
                   )}
-                  
+
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
                     <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
                     <Text style={{ color: COLORS.success, marginLeft: 4, fontWeight: '600' }}>Under Review by DHUB</Text>
@@ -1141,7 +1146,7 @@ export default function BookingDetails() {
                     onChangeText={setDisputeText}
                     multiline
                   />
-                  
+
                   <View style={{ flexDirection: 'row', gap: 8, marginBottom: 12 }}>
                     {((booking as any).dispute_tenant_photos || []).map((p: any, i: number) => (
                       <Image key={i} source={{ uri: p.url }} style={{ width: 60, height: 60, borderRadius: 4 }} />
@@ -1159,7 +1164,7 @@ export default function BookingDetails() {
                       </TouchableOpacity>
                     )}
                   </View>
-                  
+
                   <TouchableOpacity
                     style={[styles.payButton, { width: '100%' }]}
                     onPress={handleSubmitDisputeEvidence}
@@ -1501,7 +1506,7 @@ export default function BookingDetails() {
       <MapPickerModal
         visible={mapModalVisible}
         onClose={() => setMapModalVisible(false)}
-        onLocationSelected={() => {}}
+        onLocationSelected={() => { }}
         initialLocation={
           listing?.latitude && listing?.longitude
             ? { latitude: listing.latitude, longitude: listing.longitude }

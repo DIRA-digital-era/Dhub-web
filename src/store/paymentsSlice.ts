@@ -142,6 +142,9 @@ const paymentsSlice = createSlice({
       .addCase(initiateTransfer.fulfilled, (state, action) => {
         state.initiating = false;
         state.initiateData = action.payload;
+        if (action.payload?.data) {
+          state.history.unshift(action.payload.data);
+        }
       })
       .addCase(initiateTransfer.rejected, (state, action) => {
         state.initiating = false;
@@ -155,6 +158,9 @@ const paymentsSlice = createSlice({
       .addCase(initiateCollection.fulfilled, (state, action) => {
         state.initiating = false;
         state.initiateData = action.payload;
+        if (action.payload?.data) {
+          state.history.unshift(action.payload.data);
+        }
       })
       .addCase(initiateCollection.rejected, (state, action) => {
         state.initiating = false;
@@ -168,6 +174,9 @@ const paymentsSlice = createSlice({
       .addCase(initiateBookingPayment.fulfilled, (state, action) => {
         state.initiating = false;
         state.initiateData = action.payload;
+        if (action.payload?.data) {
+          state.history.unshift(action.payload.data);
+        }
       })
       .addCase(initiateBookingPayment.rejected, (state, action) => {
         state.initiating = false;

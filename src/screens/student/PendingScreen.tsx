@@ -136,7 +136,7 @@ const PendingScreen: React.FC = () => {
       listingId: booking.listing_id,
       bookingId: booking.id,
       amount: initialPaymentAmount,
-      description: `Initial Deposit (Caution + 5K Service Fee) for ${booking.listing?.title || "Property"}`,
+      description: `Initial Deposit (Caution + 5000 Service Fee) for ${booking.listing?.title || "Property"}`,
       receiverPhone: booking.landlord?.phone ?? '',
       receiverName: booking.landlord?.full_name ?? '',
       landlordId: booking.landlord_id,
@@ -229,15 +229,15 @@ const PendingScreen: React.FC = () => {
             {paid
               ? t('booking.hero_payment_complete')
               : canPay
-              ? t('booking.hero_ready_to_pay')
-              : t('booking.hero_awaiting_approval')}
+                ? t('booking.hero_ready_to_pay')
+                : t('booking.hero_awaiting_approval')}
           </Text>
           <Text style={styles.heroSubtitle}>
             {paid
               ? t('booking.hero_payment_complete_sub')
               : canPay
-              ? t('booking.hero_ready_to_pay_sub')
-              : t('booking.hero_awaiting_approval_sub')}
+                ? t('booking.hero_ready_to_pay_sub')
+                : t('booking.hero_awaiting_approval_sub')}
           </Text>
         </View>
 
@@ -345,8 +345,8 @@ const PendingScreen: React.FC = () => {
               booking.approval_status === 'approved'
                 ? COLORS.success
                 : booking.approval_status === 'rejected'
-                ? COLORS.danger
-                : COLORS.pending
+                  ? COLORS.danger
+                  : COLORS.pending
             }
             isLast
             colors={COLORS}
