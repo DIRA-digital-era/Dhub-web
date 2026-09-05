@@ -56,7 +56,8 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
-  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
+  const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB || 
+                 process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
                  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;// fallback
 
   useEffect(() => {
