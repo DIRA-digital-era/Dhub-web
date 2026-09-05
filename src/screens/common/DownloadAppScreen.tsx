@@ -5,12 +5,14 @@ import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 interface Props {
   onClose?: () => void;
+  iosLink?: string;
+  androidLink?: string;
 }
 
-const ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.dira.dhub';
-const IOS_URL = 'https://apps.apple.com/app/idYOUR_APP_ID';
+const DEFAULT_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.dira.dhub';
+const DEFAULT_IOS_URL = 'https://apps.apple.com/app/idYOUR_APP_ID';
 
-const DownloadAppScreen: React.FC<Props> = ({ onClose }) => {
+const DownloadAppScreen: React.FC<Props> = ({ onClose, iosLink, androidLink }) => {
   const openStore = (url: string) => window.open(url, '_blank');
 
   return (
@@ -27,14 +29,14 @@ const DownloadAppScreen: React.FC<Props> = ({ onClose }) => {
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.button, styles.androidButton]}
-            onPress={() => openStore(ANDROID_URL)}
+            onPress={() => openStore(androidLink || DEFAULT_ANDROID_URL)}
           >
             <Ionicons name="logo-google-playstore" size={20} color="#fff" />
             <Text style={styles.buttonText}>Android</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, styles.iosButton]}
-            onPress={() => openStore(IOS_URL)}
+            onPress={() => openStore(iosLink || DEFAULT_IOS_URL)}
           >
             <Ionicons name="logo-apple" size={20} color="#fff" />
             <Text style={styles.buttonText}>iOS</Text>

@@ -397,11 +397,6 @@ export default function BookingDetails() {
   const handlePayNow = () => {
     if (!booking) return;
 
-    if (Platform.OS === 'web') {
-      navigation.navigate('DownloadAppScreen' as never);
-      return;
-    }
-
     navigation.navigate('Payments', {
       listingId: booking.listing_id,
       bookingId: booking.id,
@@ -410,7 +405,7 @@ export default function BookingDetails() {
       receiverPhone: booking.listing?.landlord?.phone || "",
       receiverName: booking.listing?.landlord?.full_name || "",
       landlordId: booking.landlord_id,
-                  paymentType: 'initial',
+      paymentType: 'initial',
       listingType: booking.listing?.listing_type || 'Apartment',
     });
   };
@@ -418,10 +413,6 @@ export default function BookingDetails() {
   const handleCompleteRent = () => {
     if (!booking) return;
 
-    if (Platform.OS === 'web') {
-      navigation.navigate('DownloadAppScreen' as never);
-      return;
-    }
     const caution = booking.caution_fee ?? 0;
     const rentBalance = Number(booking.total_amount ?? booking.amount) - caution;
 
@@ -450,10 +441,6 @@ export default function BookingDetails() {
         {
           text: 'Proceed to Payment',
           onPress: () => {
-            if (Platform.OS === 'web') {
-              navigation.navigate('DownloadAppScreen' as never);
-              return;
-            }
             navigation.navigate('Payments', {
               listingId: booking.listing_id,
               bookingId: booking.id,

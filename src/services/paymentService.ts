@@ -254,12 +254,13 @@ export const paymentService = {
       throw new Error(body?.error || "Unable to start verification payment.");
     }
 
+    const result = body.data || body;
     console.info(
       "✅ [PaymentService] Verification Payment Success:",
-      body.data,
+      result,
     );
 
-    return body.data;
+    return result;
   },
 
   async fetchPayments(userId: string): Promise<Payment[]> {

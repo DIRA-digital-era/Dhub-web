@@ -33,7 +33,7 @@ export function usePaymentSuccessNotifier(navigationRef: NavigationRef) {
     if (!user?.id) return;
 
     const channel = supabase
-      .channel(`payment_notifs_${user.id}`)
+      .channel(`payment_notifs_${user.id}_${Date.now()}`)
       .on(
         'postgres_changes',
         {

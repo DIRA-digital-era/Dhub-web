@@ -36,7 +36,7 @@ const RecentActivity: React.FC<Props> = ({ landlordId }) => {
 
     fetchNotifications();
 const subscription = supabase
-  .channel(`notifications:landlord:${landlordId}`)
+  .channel(`notifications:landlord:${landlordId}-${Date.now()}`)
   .on(
     'postgres_changes',
     {

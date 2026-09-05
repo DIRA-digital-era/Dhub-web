@@ -193,15 +193,10 @@ const ListingDetailsScreen: React.FC = () => {
 
 
   const handleShare = async () => {
-    // Web: share the edge function URL so WhatsApp/Telegram bots crawl
-    //      proper OG meta tags and show a rich preview card.
-    // Mobile (native): share the dhub:// deep link so the app opens
-    //      directly if installed; bots don't matter here as users tap
-    //      from their phone where the app is already present.
-    const shareUrl = Platform.OS === 'web'
-      ? `https://dhubweb.diracmr.com/listing/${listingId}`
-      : `dhub://listing/${listingId}`;
-    const location = listing?.city || listing?.city || '';
+    // Always use the universal https URL so the link works for anyone,
+    // whether or not they have the DHUB app installed.
+    const shareUrl = `https://dhubweb.diracmr.com/listing/${listingId}`;
+    const location = listing?.city || '';
     const messageText = location
       ? `Check out this listing for ${listing?.title} at ${location} on DHUB\n${shareUrl}`
       : `Check out this listing for ${listing?.title} on DHUB\n${shareUrl}`;
