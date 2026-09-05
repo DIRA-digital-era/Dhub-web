@@ -56,6 +56,7 @@ export const MapView: React.FC<MapViewProps> = ({
 }) => {
   const mapRef = useRef<HTMLDivElement>(null);
   const [mapInstance, setMapInstance] = useState<any>(null);
+  const isMapInitialized = useRef(false);
   const apiKey = process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB || 
                  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || 
                  process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;// fallback
@@ -63,9 +64,11 @@ export const MapView: React.FC<MapViewProps> = ({
   useEffect(() => {
     let isMounted = true;
     loadGoogleMapsScript(apiKey).then(() => {
-      if (!isMounted || !mapRef.current) return;
+      if (!isMounted || !mapRef.current || isMapInitialized.current) return;
       const center = region || initialRegion;
       if (!center) return;
+
+      isMapInitialized.current = true;
 
       // Determine gesture handling
       const gestureHandling = (!scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled)
@@ -82,7 +85,7 @@ export const MapView: React.FC<MapViewProps> = ({
         gestureHandling: gestureHandling,
         zoomControl: zoomEnabled,
         rotateControl: rotateEnabled,
-        tilt: pitchEnabled ? 45 : 0,
+        tilt: 0, // Disabled to prevent 45 degree imagery deprecation warning
       });
 
       setMapInstance(map);
@@ -111,7 +114,15 @@ export const MapView: React.FC<MapViewProps> = ({
     });
 
     return () => { isMounted = false; };
-  }, [apiKey, region, initialRegion, mapType, scrollEnabled, zoomEnabled, rotateEnabled, pitchEnabled]);
+  }, [apiKey]); // Run once on mount
+
+  // Update map type when it changes dynamically
+  useEffect(() => {
+    if (mapInstance && mapType) {
+      const googleMapType = mapType === 'satellite' ? 'satellite' : mapType === 'hybrid' ? 'hybrid' : mapType === 'terrain' ? 'terrain' : 'roadmap';
+      mapInstance.setMapTypeId(googleMapType);
+    }
+  }, [mapInstance, mapType]);
 
   // Update map center when region prop changes
   useEffect(() => {
