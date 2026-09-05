@@ -182,16 +182,6 @@ const ListingDetailsScreen: React.FC = () => {
     });
   };
 
-
-
-
-
-
-
-
-
-
-
   const handleShare = async () => {
     // Always use the universal https URL so the link works for anyone,
     // whether or not they have the DHUB app installed.

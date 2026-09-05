@@ -113,7 +113,7 @@ const PaymentScreen: React.FC = () => {
           .from('feature_flags')
           .select('*')
           .eq('key', 'allow_payment_via_web_app')
-          .single();
+          .maybeSingle();
 
         if (error) {
           console.error("Error fetching feature flag:", error);
@@ -127,6 +127,9 @@ const PaymentScreen: React.FC = () => {
           } catch(e) {
             console.error("Error parsing feature flag value JSON:", e);
           }
+        } else {
+          // Flag doesn't exist yet — default to disabled (show download screen)
+          setWebPaymentEnabled(false);
         }
       } catch (err) {
         console.error("Unexpected error fetching flag:", err);
