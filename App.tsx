@@ -10,6 +10,7 @@ import SplashScreen from "./SplashScreen";
 import AuthListener from "./src/components/AuthListener";
 import GlobalNotification from "./src/components/GlobalNotification";
 import WebDownloadBanner from './src/components/WebDownloadBanner';
+import { GlobalModalAlert } from './src/utils/modalAlert';
 import { ThemeProvider, useTheme } from "./src/context/ThemeContext";
 import { usePushNotifications } from "./src/hooks/usePushNotifications";
 import { useVersionCheck } from "./src/hooks/useVersionCheck";
@@ -132,6 +133,7 @@ function ThemedApp() {
         <AuthListener />
         <GlobalNotification />
         <AppGate />
+        <GlobalModalAlert />
       </NavigationContainer>
       <StatusBar style={isDark ? "light" : "dark"} />
       <WebDownloadBanner />

@@ -16,7 +16,7 @@ interface MapPickerModalProps {
 }
 
 const GOOGLE_API_KEY = Platform.OS === 'ios'
-   ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS
+  ? process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS
   : process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID;
 if (!GOOGLE_API_KEY) throw new Error('Missing Google Maps API key');
 
@@ -50,11 +50,19 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
         longitudeDelta: 0.01,
       });
     } else {
-      showAlert('Permission Denied', 'Cannot access location. Please enable GPS.');
-      onClose();
+      // GPS failed or denied, but don't close the modal. Let them pick manually.
+      if (!initialLocation) {
+        setMarkerCoords({ latitude: 3.8480, longitude: 11.5021 });
+        setRegion({
+          latitude: 3.8480,
+          longitude: 11.5021,
+          latitudeDelta: 0.01,
+          longitudeDelta: 0.01,
+        });
+      }
     }
     setLoading(false);
-  }, [onClose, initialLocation]);
+  }, [initialLocation]);
 
   useEffect(() => {
     if (visible) loadUserLocation();
@@ -78,19 +86,19 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
   }, [userLocation, markerCoords]);
 
   // Update route periodically for "live" effect
-    useEffect(() => {
-      if (visible && readOnly && userLocation && markerCoords) {
-        fetchRoute();
-        routeInterval.current = setInterval(fetchRoute, 15000);
+  useEffect(() => {
+    if (visible && readOnly && userLocation && markerCoords) {
+      fetchRoute();
+      routeInterval.current = setInterval(fetchRoute, 15000);
+    }
+    return () => {
+      if (routeInterval.current !== null) {
+        clearInterval(routeInterval.current as unknown as number);
       }
-      return () => {
-        if (routeInterval.current !== null) {
-          clearInterval(routeInterval.current as unknown as number);
-        }
-      };
-    }, [visible, readOnly, userLocation, markerCoords, fetchRoute]);
+    };
+  }, [visible, readOnly, userLocation, markerCoords, fetchRoute]);
 
-    // Drag marker (landlords only)
+  // Drag marker (landlords only)
   const handleDragEnd = (e: { nativeEvent: { coordinate: LatLng } }) => {
     if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
   };
@@ -132,8 +140,8 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
               rotateEnabled={!disableInteraction}
               pitchEnabled={!disableInteraction}
               onPress={(e: { nativeEvent: { coordinate: LatLng } }) => {
-                              if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
-                            }}
+                if (!readOnly && !disableInteraction) setMarkerCoords(e.nativeEvent.coordinate);
+              }}
             >
               {markerCoords && (
                 <Marker

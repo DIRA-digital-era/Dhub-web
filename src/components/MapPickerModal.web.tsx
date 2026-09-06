@@ -50,13 +50,22 @@ const MapPickerModal: React.FC<MapPickerModalProps> = ({
             });
           }
         } else {
-          showAlert('Permission Denied', 'Cannot access location. Please enable GPS.');
-          onClose();
+          // GPS failed or denied, but don't close the modal. Let them pick manually.
+          if (!initialLocation) {
+            // Default to a fallback (e.g., Yaoundé) if we have no initialLocation
+            setMarkerCoords({ latitude: 3.8480, longitude: 11.5021 });
+            setRegion({
+              latitude: 3.8480,
+              longitude: 11.5021,
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            });
+          }
         }
         setLoading(false);
       });
     }
-  }, [visible]);
+  }, [visible, initialLocation]);
 
   const handleDragEnd = (e: any) => {
     if (!readOnly && !disableInteraction) {

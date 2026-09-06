@@ -21,6 +21,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useDispatch } from 'react-redux';
 import { hideThread } from '../../store/chatSlice';
 import { showAlert } from '../../utils/alert';
+import ConfirmModal from '../../components/ConfirmModal';
 
 import { ChatMessage, ChatMessageDto } from '../../types';
 import {
@@ -127,6 +128,8 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [participantName, setParticipantName] = useState('');
+  const [menuVisible, setMenuVisible] = useState(false);
+  const [confirmDeleteVisible, setConfirmDeleteVisible] = useState(false);
 
   const { isDark } = useTheme();
   const COLORS = React.useMemo(() => isDark ? DARK_COLORS : LIGHT_COLORS, [isDark]);
@@ -192,27 +195,14 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack
     };
   }, [threadId, currentUserId]);
 
-  const handleDeleteChat = () => {
-    showAlert(
-      t('chat.delete_chat', 'Delete Chat'),
-      t('chat.delete_chat_confirm', 'Are you sure you want to hide this chat? This action cannot be undone on this device.'),
-      [
-        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
-        { 
-          text: t('common.delete', 'Delete'), 
-          style: 'destructive',
-          onPress: async () => {
-            dispatch(hideThread(threadId));
-            await hideThreadInDb(threadId, currentUserId);
-            if (onBack) {
-              onBack();
-            } else {
-              navigation.goBack();
-            }
-          }
-        }
-      ]
-    );
+  const handleDeleteChat = async () => {
+    dispatch(hideThread(threadId));
+    await hideThreadInDb(threadId, currentUserId);
+    if (onBack) {
+      onBack();
+    } else {
+      navigation.goBack();
+    }
   };
 
   // ── Send ─────────────────────────────────────────────────────────────────────
@@ -378,10 +368,60 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack
           </View>
         </View>
 
-        <TouchableOpacity style={styles.headerBtn} onPress={handleDeleteChat}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => setMenuVisible(v => !v)}>
           <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>
+
+      {/* ── 3-dot dropdown menu ── */}
+      {menuVisible && (
+        <TouchableOpacity
+          style={StyleSheet.absoluteFill}
+          activeOpacity={1}
+          onPress={() => setMenuVisible(false)}
+        >
+          <View
+            style={[
+              styles.dropdownMenu,
+              { backgroundColor: COLORS.surface, borderColor: COLORS.border },
+            ]}
+          >
+            <TouchableOpacity
+              style={styles.dropdownItem}
+              onPress={() => {
+                setMenuVisible(false);
+                setConfirmDeleteVisible(true);
+              }}
+            >
+              <Ionicons name="trash-outline" size={18} color="#E53935" style={{ marginRight: 10 }} />
+              <Text style={[styles.dropdownItemText, { color: '#E53935' }]}>
+                {t('common.delete', 'Delete Chat')}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      )}
+
+      {/* ── Confirm Delete Modal ── */}
+      <ConfirmModal
+        visible={confirmDeleteVisible}
+        title={t('chat.delete_chat', 'Delete Chat')}
+        message={t(
+          'chat.delete_chat_confirm',
+          'This will permanently remove this conversation from your inbox. The other user won\'t be notified.'
+        )}
+        icon="trash-outline"
+        iconColor="#E53935"
+        buttons={[
+          { text: t('common.cancel', 'Cancel'), style: 'cancel', onPress: () => setConfirmDeleteVisible(false) },
+          {
+            text: t('common.delete', 'Delete'),
+            style: 'destructive',
+            onPress: () => { setConfirmDeleteVisible(false); handleDeleteChat(); },
+          },
+        ]}
+        onDismiss={() => setConfirmDeleteVisible(false)}
+      />
 
       {/* ── Messages ── */}
       <KeyboardAvoidingView
@@ -623,6 +663,33 @@ const getStyles = (COLORS: typeof LIGHT_COLORS, isDark: boolean) => StyleSheet.c
     backgroundColor: COLORS.surface,
     borderWidth: 1,
     borderColor: COLORS.inputBorder,
+  },
+
+  // 3-dot dropdown
+  dropdownMenu: {
+    position: 'absolute',
+    top: 60,
+    right: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 8,
+    minWidth: 180,
+    zIndex: 100,
+  },
+  dropdownItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+  },
+  dropdownItemText: {
+    fontSize: 15,
+    fontWeight: '500',
   },
 });
 

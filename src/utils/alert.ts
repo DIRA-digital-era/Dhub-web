@@ -1,49 +1,40 @@
-import { Alert, Platform, AlertButton, AlertOptions } from 'react-native';
+// src/utils/alert.ts
+// Unified alert helper. On native it uses Alert.alert, on web it uses our
+// premium in-app ConfirmModal via modalAlert (no more ugly browser popups).
+import { Alert, AlertButton, AlertOptions, Platform } from 'react-native';
+import { modalAlert } from './modalAlert';
 
 export function showAlert(
   title: string,
   message?: string,
   buttons?: AlertButton[],
-  options?: AlertOptions
+  _options?: AlertOptions
 ) {
   if (Platform.OS !== 'web') {
-    Alert.alert(title, message, buttons, options);
+    Alert.alert(title, message, buttons, _options);
     return;
   }
 
-  // Web: no buttons = simple alert
+  // Web — use our in-app modal
   if (!buttons || buttons.length === 0) {
-    window.alert(message ? `${title}\n\n${message}` : title);
+    modalAlert.show({
+      title,
+      message,
+      buttons: [{ text: 'OK', onPress: () => modalAlert.dismiss() }],
+    });
     return;
   }
 
-  // Web can reliably model the common 2-button confirmation case.
-  if (buttons.length === 2) {
-    const cancelButton =
-      buttons.find(button => button.style === 'cancel') ?? buttons[0];
-
-    const confirmButton =
-      buttons.find(button => button !== cancelButton) ?? buttons[1];
-
-    const confirmed = window.confirm(
-      message ? `${title}\n\n${message}` : title,
-    );
-
-    if (confirmed) {
-      confirmButton.onPress?.();
-    } else {
-      cancelButton.onPress?.();
-    }
-
-    return;
-  }
-
-  // For 1-button or >2-button alerts, use a normal alert
-  // and invoke the appropriate/default action.
-  window.alert(message ? `${title}\n\n${message}` : title);
-
-  const defaultButton =
-    buttons.find(button => button.style !== 'cancel') ?? buttons[0];
-
-  defaultButton?.onPress?.();
+  modalAlert.show({
+    title,
+    message,
+    buttons: buttons.map(btn => ({
+      text: btn.text ?? 'OK',
+      style: btn.style as any,
+      onPress: () => {
+        modalAlert.dismiss();
+        btn.onPress?.();
+      },
+    })),
+  });
 }

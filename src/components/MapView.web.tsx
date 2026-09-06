@@ -73,7 +73,7 @@ export const MapView: React.FC<MapViewProps> = ({
       // Determine gesture handling
       const gestureHandling = (!scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled)
         ? 'none'
-        : 'auto';
+        : 'greedy'; // 'greedy' works much better on mobile web (1-finger pan/tap)
 
       const map = new window.google.maps.Map(mapRef.current, {
         center: { lat: center.latitude, lng: center.longitude },
@@ -132,8 +132,9 @@ export const MapView: React.FC<MapViewProps> = ({
   }, [mapInstance, region]);
 
   return (
-    <View style={[styles.container, style]}>
-      <div ref={mapRef} style={{ width: '100%', height: '100%' }} />
+    <View style={[styles.container, style]} pointerEvents="auto">
+      {/* touchAction: 'none' prevents browser from hijacking touches (essential for mobile web maps) */}
+      <div ref={mapRef} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
       <MapContext.Provider value={mapInstance}>
         {mapInstance && children}
       </MapContext.Provider>
