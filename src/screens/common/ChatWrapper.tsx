@@ -96,6 +96,9 @@ const ChatWrapper: React.FC = () => {
     }
   };
 
+  const hiddenThreads = useSelector((state: RootState) => state.chat.hiddenThreads || []);
+  const visibleThreads = threads.filter(t => !hiddenThreads.includes(t.threadId));
+
   useEffect(() => {
     loadThreads();
     
@@ -248,7 +251,7 @@ const ChatWrapper: React.FC = () => {
           <ActivityIndicator size="large" color={COLORS.primary} />
           <Text style={styles.loadingText}>Loading conversations...</Text>
         </View>
-      ) : threads.length === 0 ? (
+      ) : visibleThreads.length === 0 ? (
         <View style={styles.emptyContainer}>
           <MaterialCommunityIcons
             name="chat-outline"
@@ -262,7 +265,7 @@ const ChatWrapper: React.FC = () => {
         </View>
       ) : (
         <FlatList
-          data={threads}
+          data={visibleThreads}
           keyExtractor={item => item.threadId}
           contentContainerStyle={styles.listContainer}
           renderItem={renderThreadItem}

@@ -1,18 +1,19 @@
+// src/components/ListingCard.tsx
 import { showAlert } from '../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '../context/ThemeContext';
 
 export interface Listing {
   id: string;
   title?: string | null;
   price?: number | null;
-  image_url?: string | null; // Thumbnail from Worker
+  image_url?: string | null;
   city?: string | null;
-
   avg_rating?: number | null;
   rating_count?: number | null;
-
   description?: string | null;
   rooms?: number | null;
   landlord_id?: string | null;
@@ -25,11 +26,8 @@ interface ListingCardProps {
   listing: Listing;
   onPress: (listingId: string) => void;
   role: 'student' | 'landlord';
-  onBoostPress?: (listingId: string) => void; // optional
+  onBoostPress?: (listingId: string) => void;
 }
-
-import { useTranslation } from 'react-i18next';
-import { useTheme } from '../context/ThemeContext';
 
 const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoostPress }) => {
   const { t } = useTranslation();
@@ -49,9 +47,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
     <TouchableOpacity style={[styles.card, { backgroundColor: colors.card }]} onPress={handleViewDetails}>
       <View style={styles.imageContainer}>
         <Image
-          source={{
-            uri: listing.image_url || 'https://via.placeholder.com/400x250?text=No+Image',
-          }}
+          source={{ uri: listing.image_url || 'https://via.placeholder.com/400x250?text=No+Image' }}
           style={styles.image}
           resizeMode="cover"
         />
@@ -63,13 +59,10 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
           </Text>
         </View>
 
-        {/* Boost badges */}
+        {/* Boost / Processing badges - top left */}
         <View style={styles.boostBadgeContainer}>
           {role === 'landlord' && !listing.boosted && (
-            <TouchableOpacity
-              style={styles.boostNowBadge}
-              onPress={() => onBoostPress?.(listing.id)}
-            >
+            <TouchableOpacity style={styles.boostNowBadge} onPress={() => onBoostPress?.(listing.id)}>
               <Text style={styles.boostNowText}>{t('listing.boost_now')}</Text>
             </TouchableOpacity>
           )}
@@ -85,21 +78,22 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
           )}
         </View>
 
-        {/* Gold Verified Rosette - Top Right Overlay */}
+        {/* Gold Gear Verified badge - top right */}
         {listing.is_verified && (
           <TouchableOpacity
             style={styles.verifiedBadge}
-            onPress={() => showAlert(
-              '✅ DHUB Verified Property',
-              'This listing was physically inspected and confirmed by a DHUB agent.\n\n• Photos match the real property\n• Promised amenities are present\n• Price is fair and accurate\n\nYou can rent with confidence!'
-            )}
+            onPress={() =>
+              showAlert(
+                '✅ DHUB Verified Property',
+                'This listing was physically inspected and confirmed by a DHUB agent.\n\n• Photos match the real property\n• Promised amenities are present\n• Price is fair and accurate\n\nYou can rent with confidence!'
+              )
+            }
             activeOpacity={0.85}
           >
-            {/* Outer ring */}
             <View style={styles.verifiedOuter}>
-              {/* Inner circle */}
+              <Ionicons name="settings" size={38} color="#D4AF37" />
               <View style={styles.verifiedInner}>
-                <Ionicons name="checkmark" size={20} color="#fff" />
+                <Ionicons name="checkmark" size={16} color="#fff" />
               </View>
             </View>
           </TouchableOpacity>
@@ -107,52 +101,51 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
       </View>
 
       <View style={styles.cardContent}>
+        {/* Title + Rating */}
         <View style={styles.headerRow}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-            <Text style={[styles.title, { color: colors.text, flexShrink: 1 }]} numberOfLines={1}>
-              {listing.title || t('listing.untitled')}
-            </Text>
-          </View>
-
+          <Text style={[styles.title, { color: colors.text }]} numberOfLines={1}>
+            {listing.title || t('listing.untitled')}
+          </Text>
           <View style={[styles.ratingContainer, { backgroundColor: colors.background }]}>
-            <Text style={styles.ratingIcon}>⭐</Text>
-            {listing.rating_count && listing.rating_count > 0 ? (
-              <Text style={styles.ratingText}>
-                {listing.avg_rating?.toFixed(1)} ({listing.rating_count})
-              </Text>
-            ) : (
-              <Text style={[styles.ratingText, { opacity: 0.7 }]}>{t('common.new')}</Text>
-            )}
+            <Ionicons name="star" size={12} color="#f59e0b" />
+            <Text style={styles.ratingText}>
+              {listing.rating_count && listing.rating_count > 0
+                ? `${listing.avg_rating?.toFixed(1)} (${listing.rating_count})`
+                : t('common.new')}
+            </Text>
           </View>
         </View>
 
+        {/* Location */}
         <View style={styles.locationRow}>
-          <Text style={styles.locationIcon}>📍</Text>
+          <Ionicons name="location" size={13} color={colors.textSecondary} />
           <Text style={[styles.city, { color: colors.textSecondary }]} numberOfLines={1}>
-            {listing.city || t('common.unknown')}
+            {' '}{listing.city || t('common.unknown')}
           </Text>
         </View>
 
+        {/* Description */}
         <Text style={[styles.description, { color: colors.textSecondary }]} numberOfLines={2}>
           {listing.description || t('listing.no_description_card')}
         </Text>
 
+        {/* Rooms badge */}
         <View style={styles.featuresRow}>
           <View style={[styles.feature, { backgroundColor: colors.background }]}>
-            <Text style={styles.featureIcon}>🛏️</Text>
+            <Ionicons name="bed-outline" size={13} color={colors.textSecondary} />
             <Text style={[styles.featureText, { color: colors.textSecondary }]}>
-              {listing.rooms || 0} {t('listing.rooms', { count: listing.rooms || 0 }).toLowerCase()}
+              {' '}{listing.rooms || 0} {t('listing.rooms', { count: listing.rooms || 0 }).toLowerCase()}
             </Text>
-          </View>
-          <View style={[styles.feature, { backgroundColor: colors.background }]}>
-            <Text style={styles.featureIcon}>📐</Text>
-            <Text style={[styles.featureText, { color: colors.textSecondary }]}>{t('listing.spacious')}</Text>
           </View>
         </View>
 
+        {/* Footer CTA */}
         <View style={[styles.footer, { borderTopColor: colors.border }]}>
           <Text style={[styles.postedDate, { color: colors.textSecondary }]}>{t('listing.available_now')}</Text>
-          <TouchableOpacity style={[styles.viewButton, { backgroundColor: colors.secondary }]} onPress={handleViewDetails}>
+          <TouchableOpacity
+            style={[styles.viewButton, { backgroundColor: colors.secondary }]}
+            onPress={handleViewDetails}
+          >
             <Text style={styles.viewButtonText}>{t('listing.view_details')}</Text>
           </TouchableOpacity>
         </View>
@@ -163,82 +156,54 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: '#fff',
     borderRadius: 20,
     marginBottom: 20,
     overflow: 'hidden',
     elevation: 6,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
   },
-  imageContainer: { position: 'relative', height: 220 },
+  imageContainer: { position: 'relative', height: 260 },
   image: { width: '100%', height: '100%' },
 
   priceBadge: {
     position: 'absolute',
     bottom: 14,
     left: 14,
-    backgroundColor: 'rgba(0,102,204,0.95)',
-    paddingHorizontal: 14,
+    backgroundColor: 'rgba(0,102,204,0.92)',
+    paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 10,
   },
-  priceText: { color: '#fff', fontSize: 14, fontWeight: '700' },
+  priceText: { color: '#fff', fontSize: 13, fontWeight: '700' },
 
-  boostBadgeContainer: { position: 'absolute', top: 14, right: 14, zIndex: 10 },
+  boostBadgeContainer: { position: 'absolute', top: 12, left: 12, zIndex: 10, gap: 6 },
   boostNowBadge: {
     backgroundColor: '#FF3B30',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 50,
-    justifyContent: 'center',
-    alignItems: 'center',
-    elevation: 6,
-  },
-  boostNowText: { color: '#fff', fontWeight: '800', fontSize: 12, letterSpacing: 0.5 },
-
-  boostedBadge: {
-    backgroundColor: '#32CD32',
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 20,
+    elevation: 4,
   },
-  boostedText: { color: '#fff', fontWeight: '700', fontSize: 12 },
-
-  cardContent: { padding: 16 },
-  headerRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  title: { flex: 1, fontSize: 18, fontWeight: '700', marginRight: 8 },
-  ratingContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#fff9e6', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
-  ratingIcon: { fontSize: 12, marginRight: 4 },
-  ratingText: { fontSize: 12, fontWeight: '600', color: '#f59e0b' },
-
-  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  locationIcon: { fontSize: 12, marginRight: 6 },
-  city: { fontSize: 14, color: '#666', fontWeight: '500' },
-
-  description: { fontSize: 14, color: '#666', lineHeight: 20, marginBottom: 12 },
-  featuresRow: { flexDirection: 'row', marginBottom: 12, gap: 12 },
-  feature: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#f8f9fa', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  featureIcon: { fontSize: 12, marginRight: 4 },
-  featureText: { fontSize: 12, color: '#666', fontWeight: '500' },
-
-  footer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: '#f0f0f0' },
-  postedDate: { fontSize: 12, color: '#999' },
-  viewButton: { backgroundColor: '#0066cc', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 8 },
-  viewButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  boostNowText: { color: '#fff', fontWeight: '800', fontSize: 11, letterSpacing: 0.5 },
+  boostedBadge: {
+    backgroundColor: '#32CD32',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+  boostedText: { color: '#fff', fontWeight: '700', fontSize: 11 },
   processingBadge: {
     backgroundColor: 'rgba(0,0,0,0.6)',
     paddingHorizontal: 10,
     paddingVertical: 4,
     borderRadius: 12,
-    marginTop: 6,
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.3)',
   },
-  processingBadgeText: {
-    color: '#fff',
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
+  processingBadgeText: { color: '#fff', fontSize: 10, fontWeight: '700', textTransform: 'uppercase' },
 
   verifiedBadge: {
     position: 'absolute',
@@ -254,21 +219,60 @@ const styles = StyleSheet.create({
   verifiedOuter: {
     width: 44,
     height: 44,
-    borderRadius: 22,
-    backgroundColor: '#D4AF37',
-    borderWidth: 3,
-    borderColor: '#fff',
     justifyContent: 'center',
     alignItems: 'center',
   },
   verifiedInner: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: '#B8860B',
+    position: 'absolute',
+    zIndex: 2,
     justifyContent: 'center',
     alignItems: 'center',
   },
+
+  cardContent: { padding: 12 },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+    gap: 8,
+  },
+  title: { flex: 1, fontSize: 17, fontWeight: '700' },
+  ratingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  ratingText: { fontSize: 12, fontWeight: '600', color: '#f59e0b' },
+
+  locationRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 6 },
+  city: { fontSize: 13, fontWeight: '500' },
+
+  description: { fontSize: 13, lineHeight: 19, marginBottom: 10 },
+
+  featuresRow: { flexDirection: 'row', marginBottom: 10, gap: 8 },
+  feature: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  featureText: { fontSize: 12, fontWeight: '500' },
+
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+  },
+  postedDate: { fontSize: 12 },
+  viewButton: { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8 },
+  viewButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
 });
 
 export default ListingCard;

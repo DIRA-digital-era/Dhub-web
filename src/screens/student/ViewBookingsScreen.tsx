@@ -201,10 +201,10 @@ export default function ViewBookingsScreen() {
     }, [fetchBookingsFromServer])
   );
 
-  const onRefresh = () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchBookingsFromServer(false);
-  };
+    await fetchBookingsFromServer(false);
+  }, [fetchBookingsFromServer]);
 
   const getDaysLeftColor = (daysLeft: number) => {
     if (daysLeft <= 0) return COLORS.danger;

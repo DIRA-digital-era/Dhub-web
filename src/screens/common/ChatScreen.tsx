@@ -18,6 +18,9 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { Ionicons, Feather } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useDispatch } from 'react-redux';
+import { hideThread } from '../../store/chatSlice';
+import { showAlert } from '../../utils/alert';
 
 import { ChatMessage, ChatMessageDto } from '../../types';
 import {
@@ -26,6 +29,7 @@ import {
   fetchThreadMessages,
   markMessagesRead,
   getThreadParticipantInfo,
+  hideThreadInDb,
 } from '../../services/chatService';
 import { StudentStackParamList } from '../../types';
 import { useTranslation } from 'react-i18next';
@@ -115,6 +119,7 @@ const isSameDay = (a: Date, b: Date) =>
 const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack }) => {
   const { t } = useTranslation();
   const navigation = useNavigation<ChatNavProp>();
+  const dispatch = useDispatch();
   const insets = useSafeAreaInsets();
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -186,6 +191,29 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack
       if (lastScrollTimeout.current) clearTimeout(lastScrollTimeout.current);
     };
   }, [threadId, currentUserId]);
+
+  const handleDeleteChat = () => {
+    showAlert(
+      t('chat.delete_chat', 'Delete Chat'),
+      t('chat.delete_chat_confirm', 'Are you sure you want to hide this chat? This action cannot be undone on this device.'),
+      [
+        { text: t('common.cancel', 'Cancel'), style: 'cancel' },
+        { 
+          text: t('common.delete', 'Delete'), 
+          style: 'destructive',
+          onPress: async () => {
+            dispatch(hideThread(threadId));
+            await hideThreadInDb(threadId, currentUserId);
+            if (onBack) {
+              onBack();
+            } else {
+              navigation.goBack();
+            }
+          }
+        }
+      ]
+    );
+  };
 
   // ── Send ─────────────────────────────────────────────────────────────────────
   const handleSend = async () => {
@@ -350,7 +378,7 @@ const ChatScreen: React.FC<ChatScreenProps> = ({ currentUserId, threadId, onBack
           </View>
         </View>
 
-        <TouchableOpacity style={styles.headerBtn}>
+        <TouchableOpacity style={styles.headerBtn} onPress={handleDeleteChat}>
           <Ionicons name="ellipsis-vertical" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </View>

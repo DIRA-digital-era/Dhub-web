@@ -21,8 +21,10 @@ export async function fetchUserThreads(userId: string, limit = 50): Promise<Thre
     if (threadErr) throw threadErr;
     if (!threads || threads.length === 0) return [];
 
-    const threadIds = threads.map(t => t.id);
+    const visibleThreads = threads.filter(t => !t.hidden_for?.includes(userId));
+    if (visibleThreads.length === 0) return [];
 
+    const threadIds = visibleThreads.map(t => t.id);
     const { data: messages, error: msgErr } = await supabase
       .from('messages')
       .select('thread_id, body, created_at, sender_id, is_read')
@@ -50,7 +52,7 @@ export async function fetchUserThreads(userId: string, limit = 50): Promise<Thre
       }
     });
 
-    return threads.map((t) => {
+    return visibleThreads.map((t) => {
       const otherId = t.user1_id === userId ? t.user2_id : t.user1_id;
       const userObj = userMap.get(otherId);
 
@@ -380,6 +382,30 @@ export async function getOrCreateThread(userId1: string, userId2: string): Promi
   } catch (err) {
     console.error('getOrCreateThread error:', err);
     throw err;
+  }
+}
+
+/* ------------------------------------------------------------------
+   HIDE THREAD (Soft Delete)
+------------------------------------------------------------------ */
+
+export async function hideThreadInDb(threadId: string, userId: string) {
+  try {
+    const { data, error } = await supabase
+      .from('threads')
+      .select('hidden_for')
+      .eq('id', threadId)
+      .single();
+      
+    if (error && error.code !== 'PGRST116') throw error;
+    
+    const hiddenFor = data?.hidden_for || [];
+    if (!hiddenFor.includes(userId)) {
+      const newHiddenFor = [...hiddenFor, userId];
+      await supabase.from('threads').update({ hidden_for: newHiddenFor }).eq('id', threadId);
+    }
+  } catch (err) {
+    console.error('hideThreadInDb error:', err);
   }
 }
 

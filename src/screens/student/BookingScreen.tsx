@@ -942,54 +942,66 @@ const handleDownloadPDF = async () => {
         </View>
       </Modal>
 
-      {/* Unverified Listing Modal */}
+      {/* ── Polished Unverified Listing Modal ── */}
       <Modal
         visible={showUnverifiedModal}
         transparent
-        animationType="slide"
+        animationType="fade"
         onRequestClose={() => setShowUnverifiedModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Ionicons name="alert-circle" size={28} color={COLORS.danger} />
-              <Text style={[styles.modalTitle, { color: COLORS.danger }]}>
-                Unverified Listing
-              </Text>
+          <View style={styles.unverifiedModalContent}>
+            <View style={styles.unverifiedIconContainer}>
+              <Ionicons name="shield-half-outline" size={32} color={COLORS.danger} />
             </View>
-            <Text style={styles.modalDescription}>
-              This listing has not been physically verified by DHUB. Booking unverified properties carries risks such as:
+            
+            <Text style={styles.unverifiedModalTitle}>Unverified Property</Text>
+            <Text style={styles.unverifiedModalDesc}>
+              This listing has not been physically verified by DHUB. Booking unverified properties carries risks:
             </Text>
-            <View style={styles.bulletList}>
-              <Text style={styles.bulletItem}>• The property may not match the photos</Text>
-              <Text style={styles.bulletItem}>• Amenities could be missing</Text>
-              <Text style={styles.bulletItem}>• The landlord may not be legitimate</Text>
-              <Text style={styles.bulletItem}>• You may lose your caution fee</Text>
+
+            <View style={styles.unverifiedRiskList}>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>Property may not match the photos</Text>
+              </View>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>Promised amenities could be missing</Text>
+              </View>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>You may risk losing your caution fee</Text>
+              </View>
             </View>
+
             <TouchableOpacity
-              style={styles.learnMoreButton}
+              style={styles.unverifiedLearnMore}
               onPress={() => {
                 setShowUnverifiedModal(false);
                 navigation.navigate('Legal');
               }}
             >
-              <Text style={styles.learnMoreButtonText}>Learn More</Text>
+              <Text style={styles.unverifiedLearnMoreText}>Read our Safety Guidelines</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.gold} />
             </TouchableOpacity>
-            <View style={styles.modalActions}>
+
+            <View style={styles.unverifiedActions}>
               <TouchableOpacity
-                style={[styles.modalCloseButton, { flex: 1 }]}
+                style={styles.unverifiedCancelBtn}
                 onPress={() => setShowUnverifiedModal(false)}
               >
-                <Text style={styles.modalCloseButtonText}>Cancel</Text>
+                <Text style={styles.unverifiedCancelBtnText}>Cancel Booking</Text>
               </TouchableOpacity>
+              
               <TouchableOpacity
-                style={[styles.learnMoreButton, { flex: 1, backgroundColor: COLORS.danger }]}
+                style={styles.unverifiedProceedBtn}
                 onPress={() => {
                   setShowUnverifiedModal(false);
                   performBooking();
                 }}
               >
-                <Text style={styles.learnMoreButtonText}>Proceed Anyway</Text>
+                <Text style={styles.unverifiedProceedBtnText}>Proceed Anyway</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -1419,6 +1431,112 @@ const getStyles = (COLORS: any) => StyleSheet.create({
   footerHint: { textAlign: 'center', marginTop: 8, fontSize: 13, color: COLORS.greyMedium },
 
   bottomSpacer: { height: 8 },
+
+  // Unverified Modal Styles
+  unverifiedModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  unverifiedIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2', // Light red background
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  unverifiedModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.greyDark,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  unverifiedModalDesc: {
+    fontSize: 14,
+    color: COLORS.greyMedium,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  unverifiedRiskList: {
+    width: '100%',
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  riskItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  riskIcon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  riskText: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.greyDark,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  unverifiedLearnMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 6,
+  },
+  unverifiedLearnMoreText: {
+    fontSize: 14,
+    color: COLORS.gold,
+    fontWeight: '700',
+  },
+  unverifiedActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  unverifiedCancelBtn: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unverifiedCancelBtnText: {
+    color: COLORS.greyDark,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  unverifiedProceedBtn: {
+    flex: 1,
+    backgroundColor: COLORS.danger,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unverifiedProceedBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });
 
 export default BookingScreen;

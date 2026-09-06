@@ -328,10 +328,10 @@ export default function BookingDetails() {
     fetchBookingDetails(false);
   }, [fetchBookingDetails]);
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(async () => {
     setRefreshing(true);
-    fetchBookingDetails(true);
-  };
+    await fetchBookingDetails(true);
+  }, [fetchBookingDetails]);
 
   // ── Realtime listener ──────────────────────────────────────────────────────
   useEffect(() => {

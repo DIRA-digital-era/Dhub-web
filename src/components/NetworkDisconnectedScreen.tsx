@@ -34,13 +34,21 @@ export const NetworkDisconnectedScreen = ({ onRefresh, refreshing, fullScreen = 
     }
   };
 
+  const safeHandleRefresh = async () => {
+    try {
+      await onRefresh();
+    } catch (error) {
+      console.warn('Refresh failed or timed out:', error);
+    }
+  };
+
   const content = (
     <ScrollView
       contentContainerStyle={styles.scrollContent}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={onRefresh}
+          onRefresh={safeHandleRefresh}
           colors={[COLORS.gold]}
           tintColor={COLORS.gold}
         />
@@ -56,7 +64,7 @@ export const NetworkDisconnectedScreen = ({ onRefresh, refreshing, fullScreen = 
           Please check your network settings and try again. Pull down to refresh.
         </Text>
 
-        <TouchableOpacity style={styles.primaryButton} onPress={onRefresh}>
+        <TouchableOpacity style={styles.primaryButton} onPress={safeHandleRefresh}>
           <Ionicons name="refresh" size={20} color={COLORS.white} />
           <Text style={styles.primaryButtonText}>Try Again</Text>
         </TouchableOpacity>

@@ -1,5 +1,5 @@
 // src/screens/landlord/BookingsScreen.tsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -45,7 +45,7 @@ const BookingsScreen: React.FC = () => {
     if (user) fetchBookings();
   }, [user]);
 
-  const fetchBookings = async () => {
+  const fetchBookings = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
@@ -85,7 +85,7 @@ const BookingsScreen: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [user]);
 
   // handleStatusUpdate removed – now using ApprovalScreen
 

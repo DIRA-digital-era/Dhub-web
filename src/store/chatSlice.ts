@@ -19,11 +19,13 @@ function normalize(msg: ChatMessage): ChatMessage {
 interface ChatState {
   threads: Record<string, ChatMessage[]>;
   currentChatPeerId?: string; // <-- added to store current selected chat peer
+  hiddenThreads: string[]; // <-- threads hidden locally by the user
 }
 
 const initialState: ChatState = {
   threads: {},
   currentChatPeerId: undefined,
+  hiddenThreads: [],
 };
 
 export const chatSlice = createSlice({
@@ -50,9 +52,15 @@ export const chatSlice = createSlice({
         }
       }
     },
+    hideThread: (state, action: PayloadAction<string>) => {
+      if (!state.hiddenThreads.includes(action.payload)) {
+        state.hiddenThreads.push(action.payload);
+      }
+    },
     clearMessages: (state) => {
       state.threads = {};
       state.currentChatPeerId = undefined;
+      // Note: we don't clear hiddenThreads on clearMessages so they stay hidden across logout/login locally
     },
     setCurrentChatPeerId: (state, action: PayloadAction<string>) => {
       state.currentChatPeerId = action.payload;
@@ -60,5 +68,5 @@ export const chatSlice = createSlice({
   },
 });
 
-export const { setMessages, addMessage, clearMessages, setCurrentChatPeerId } = chatSlice.actions;
+export const { setMessages, addMessage, hideThread, clearMessages, setCurrentChatPeerId } = chatSlice.actions;
 export default chatSlice.reducer;
