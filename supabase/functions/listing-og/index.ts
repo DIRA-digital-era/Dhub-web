@@ -159,7 +159,45 @@ serve(async (req) => {
 
     const hasHeroImage = imageUrl && imageUrl !== WEB_BASE_URL + '/icon.png';
 
-    // ── Build HTML ──────────────────────────────────────────────────────
+    // ── Build gallery HTML separately (avoids nested template literals) ──
+    let galleryHtml = '';
+    if (listing.media && listing.media.length > 0) {
+      const slides = listing.media.map((m: any) => {
+        const url = (m.type === 'video' ? m.thumbUrl : m.url) || '';
+        const src = url.startsWith('/media/') ? MEDIA_BASE_URL + url : url;
+        return `<div class="gallery-slide"><img src="${src}" alt="${esc(title)}" loading="lazy"></div>`;
+      }).join('');
+
+      const dots = listing.media.map((_: any, i: number) =>
+        `<div class="gallery-dot${i === 0 ? ' active' : ''}"></div>`
+      ).join('');
+
+      let arrows = '';
+      if (listing.media.length > 1) {
+        arrows = `
+          <button class="gallery-arrow gallery-arrow-left hidden" id="arrow-prev">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <button class="gallery-arrow gallery-arrow-right" id="arrow-next">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+          </button>
+          <div class="gallery-dots">${dots}</div>
+        `;
+      }
+
+      galleryHtml = `
+        <div class="gallery-container" id="gallery">
+          <div class="gallery-track" id="gallery-track">
+            ${slides}
+          </div>
+          ${arrows}
+        </div>
+      `;
+    } else {
+      galleryHtml = `<div class="hero-placeholder">${ICON_HOME}</div>`;
+    }
+
+    // ── Build final HTML ──────────────────────────────────────────────────
     const html = `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -335,36 +373,10 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 .brand strong { color: var(--gold); opacity: .6; }
 </style>
 
-
 </head>
 <body>
 <div class="card">
-  ${
-    listing.media && listing.media.length > 0
-      ? \`
-        <div class="gallery-container" id="gallery">
-          <div class="gallery-track" id="gallery-track">
-            \${listing.media.map((m: any) => {
-              const url = (m.type === 'video' ? m.thumbUrl : m.url) || '';
-              const src = url.startsWith('/media/') ? MEDIA_BASE_URL + url : url;
-              return \`<div class="gallery-slide"><img src="\${src}" alt="\${esc(title)}" loading="lazy"></div>\`;
-            }).join('')}
-          </div>
-          \${listing.media.length > 1 ? \`
-            <button class="gallery-arrow gallery-arrow-left hidden" id="arrow-prev">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
-            </button>
-            <button class="gallery-arrow gallery-arrow-right" id="arrow-next">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
-            </button>
-            <div class="gallery-dots">
-              \${listing.media.map((_, i) => \`<div class="gallery-dot \${i === 0 ? 'active' : ''}"></div>\`).join('')}
-            </div>
-          \` : ''}
-        </div>
-      \`
-      : \`<div class="hero-placeholder">\${ICON_HOME}</div>\`
-  }
+  ${galleryHtml}
   <div class="body">
     <div class="badge"><span class="badge-dot"></span>DHUB Rental</div>
     <h1>${esc(title)}</h1>
@@ -460,29 +472,20 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
   if (!isMobile) return;
 
   // ── Smart deep-link with fallback ──────────────────────────────────────
-  // We wait until the page is rendered and visible, THEN try the deep link.
-  // If the app is installed, the OS will intercept and open it.
-  // If not installed, the browser ignores the unknown scheme and the user
-  // sees the fully-rendered page with the store download button.
   window.addEventListener('load', function() {
-    // Small delay so the user sees the card before anything happens
     setTimeout(function() {
       var appOpened = false;
-      // Use a visibility trick: if the app opens, the page goes to background
-      // and the blur/pagehide event fires. We use this to skip the store redirect.
       function onBlur() {
         appOpened = true;
       }
       window.addEventListener('blur', onBlur);
       document.addEventListener('pagehide', function() { appOpened = true; });
 
-      // Attempt to open the native app via the custom URI scheme
       var iframe = document.createElement('iframe');
       iframe.style.display = 'none';
       iframe.src = '${deepLink}';
       document.body.appendChild(iframe);
 
-      // After 2s, if app didn't open, clean up listener. Page stays visible.
       setTimeout(function() {
         window.removeEventListener('blur', onBlur);
         document.body.removeChild(iframe);
