@@ -154,7 +154,7 @@ serve(async (req) => {
       : 'Find your perfect home on DHUB.';
 
     const deepLink = 'dhub://listing/' + listingId;
-    const webLink = WEB_BASE_URL + '/listing/' + listingId;
+    const webLink = WEB_BASE_URL + '/app/listing/' + listingId;
     const canonicalUrl = SUPABASE_PROJECT_URL + '/functions/v1/listing-og?id=' + listingId;
 
     const hasHeroImage = imageUrl && imageUrl !== WEB_BASE_URL + '/icon.png';
@@ -220,7 +220,78 @@ body {
   overflow: hidden;
   box-shadow: 0 24px 80px rgba(0,0,0,.65), 0 0 0 1px rgba(255,255,255,.055);
 }
-.hero { width: 100%; height: 260px; object-fit: cover; display: block; }
+
+/* ── Gallery Styles ── */
+.gallery-container {
+  position: relative;
+  width: 100%;
+  height: 260px;
+  overflow: hidden;
+  background: #1c1c27;
+}
+.gallery-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.3s ease-in-out;
+  touch-action: pan-y; /* Allow vertical scroll, hijack horizontal swipe */
+}
+.gallery-slide {
+  min-width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.gallery-slide img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gallery-arrow {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  background: rgba(0,0,0,0.5);
+  color: white;
+  border: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 10;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+.gallery-arrow:hover { opacity: 1; }
+.gallery-arrow.hidden { display: none; }
+.gallery-arrow-left { left: 10px; }
+.gallery-arrow-right { right: 10px; }
+.gallery-dots {
+  position: absolute;
+  bottom: 12px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+  z-index: 10;
+}
+.gallery-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.4);
+  transition: background 0.2s, transform 0.2s;
+}
+.gallery-dot.active {
+  background: var(--gold);
+  transform: scale(1.3);
+}
+
 .hero-placeholder {
   width: 100%; height: 260px;
   background: linear-gradient(135deg, #1c1c27 0%, #272738 100%);
@@ -268,9 +339,32 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 </head>
 <body>
 <div class="card">
-  ${hasHeroImage
-    ? `<img class="hero" src="${imageUrl}" alt="${esc(title)}" loading="eager">`
-    : `<div class="hero-placeholder">${ICON_HOME}</div>`}
+  ${
+    listing.media && listing.media.length > 0
+      ? \`
+        <div class="gallery-container" id="gallery">
+          <div class="gallery-track" id="gallery-track">
+            \${listing.media.map((m: any) => {
+              const url = (m.type === 'video' ? m.thumbUrl : m.url) || '';
+              const src = url.startsWith('/media/') ? MEDIA_BASE_URL + url : url;
+              return \`<div class="gallery-slide"><img src="\${src}" alt="\${esc(title)}" loading="lazy"></div>\`;
+            }).join('')}
+          </div>
+          \${listing.media.length > 1 ? \`
+            <button class="gallery-arrow gallery-arrow-left hidden" id="arrow-prev">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+            </button>
+            <button class="gallery-arrow gallery-arrow-right" id="arrow-next">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+            </button>
+            <div class="gallery-dots">
+              \${listing.media.map((_, i) => \`<div class="gallery-dot \${i === 0 ? 'active' : ''}"></div>\`).join('')}
+            </div>
+          \` : ''}
+        </div>
+      \`
+      : \`<div class="hero-placeholder">\${ICON_HOME}</div>\`
+  }
   <div class="body">
     <div class="badge"><span class="badge-dot"></span>DHUB Rental</div>
     <h1>${esc(title)}</h1>
@@ -307,6 +401,60 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
   // Hide irrelevant store button based on OS
   if (isIos && btnAndroid) btnAndroid.style.display = 'none';
   if (isAndroid && btnIos) btnIos.style.display = 'none';
+
+  // ── Gallery Logic ────────────────────────────────────────────────────────
+  var track = document.getElementById('gallery-track');
+  if (track) {
+    var slides = track.querySelectorAll('.gallery-slide');
+    var dots = document.querySelectorAll('.gallery-dot');
+    var prevBtn = document.getElementById('arrow-prev');
+    var nextBtn = document.getElementById('arrow-next');
+    var totalSlides = slides.length;
+    var currentIndex = 0;
+
+    function updateGallery() {
+      track.style.transform = 'translateX(-' + (currentIndex * 100) + '%)';
+      dots.forEach(function(dot, i) {
+        dot.className = i === currentIndex ? 'gallery-dot active' : 'gallery-dot';
+      });
+      if (prevBtn) prevBtn.className = currentIndex === 0 ? 'gallery-arrow gallery-arrow-left hidden' : 'gallery-arrow gallery-arrow-left';
+      if (nextBtn) nextBtn.className = currentIndex === totalSlides - 1 ? 'gallery-arrow gallery-arrow-right hidden' : 'gallery-arrow gallery-arrow-right';
+    }
+
+    if (prevBtn) prevBtn.addEventListener('click', function() {
+      if (currentIndex > 0) { currentIndex--; updateGallery(); }
+    });
+    if (nextBtn) nextBtn.addEventListener('click', function() {
+      if (currentIndex < totalSlides - 1) { currentIndex++; updateGallery(); }
+    });
+
+    // Touch support for swiping
+    var startX = 0, currentX = 0, isDragging = false;
+    track.addEventListener('touchstart', function(e) {
+      startX = e.touches[0].clientX;
+      isDragging = true;
+      track.style.transition = 'none';
+    }, {passive: true});
+
+    track.addEventListener('touchmove', function(e) {
+      if (!isDragging) return;
+      currentX = e.touches[0].clientX;
+      var diff = startX - currentX;
+      track.style.transform = 'translateX(calc(-' + (currentIndex * 100) + '% - ' + diff + 'px))';
+    }, {passive: true});
+
+    track.addEventListener('touchend', function(e) {
+      if (!isDragging) return;
+      isDragging = false;
+      track.style.transition = 'transform 0.3s ease-in-out';
+      var diff = startX - currentX;
+      if (Math.abs(diff) > 50) {
+        if (diff > 0 && currentIndex < totalSlides - 1) currentIndex++;
+        else if (diff < 0 && currentIndex > 0) currentIndex--;
+      }
+      updateGallery();
+    });
+  }
 
   // On desktop show both store buttons prominently and skip deep link
   if (!isMobile) return;

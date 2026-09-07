@@ -136,6 +136,7 @@ const UploadListingScreen: React.FC = () => {
           url: asset.uri,
           thumbUrl,
           mimeType: asset.mimeType,
+          file: (asset as any).file, // Captures raw File on Web
         });
       }
 

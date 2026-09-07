@@ -15,34 +15,50 @@ async function uriToBlob(uri: string): Promise<Blob> {
   return response.blob();
 }
 
-/**
- * Upload a file using headers (X-File-Name, X-Listing-Id) – matching the Worker.
- */
 async function uploadFile(
   blob: Blob,
   fileName: string,
   listingId: string,
   mimeType: string,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  onProgress?: (progress: number) => void
 ): Promise<string> {
-  const res = await fetch(`${MEDIA_BASE_URL}/upload`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': mimeType,
-      'X-File-Name': fileName,
-      'X-Listing-Id': listingId,
-    },
-    body: blob,
-    signal,
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    if (signal) {
+      signal.addEventListener('abort', () => xhr.abort());
+    }
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && onProgress) {
+        onProgress(event.loaded / event.total);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        try {
+          const data = JSON.parse(xhr.responseText);
+          resolve(data.url);
+        } catch (e) {
+          reject(new Error('Failed to parse response'));
+        }
+      } else {
+        reject(new Error(`Upload failed: ${xhr.status} ${xhr.responseText}`));
+      }
+    });
+
+    xhr.addEventListener('error', () => reject(new Error('Network error during upload')));
+    xhr.addEventListener('abort', () => reject(new DOMException('Upload aborted', 'AbortError')));
+
+    xhr.open('POST', `${MEDIA_BASE_URL}/upload`);
+    xhr.setRequestHeader('Content-Type', mimeType);
+    xhr.setRequestHeader('X-File-Name', fileName);
+    xhr.setRequestHeader('X-Listing-Id', listingId);
+
+    xhr.send(blob);
   });
-
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Upload failed: ${res.status} ${text}`);
-  }
-
-  const data = await res.json();
-  return data.url;
 }
 
 export const uploadListingMedia = async (
@@ -71,8 +87,13 @@ export const uploadListingMedia = async (
   }
 
   // 3. Upload the main file
-  const url = await uploadFile(blob, fileName, listingId, mime, signal);
-  onProgress?.(0.8);
+  const url = await uploadFile(blob, fileName, listingId, mime, signal, (p) => {
+    // Map the main file upload to 0 - 80%
+    onProgress?.(p * 0.8);
+  });
+  
+  // Set progress to 85% while we handle thumbnail
+  onProgress?.(0.85);
 
   // 4. Upload thumbnail for videos
   let thumbUrl = url;
@@ -81,7 +102,10 @@ export const uploadListingMedia = async (
       const thumbBlob = await uriToBlob(thumbUri);
       const thumbMime = 'image/jpeg';
       const thumbName = `${Date.now()}_thumb.jpg`;
-      thumbUrl = await uploadFile(thumbBlob, thumbName, listingId, thumbMime, signal);
+      thumbUrl = await uploadFile(thumbBlob, thumbName, listingId, thumbMime, signal, (p) => {
+        // Map thumbnail upload to 85% - 100%
+        onProgress?.(0.85 + (p * 0.15));
+      });
     } catch (err) {
       console.warn('[upload.web] Thumbnail upload failed, using video URL', err);
     }

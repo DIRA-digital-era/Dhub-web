@@ -1,15 +1,22 @@
 // src/components/WebDownloadPrompt.tsx
+// Bottom-sheet modal shown in-app on web.
+// - When `app_download_enabled` flag is TRUE : shows iOS/Android download buttons
+// - When `app_download_enabled` flag is FALSE: shows a "Coming Soon" badge, hides download buttons
+// - `onContinue` (Continue on Web) is ALWAYS shown when provided, regardless of flag
+// - `blocking=true` hides the drag handle and removes the Continue on Web option
+
 import { Ionicons } from '@expo/vector-icons';
 import React, { useEffect, useRef } from 'react';
 import {
-    Animated,
-    Modal,
-    PanResponder,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View
+  Animated,
+  Modal,
+  PanResponder,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
+import { useAppDownloadFlag } from '../hooks/useAppDownloadFlag';
 
 interface Props {
   visible: boolean;
@@ -28,6 +35,7 @@ const WebDownloadPrompt: React.FC<Props> = ({
   onContinue,
 }) => {
   const translateY = useRef(new Animated.Value(300)).current;
+  const { enabled: appDownloadEnabled } = useAppDownloadFlag();
 
   useEffect(() => {
     if (visible) {
@@ -81,31 +89,46 @@ const WebDownloadPrompt: React.FC<Props> = ({
             <Ionicons name="phone-portrait-outline" size={48} color="#D4AF37" />
           </View>
           <Text style={styles.title}>
-            {blocking ? 'Mobile App Required' : 'Get the Full Experience'}
+            {appDownloadEnabled
+              ? (blocking ? 'Mobile App Required' : 'Get the Full Experience')
+              : '📱 Coming Soon on Mobile'}
           </Text>
           <Text style={styles.subtitle}>
-            {blocking
-              ? 'Payments are only available on the DHUB mobile app. Download now to complete your booking.'
-              : 'The DHUB mobile app offers seamless booking, real‑time notifications, and secure payments. Download now for the best experience.'}
+            {appDownloadEnabled
+              ? (blocking
+                  ? 'Payments are only available on the DHUB mobile app. Download now to complete your booking.'
+                  : 'The DHUB mobile app offers seamless booking, real‑time notifications, and secure payments. Download now for the best experience.')
+              : 'The DHUB mobile app is coming soon to the App Store and Google Play. Stay tuned for launch!'}
           </Text>
 
-          <View style={styles.buttonRow}>
-            <TouchableOpacity
-              style={[styles.button, styles.androidButton]}
-              onPress={() => openStore(ANDROID_URL)}
-            >
-              <Ionicons name="logo-google-playstore" size={20} color="#fff" />
-              <Text style={styles.buttonText}>Android</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.button, styles.iosButton]}
-              onPress={() => openStore(IOS_URL)}
-            >
-              <Ionicons name="logo-apple" size={20} color="#fff" />
-              <Text style={styles.buttonText}>iOS</Text>
-            </TouchableOpacity>
-          </View>
+          {/* Download buttons — only shown when flag is ON */}
+          {appDownloadEnabled && (
+            <View style={styles.buttonRow}>
+              <TouchableOpacity
+                style={[styles.button, styles.androidButton]}
+                onPress={() => openStore(ANDROID_URL)}
+              >
+                <Ionicons name="logo-google-playstore" size={20} color="#fff" />
+                <Text style={styles.buttonText}>Android</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.button, styles.iosButton]}
+                onPress={() => openStore(IOS_URL)}
+              >
+                <Ionicons name="logo-apple" size={20} color="#fff" />
+                <Text style={styles.buttonText}>iOS</Text>
+              </TouchableOpacity>
+            </View>
+          )}
 
+          {/* Coming Soon badge — only shown when flag is OFF */}
+          {!appDownloadEnabled && (
+            <View style={styles.comingSoonBadge}>
+              <Text style={styles.comingSoonText}>COMING SOON</Text>
+            </View>
+          )}
+
+          {/* Continue on Web — ALWAYS shown when onContinue is provided and not blocking */}
           {!blocking && onContinue && (
             <TouchableOpacity style={styles.continueLink} onPress={onContinue}>
               <Text style={styles.continueText}>Continue on Web Anyway</Text>
@@ -193,6 +216,21 @@ const styles = StyleSheet.create({
   androidButton: { backgroundColor: '#3DDC84' },
   iosButton: { backgroundColor: '#000' },
   buttonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
+  comingSoonBadge: {
+    backgroundColor: 'rgba(212,175,55,0.12)',
+    borderWidth: 1,
+    borderColor: 'rgba(212,175,55,0.35)',
+    borderRadius: 20,
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  comingSoonText: {
+    color: '#D4AF37',
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 1,
+  },
   continueLink: { paddingVertical: 8 },
   continueText: { color: '#D4AF37', fontSize: 14, fontWeight: '500', textDecorationLine: 'underline' },
   closeLink: { paddingVertical: 8, marginTop: 4 },

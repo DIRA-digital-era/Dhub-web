@@ -73,7 +73,7 @@ const ListingDetailsScreen: React.FC = () => {
   const [isFavorite, setIsFavorite] = useState(false);
   const [mapVisible, setMapVisible] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
-  const [fullscreenMedia, setFullscreenMedia] = useState<MediaItem | null>(null);
+  const [galleryIndex, setGalleryIndex] = useState<number | null>(null);
   const [hasPaidBooking, setHasPaidBooking] = useState(false);
   const [existingBookingId, setExistingBookingId] = useState<string | null>(null);
 
@@ -82,12 +82,15 @@ const ListingDetailsScreen: React.FC = () => {
 
   const flatListRef = React.useRef<FlatList>(null);
 
-  // Close fullscreen media when screen loses focus
+  // Close gallery when screen loses focus
   useFocusEffect(
     useCallback(() => {
-      return () => setFullscreenMedia(null);
+      return () => setGalleryIndex(null);
     }, [])
   );
+
+  // Ref for gallery FlatList (fullscreen)
+  const galleryFlatListRef = React.useRef<FlatList>(null);
 
   /* ─── Fetch ─── */
   useEffect(() => {
@@ -265,8 +268,6 @@ const ListingDetailsScreen: React.FC = () => {
 
   const renderMediaItem = ({ item, index }: { item: MediaItem; index: number }) => {
     if (!listing) return null;
-    // thumbUrl is a real image only when it differs from the video URL.
-    // Old DB records have thumbUrl === url (both .mp4) — show a styled placeholder.
     const hasRealThumb =
       item.type === 'video' &&
       item.thumbUrl &&
@@ -275,7 +276,7 @@ const ListingDetailsScreen: React.FC = () => {
 
     return (
       <TouchableOpacity
-        onPress={() => setFullscreenMedia(item)}
+        onPress={() => setGalleryIndex(index)}
         activeOpacity={0.9}
         style={styles.mediaItemContainer}
       >
@@ -313,6 +314,28 @@ const ListingDetailsScreen: React.FC = () => {
           <Text style={styles.mediaCounterText}>{index + 1} / {allMedia.length}</Text>
         </View>
       </TouchableOpacity>
+    );
+  };
+
+  /* ─── Gallery (fullscreen swipeable) helpers ─── */
+  const [galleryActiveIndex, setGalleryActiveIndex] = React.useState(0);
+
+  const renderGalleryItem = ({ item, index }: { item: MediaItem; index: number }) => {
+    if (item.type === 'video') {
+      return (
+        <View style={styles.galleryItemContainer}>
+          <FullVideoPlayer
+            url={item.url}
+            processingStatus={item.processing_status}
+            onClose={() => setGalleryIndex(null)}
+          />
+        </View>
+      );
+    }
+    return (
+      <View style={styles.galleryItemContainer}>
+        <Image source={{ uri: item.url }} style={styles.galleryImage} resizeMode="contain" />
+      </View>
     );
   };
 
@@ -678,31 +701,99 @@ const ListingDetailsScreen: React.FC = () => {
         />
       )}
 
-      {/* Fullscreen Media Modal */}
-      <Modal visible={!!fullscreenMedia} transparent animationType="fade">
-        {fullscreenMedia?.type === 'video' ? (
-          <FullVideoPlayer
-            url={fullscreenMedia.url}
-            processingStatus={fullscreenMedia.processing_status}
-            onClose={() => setFullscreenMedia(null)}
-          />
-        ) : fullscreenMedia?.type === 'image' ? (
-          <View style={styles.fullscreenContainer}>
-            <TouchableOpacity
-              style={styles.fullscreenClose}
-              onPress={() => setFullscreenMedia(null)}
-            >
-              <Ionicons name="close" size={32} color={COLORS.white} />
-            </TouchableOpacity>
-            <Image
-              source={{ uri: fullscreenMedia.url }}
-              style={styles.fullscreenMedia}
-              resizeMode="contain"
-            />
+      {/* Fullscreen Swipeable Gallery Modal */}
+      <Modal
+        visible={galleryIndex !== null}
+        transparent
+        animationType="fade"
+        onShow={() => {
+          if (galleryIndex !== null && galleryIndex > 0) {
+            setGalleryActiveIndex(galleryIndex);
+            // Small delay so FlatList is mounted before scrolling
+            setTimeout(() => {
+              galleryFlatListRef.current?.scrollToIndex({ index: galleryIndex, animated: false });
+            }, 50);
+          } else {
+            setGalleryActiveIndex(0);
+          }
+        }}
+      >
+        <View style={styles.fullscreenContainer}>
+          {/* Close */}
+          <TouchableOpacity
+            style={styles.fullscreenClose}
+            onPress={() => setGalleryIndex(null)}
+          >
+            <Ionicons name="close" size={28} color={COLORS.white} />
+          </TouchableOpacity>
+
+          {/* Counter */}
+          <View style={styles.galleryCounter}>
+            <Text style={styles.galleryCounterText}>
+              {galleryActiveIndex + 1} / {allMedia.length}
+            </Text>
           </View>
-        ) : (
-          <View />
-        )}
+
+          {/* Swipeable FlatList */}
+          <FlatList
+            ref={galleryFlatListRef}
+            data={allMedia}
+            renderItem={renderGalleryItem}
+            keyExtractor={(item, idx) => `gallery-${item.url}-${idx}`}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            initialScrollIndex={galleryIndex ?? 0}
+            getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+            onMomentumScrollEnd={(e) => {
+              const newIndex = Math.round(e.nativeEvent.contentOffset.x / screenWidth);
+              setGalleryActiveIndex(newIndex);
+            }}
+          />
+
+          {/* Left arrow */}
+          {allMedia.length > 1 && galleryActiveIndex > 0 && (
+            <TouchableOpacity
+              style={styles.galleryArrowLeft}
+              onPress={() => {
+                const next = galleryActiveIndex - 1;
+                galleryFlatListRef.current?.scrollToIndex({ index: next, animated: true });
+                setGalleryActiveIndex(next);
+              }}
+            >
+              <Ionicons name="chevron-back" size={32} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
+
+          {/* Right arrow */}
+          {allMedia.length > 1 && galleryActiveIndex < allMedia.length - 1 && (
+            <TouchableOpacity
+              style={styles.galleryArrowRight}
+              onPress={() => {
+                const next = galleryActiveIndex + 1;
+                galleryFlatListRef.current?.scrollToIndex({ index: next, animated: true });
+                setGalleryActiveIndex(next);
+              }}
+            >
+              <Ionicons name="chevron-forward" size={32} color={COLORS.white} />
+            </TouchableOpacity>
+          )}
+
+          {/* Dot indicators */}
+          {allMedia.length > 1 && (
+            <View style={styles.galleryDots}>
+              {allMedia.map((_, idx) => (
+                <View
+                  key={idx}
+                  style={[
+                    styles.galleryDot,
+                    idx === galleryActiveIndex && styles.galleryDotActive,
+                  ]}
+                />
+              ))}
+            </View>
+          )}
+        </View>
       </Modal>
 
       {/* Profile Verification Gate Modal */}
@@ -987,10 +1078,31 @@ const getStyles = (COLORS: any) => StyleSheet.create({
   modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.greyDark },
   modalBody: { fontSize: 15, color: COLORS.greyMedium, lineHeight: 22, marginBottom: 24 },
   modalFooter: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12 },
-  modalCancelBtn: { paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8 },
   modalCancelBtnText: { fontSize: 15, fontWeight: '600', color: COLORS.greyMedium },
   modalPrimaryBtn: { paddingVertical: 10, paddingHorizontal: 20, borderRadius: 8, backgroundColor: COLORS.gold },
   modalPrimaryBtnText: { fontSize: 15, fontWeight: '700', color: COLORS.white },
+  
+  // Gallery Styles
+  galleryCounter: {
+    position: 'absolute', top: 50, alignSelf: 'center', zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', paddingHorizontal: 16, paddingVertical: 6, borderRadius: 20,
+  },
+  galleryCounterText: { color: COLORS.white, fontSize: 16, fontWeight: '600' },
+  galleryItemContainer: { width: screenWidth, height: '100%', justifyContent: 'center', alignItems: 'center' },
+  galleryImage: { width: '100%', height: '100%' },
+  galleryArrowLeft: {
+    position: 'absolute', left: 20, top: '50%', marginTop: -22, zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 22, width: 44, height: 44, justifyContent: 'center', alignItems: 'center',
+  },
+  galleryArrowRight: {
+    position: 'absolute', right: 20, top: '50%', marginTop: -22, zIndex: 10,
+    backgroundColor: 'rgba(0,0,0,0.5)', borderRadius: 22, width: 44, height: 44, justifyContent: 'center', alignItems: 'center',
+  },
+  galleryDots: {
+    flexDirection: 'row', position: 'absolute', bottom: 40, alignSelf: 'center', zIndex: 10, gap: 8,
+  },
+  galleryDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: 'rgba(255,255,255,0.4)' },
+  galleryDotActive: { width: 12, height: 12, borderRadius: 6, backgroundColor: COLORS.white },
 });
 
 export default ListingDetailsScreen;

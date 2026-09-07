@@ -145,7 +145,6 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     borderTopWidth: 1,
-    gap: 0,
     padding: 12,
     gap: 8,
   },

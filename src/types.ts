@@ -113,6 +113,7 @@ export interface MediaItem {
   thumbUrl?: string;
   processing_status?: 'processing' | 'ready' | 'failed';
   mimeType?: string;
+  file?: any;
 }
 
 export interface ListingDetails extends Listing {
