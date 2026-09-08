@@ -3,7 +3,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 
 // ── Constants ──────────────────────────────────────────────────────────────
 const APP_STORE_URL = 'https://apps.apple.com/app/dhub/id000000000';
-const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.diracmr.dhub';
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.dira.dhub';
 const WEB_BASE_URL = 'https://dhubweb.diracmr.com';
 const SUPABASE_PROJECT_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co';
 const MEDIA_BASE_URL = 'https://listings.frunjimbong.workers.dev';
