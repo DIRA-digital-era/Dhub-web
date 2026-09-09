@@ -28,6 +28,7 @@ import { useTranslation } from 'react-i18next';
 
 import { RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { NotFoundView } from '../../components/NotFoundView';
 import {
   ListingDetails,
   MediaItem,
@@ -308,18 +309,7 @@ const ListingDetailsScreen: React.FC = () => {
   }
 
   if (!listing) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <NetworkStatusBanner />
-        <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
-          <Text style={styles.errorText}>{t('common.error')}</Text>
-          <TouchableOpacity style={styles.errorButton} onPress={() => navigation.goBack()}>
-            <Text style={styles.errorButtonText}>{t('common.back')}</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
+    return <NotFoundView showAuthOptions={!userId} />;
   }
 
   const hasCoords = listing.latitude != null && listing.longitude != null;
