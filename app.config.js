@@ -97,6 +97,7 @@ export default ({ config }) => {
       EXPO_PUBLIC_SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL,
       EXPO_PUBLIC_SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY,
       EXPO_PUBLIC_API_URL: process.env.EXPO_PUBLIC_API_URL,
+      EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB,
       DIRA_PAYMENT_URL: process.env.DIRA_PAYMENT_URL,
       eas: {
         projectId: "b0659e77-bb69-4083-96dd-5b4155a1b80e"
