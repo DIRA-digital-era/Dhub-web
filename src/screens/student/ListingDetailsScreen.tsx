@@ -93,36 +93,43 @@ const ListingDetailsScreen: React.FC = () => {
   /* ─── Fetch ─── */
   useEffect(() => {
     let mounted = true;
+
+    // 1️⃣ Initial Data Fetch
     const load = async () => {
-      setLoading(true);
       const data = await fetchListingDetails(listingId);
-      if (mounted) {
+      if (mounted && data) {
         setListing(data);
         setLoading(false);
       }
-
-      // Check for paid booking map unlock & existing booking
-      if (userId && listingId) {
-        const { data: bookingData } = await supabase
-          .from('bookings')
-          .select('id, status, payment_status')
-          .eq('listing_id', listingId)
-          .eq('student_id', userId)
-          .not('status', 'eq', 'cancelled')
-          .not('status', 'eq', 'completed')
-          .order('created_at', { ascending: false })
-          .limit(1);
-
-        if (mounted && bookingData && bookingData.length > 0) {
-          if (bookingData[0].payment_status === 'completed') {
-            setHasPaidBooking(true);
-          }
-          setExistingBookingId(bookingData[0].id);
-        }
-      }
     };
+
+    setLoading(true);
     load();
-    return () => { mounted = false; };
+
+    // 2️⃣ Realtime Channel: Listen for FFmpeg/Render DB updates
+    const channel = supabase
+      .channel(`listing_realtime_${listingId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'listings',
+          filter: `id=eq.${listingId}`,
+        },
+        (payload) => {
+          console.log('[ListingDetails] Realtime listing update received from Supabase:', payload.new);
+          // Automatically refetch listing details & video status when Render completes encoding
+          load();
+        }
+      )
+      .subscribe();
+
+    // 3️⃣ Cleanup on unmount or listingId change
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
   }, [listingId, userId]);
 
   /* ─── Favorites ─── */
