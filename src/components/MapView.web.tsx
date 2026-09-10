@@ -3,20 +3,53 @@ import { StyleSheet, View } from 'react-native';
 
 // Safely load Google Maps JS API with loading=async
 let googleMapsPromise: Promise<void> | null = null;
+
 const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  if (typeof window === 'undefined') return Promise.resolve();
-  if ((window as any).google && (window as any).google.maps) return Promise.resolve();
-  if (googleMapsPromise) return googleMapsPromise;
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+
+  if ((window as any).google?.maps?.Map) {
+    return Promise.resolve();
+  }
+
+  if (googleMapsPromise) {
+    return googleMapsPromise;
+  }
 
   googleMapsPromise = new Promise((resolve, reject) => {
+    const callbackName = '__dhubGoogleMapsLoaded';
+
+    (window as any)[callbackName] = () => {
+      delete (window as any)[callbackName];
+
+      if ((window as any).google?.maps?.Map) {
+        resolve();
+      } else {
+        reject(new Error('Google Maps loaded but google.maps.Map is unavailable.'));
+      }
+    };
+
     const script = document.createElement('script');
-    script.src = `https://maps.googleapis.com/maps/api/js?key=${apiKey}&loading=async`;
+
+    script.src =
+      `https://maps.googleapis.com/maps/api/js` +
+      `?key=${encodeURIComponent(apiKey)}` +
+      `&loading=async` +
+      `&callback=${callbackName}`;
+
     script.async = true;
     script.defer = true;
-    script.onload = () => resolve();
-    script.onerror = (e) => reject(e);
+
+    script.onerror = () => {
+      delete (window as any)[callbackName];
+      googleMapsPromise = null;
+      reject(new Error('Failed to load Google Maps JavaScript API.'));
+    };
+
     document.head.appendChild(script);
   });
+
   return googleMapsPromise;
 };
 
