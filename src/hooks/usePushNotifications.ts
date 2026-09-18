@@ -120,6 +120,17 @@ export const usePushNotifications = (userId?: string) => {
   };
 
   const checkAndRegisterPushNotifications = async () => {
+    if (Platform.OS === 'web') {
+      if ('Notification' in window && Notification.permission !== 'granted' && Notification.permission !== 'denied') {
+        try {
+          await Notification.requestPermission();
+        } catch (e) {
+          console.warn('Failed to request web notification permission', e);
+        }
+      }
+      return; // Web doesn't use Expo Push tokens in this flow
+    }
+
     if (!Device.isDevice) {
       console.log('Must use physical device for Push Notifications');
       return;

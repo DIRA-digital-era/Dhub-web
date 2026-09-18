@@ -460,7 +460,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             <Text style={styles.modalBody}>
               Verifying your listing increases your chances of getting tenants faster by building trust. Verified properties appear higher in search results and have a special badge.
               {'\n\n'}
-              The 5,000 FCFA fee covers the logistics and displacement of our DHUB agents to physically inspect the property, take professional photos if needed, and guarantee its authenticity to prospective tenants.
+              The {verificationFee.toLocaleString()} FCFA fee covers the logistics and displacement of our DHUB agents to physically inspect the property, take professional photos if needed, and guarantee its authenticity to prospective tenants.
             </Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => setInfoModalVisible(false)}>
               <Text style={styles.modalButtonText}>I understand</Text>

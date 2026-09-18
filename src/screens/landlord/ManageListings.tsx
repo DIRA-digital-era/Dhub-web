@@ -78,7 +78,21 @@ const ManageListings: React.FC = () => {
   }
 
   useEffect(() => {
+    if (!user?.id) return;
+
     fetchProfileAndListings();
+
+    // Realtime: refresh when listings change after upload/edit/delete
+    const channel = supabase
+      .channel(`manage_listings:${user.id}`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'listings', filter: `landlord_id=eq.${user.id}` },
+        () => fetchProfileAndListings()
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
   }, [user?.id]);
 
   const fetchProfileAndListings = async () => {

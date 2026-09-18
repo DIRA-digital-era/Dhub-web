@@ -107,7 +107,18 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
 // ✅ CORRECT – add listener before subscribe
     const channel = supabase
       .channel(`student_notifs_${user.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, fetchUnread)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${user.id}` }, (payload) => {
+        fetchUnread();
+        if (payload.eventType === 'INSERT') {
+          const newNotif = payload.new as any;
+          if (newNotif && newNotif.title) {
+            showAlert(newNotif.title, newNotif.body);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification(newNotif.title, { body: newNotif.body });
+            }
+          }
+        }
+      })
       .subscribe();
 
     return () => { supabase.removeChannel(channel); };

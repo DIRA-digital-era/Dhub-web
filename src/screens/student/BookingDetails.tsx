@@ -113,6 +113,8 @@ export default function BookingDetails() {
 
   const [booking, setBooking] = useState<BookingFull | null>(null);
   const [loading, setLoading] = useState(true);
+  const [bookingFee, setBookingFee] = useState<number>(5000);
+  const [renewalFee, setRenewalFee] = useState<number>(5000);
   const [error, setError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
@@ -400,7 +402,7 @@ export default function BookingDetails() {
     // Initial Payment = Caution Fee (escrow) + 5,000 XAF service fee
     // The backend will verify this amount from the booking record via /api/payments/booking-intents
     const caution = booking.caution_fee ?? 0;
-    const initialPaymentAmount = caution + 5000;
+    const initialPaymentAmount = caution + bookingFee;
 
     navigation.navigate('Payments', {
       listingId: booking.listing_id,
@@ -435,7 +437,7 @@ export default function BookingDetails() {
   };
 
   // ── Renewal (Extend Lease) handler ──────────────────────────────────────
-  const RENEWAL_PROCESSING_FEE = 5000;
+  const RENEWAL_PROCESSING_FEE = renewalFee;
   const handleRenewLease = () => {
     if (!booking) return;
     showAlert(
@@ -1309,7 +1311,7 @@ export default function BookingDetails() {
           <View style={styles.footerInfo}>
             <Text style={styles.footerLabel}>{t('bookings.initial_deposit_label')}</Text>
             <Text style={styles.footerAmount}>
-              FCFA {((booking.caution_fee ?? 0) + 5000).toLocaleString()}
+              FCFA {((booking.caution_fee ?? 0) + bookingFee).toLocaleString()}
             </Text>
           </View>
           <TouchableOpacity

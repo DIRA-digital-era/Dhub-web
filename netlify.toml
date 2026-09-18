@@ -2,6 +2,13 @@
   command = "npx expo export --platform web"
   publish = "dist"
 
+# Redirect legacy Netlify domain to production domain
+[[redirects]]
+  from = "https://dhubweb.netlify.app/*"
+  to = "https://dhubweb.diracmr.com/:splat"
+  status = 301
+  force = true
+
 [[edge_functions]]
   path = "/"
   function = "root-og"

@@ -92,7 +92,7 @@ const DashboardStats: React.FC<Props> = ({ landlordId }) => {
 
     // subscribe to relevant tables
     const channel = supabase
-      .channel(`landlord‑stats:${landlordId}-${Date.now()}`)
+      .channel(`landlord_stats:${landlordId}-${Date.now()}`)
       .on(
         'postgres_changes',
         { schema: 'public', table: 'listings', filter: `landlord_id=eq.${landlordId}`, event: '*' },

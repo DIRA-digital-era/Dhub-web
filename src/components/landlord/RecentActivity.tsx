@@ -1,7 +1,8 @@
 // src/components/landlord/RecentActivity.tsx
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Platform } from 'react-native';
 import { supabase } from '../../utils/supabaseClient';
+import { showAlert } from '../../utils/alert';
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../context/ThemeContext';
 
@@ -68,6 +69,12 @@ const subscription = supabase
         newNotif.type === 'chat_message'
       ) {
         setNotifications((prev) => [newNotif, ...prev]);
+          if (newNotif.title) {
+            showAlert(newNotif.title, newNotif.body);
+            if (Platform.OS === 'web' && typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+              new Notification(newNotif.title, { body: newNotif.body });
+            }
+          }
       }
     }
   )

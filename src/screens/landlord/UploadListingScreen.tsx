@@ -94,6 +94,36 @@ const UploadListingScreen: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  useEffect(() => {
+    const checkKyc = async () => {
+      if (!user) return;
+      try {
+        const { data: profileData, error } = await supabase
+          .from('landlord_profiles')
+          .select('kyc_status')
+          .eq('user_id', user.id)
+          .single();
+
+        if (error) throw error;
+        if (!profileData || profileData.kyc_status !== 'approved') {
+          showAlert(
+            'KYC Verification Required',
+            'You must complete identity verification before uploading a listing.',
+            [
+              { text: 'Cancel', onPress: () => navigation.goBack(), style: 'cancel' },
+              { text: 'Verify Now', onPress: () => navigation.navigate('KYCVerification' as never) }
+            ]
+          );
+        }
+      } catch (err) {
+        console.error('KYC Guard error:', err);
+        showAlert('Verification Check Failed', 'Unable to verify your KYC status. Please try again.');
+        navigation.goBack();
+      }
+    };
+    checkKyc();
+  }, [user, navigation]);
+
   const [media, setMedia] = useState<MediaItem[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
 

@@ -26,14 +26,14 @@ export default ({ config }) => {
       softwareKeyboardLayoutMode: "pan",
       config: {
         googleMaps: {
-          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID || "AIzaSyAyARtsl2_R9zn_payaszS6Qj3Yhws9KD8"
+          apiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID
         }
       }
     },
     ios: {
       supportsTablet: true,
       config: {
-        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS || "AIzaSyCsoZGBWKi6YE1EDkkz2G3suRA2orqhGQA"
+        googleMapsApiKey: process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS
       }
     },
 

@@ -20,28 +20,55 @@ const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
   googleMapsPromise = new Promise((resolve, reject) => {
     const callbackName = '__dhubGoogleMapsLoaded';
 
+    // Safari ITP / iOS timeout guard: if the callback has not fired within
+    // 12 seconds, check if the API actually loaded (it can load silently
+    // without firing the callback on some Safari versions).
+    const timeoutId = setTimeout(() => {
+      if ((window as any).google?.maps?.Map) {
+        delete (window as any)[callbackName];
+        resolve();
+      } else {
+        googleMapsPromise = null;
+        reject(new Error('Google Maps script timed out on this browser.'));
+      }
+    }, 12000);
+
     (window as any)[callbackName] = () => {
+      clearTimeout(timeoutId);
       delete (window as any)[callbackName];
 
       if ((window as any).google?.maps?.Map) {
         resolve();
       } else {
+        googleMapsPromise = null;
         reject(new Error('Google Maps loaded but google.maps.Map is unavailable.'));
       }
     };
 
+    // Also handle the case where google.maps is already available
+    // (e.g. Safari cached the script but didn't fire our callback again)
+    if ((window as any).google?.maps?.Map) {
+      clearTimeout(timeoutId);
+      delete (window as any)[callbackName];
+      resolve();
+      return;
+    }
+
     const script = document.createElement('script');
 
+    // Note: omit `loading=async` so the callback fires reliably on Safari iOS.
+    // Use `libraries=places` so the full Maps API surface is available.
     script.src =
       `https://maps.googleapis.com/maps/api/js` +
       `?key=${encodeURIComponent(apiKey)}` +
-      `&loading=async` +
+      `&libraries=places` +
       `&callback=${callbackName}`;
 
     script.async = true;
     script.defer = true;
 
     script.onerror = () => {
+      clearTimeout(timeoutId);
       delete (window as any)[callbackName];
       googleMapsPromise = null;
       reject(new Error('Failed to load Google Maps JavaScript API.'));
@@ -191,7 +218,7 @@ export const MapView: React.FC<MapViewProps> = ({
 
   return (
     <View style={[styles.container, style]} pointerEvents="auto">
-      <div ref={mapRef} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
+      <div ref={mapRef} style={{ width: '100%', height: '100%', touchAction: 'manipulation' }} />
       <MapContext.Provider value={mapInstance}>
         {mapInstance && children}
       </MapContext.Provider>

@@ -19,6 +19,18 @@ const ListingsPreview: React.FC<Props> = ({ landlordId }) => {
   useEffect(() => {
     if (landlordId) {
       fetchListings();
+
+      // Realtime listener: refresh when listings change (insert/update/delete)
+      const channel = supabase
+        .channel(listings_preview:)
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'listings', filter: landlord_id=eq. },
+          () => fetchListings()
+        )
+        .subscribe();
+
+      return () => { supabase.removeChannel(channel); };
     } else {
       setLoading(false);
     }

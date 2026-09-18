@@ -47,6 +47,7 @@ const PendingScreen: React.FC = () => {
   );
 
   const [loading, setLoading] = useState(true);
+  const [bookingFee, setBookingFee] = useState<number>(5000);
   const [booking, setBooking] = useState<any>(null);
   const [canPay, setCanPay] = useState(false);
   const [paid, setPaid] = useState(false);
@@ -55,7 +56,10 @@ const PendingScreen: React.FC = () => {
   useEffect(() => {
     const fetchBooking = async () => {
       try {
-        const { data, error } = await supabase
+        const { data: feeData } = await supabase.from('pricing_configs').select('config_value').eq('config_key', 'rent_processing_fee').single();
+      if (feeData) setBookingFee(Number(feeData.config_value));
+
+      const { data, error } = await supabase
           .from('bookings')
           .select(`
             *,
