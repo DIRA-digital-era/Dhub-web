@@ -411,7 +411,6 @@ const ApprovalScreen: React.FC = () => {
                 })()}
               </Text>
             </View>
-          </View>
         </View>
 
         {/* ── Actions ──────────────────────────────────────────────────────── */}
