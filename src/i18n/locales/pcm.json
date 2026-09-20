@@ -21,7 +21,9 @@
     "mins_ago": "{{count}}m ago",
     "hours_ago": "{{count}}h ago",
     "days_ago": "{{count}}d ago",
-    "close": "Close"
+    "close": "Close",
+    "delete": "Delete (PCM)",
+    "home": "Home (PCM)"
   },
   "profile": {
     "title": "My Profile",
@@ -32,7 +34,7 @@
     "change_password": "Change Password",
     "delete_account": "Delete Account",
     "view_bookings": "See My Bookings",
-    "upload_listing": "Upload House",
+    "upload_listing": "Post House",
     "manage_listings": "Manage Houses",
     "report_tenant": "Report Tenant",
     "report_landlord": "Report Landlord",
@@ -52,7 +54,8 @@
     "delete_confirm_msg": "You sure say you want delete your account? E no fit undo.",
     "delete": "Delete",
     "session_missing": "Session no dey",
-    "session_missing_msg": "You no fit update email. Logout and login again."
+    "session_missing_msg": "You no fit update email. Commot the app then enta back.",
+    "theme_label": "Theme Label (PCM)"
   },
   "listing": {
     "available": "E dey available",
@@ -87,7 +90,8 @@
     "no_description_card": "No description here.",
     "spacious": "Big space",
     "available_now": "E dey ready",
-    "view_details": "See more"
+    "view_details": "See more",
+    "video": "Video (PCM)"
   },
   "home": {
     "title": "DHUB",
@@ -158,8 +162,8 @@
     "hero_ready_to_pay": "Ready for pay",
     "hero_awaiting_approval": "We dey wait landlord",
     "hero_payment_complete_sub": "Your booking don set. Welcome home!",
-    "hero_ready_to_pay_sub": "Landlord don approve. Pay money now make e confirm.",
-    "hero_awaiting_approval_sub": "We don send your request. Landlord go check am soon.",
+    "hero_ready_to_pay_sub": "Landlord don gree. Pay money now make e confirm.",
+    "hero_awaiting_approval_sub": "We don send your request. Landlord go check am small time.",
     "progress": "How e dey go",
     "step_request_sent": "Request don go",
     "step_request_sent_sub": "Wait make landlord check am",
@@ -287,7 +291,9 @@
     "yesterday": "Yesterday",
     "empty_title": "Start to talk",
     "empty_subtitle": "Say hello! Your messages dey private between you and {{name}}.",
-    "other_user": "the other person"
+    "other_user": "the other person",
+    "delete_chat": "Delete Chat (PCM)",
+    "delete_chat_confirm": "Delete Chat Confirm (PCM)"
   },
   "bookings": {
     "title": "My Bookings",
@@ -406,6 +412,311 @@
     "agree_tos": "I agree to di Terms of Service",
     "signing_up": "We dey sign up...",
     "has_account": "You don get account already?",
-    "sign_in_link": "Sign In"
+    "sign_in_link": "Sign In",
+    "password_min_length": "Password Min Length (PCM)",
+    "resend_otp": "Resend Otp (PCM)",
+    "passwords_no_match": "Passwords No Match (PCM)",
+    "reset_password_title": "Reset Password Title (PCM)",
+    "back_to_signin": "Back To Signin (PCM)",
+    "forgot_password_title": "Forgot Password Title (PCM)",
+    "update_failed": "Update Failed (PCM)",
+    "secure_account_msg": "Secure Account Msg (PCM)",
+    "send_reset_link": "Send Reset Link (PCM)",
+    "password_reset_success": "Password Reset Success (PCM)",
+    "enter_email_or_phone": "Enter Email Or Phone (PCM)",
+    "enter_otp_error": "Enter Otp Error (PCM)",
+    "invalid_phone_cameroon": "Invalid Phone Cameroon (PCM)",
+    "email_or_phone_placeholder": "Email Or Phone Placeholder (PCM)",
+    "forgot_password_subtitle": "Forgot Password Subtitle (PCM)",
+    "resend_in": "Resend In (PCM)",
+    "reset_failed": "Reset Failed (PCM)",
+    "reset_password_btn": "Reset Password Btn (PCM)",
+    "enter_otp_sent_to": "Enter Otp Sent To (PCM)"
+  },
+  "screens": {
+    "networkerror": {
+      "oops__no_internet": "Oops! No Internet (PCM)",
+      "please_check_your_connect": "Please check your connection and try again.\n        If this error persists you can contact support. (PCM)",
+      "retry": "Retry (PCM)"
+    },
+    "emailverification": {
+      "finalizing_account": "Finalizing Account (PCM)",
+      "back_to_sign_up": "Back to Sign Up (PCM)"
+    },
+    "signin": {
+      "welcome_back": "Welcome Back (PCM)",
+      "sign_in_to_your_account": "Sign in to your account (PCM)",
+      "phone": "Phone (PCM)",
+      "email": "Email (PCM)",
+      "or_send_me_a_magic_link": "Or send me a Magic Link (No password) (PCM)",
+      "continue_with_google": "Continue with Google (PCM)",
+      "forgot_password": "Forgot Password? (PCM)",
+      "don_t_have_an_account": "Don't have an account? (PCM)",
+      "sign_up": "Sign Up (PCM)"
+    },
+    "signup": {
+      "create_account": "Create Account (PCM)",
+      "join_dhub_to_manage_your": "Join Dhub to manage your properties (PCM)",
+      "i_agree_to_the": "I agree to the (PCM)",
+      "terms_of_service": "Terms of Service (PCM)",
+      "privacy_policy": "Privacy Policy (PCM)",
+      "you_must_accept_the_terms": "You must accept the Terms (PCM)",
+      "sign_up_with_google": "Sign Up with Google (PCM)",
+      "already_have_an_account": "Already have an account? (PCM)",
+      "sign_in": "Sign In (PCM)",
+      "creating_your_account": "Creating Your Account (PCM)",
+      "setting_up_your_secure_pr": "Setting up your secure profile... (PCM)",
+      "cancel": "Cancel (PCM)"
+    },
+    "verifyotp": {
+      "verify_whatsapp_otp": "Verify WhatsApp OTP (PCM)"
+    },
+    "chatwrapper": {
+      "loading_user": "Loading user... (PCM)",
+      "chats": "Chats (PCM)",
+      "loading_conversations": "Loading conversations... (PCM)",
+      "no_conversations_yet": "No conversations yet (PCM)",
+      "start_a_new_conversation": "Start a new conversation to chat with others (PCM)"
+    },
+    "downloadapp": {
+      "mobile_app_required": "Mobile App Required (PCM)",
+      "payments_and_full_booking": "Payments and full booking management are only available on the DHUB mobile app.\n          Download now to complete your transaction. (PCM)",
+      "android": "Android (PCM)",
+      "ios": "iOS (PCM)",
+      "go_back": "Go Back (PCM)"
+    },
+    "legal": {
+      "back": "Back (PCM)"
+    },
+    "reportbug": {
+      "report_a_bug": "Report a Bug (PCM)",
+      "found_a_technical_issue": "Found a technical issue, crash, or visual bug? Let our developers know so we can fix it! (PCM)",
+      "subject__optional": "Subject (Optional) (PCM)",
+      "send_email_to_support": "Send Email to Support (PCM)"
+    },
+    "reportuser": {
+      "if_you_have_experienced_i": "If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report. (PCM)",
+      "submit_report": "Submit Report (PCM)"
+    },
+    "support": {
+      "connecting_to_support": "Connecting to support... (PCM)",
+      "dhub_support": "DHUB Support (PCM)",
+      "we_re_online": "We're online (PCM)",
+      "call": "Call (PCM)",
+      "quick_topics": "Quick topics (PCM)",
+      "how_can_we_help": "How can we help? (PCM)",
+      "send_a_message_or_tap_a_q": "Send a message or tap a quick topic above to get started. (PCM)"
+    },
+    "updaterequired": {
+      "update_now": "Update Now (PCM)",
+      "maybe_later": "Maybe Later (PCM)"
+    },
+    "approval": {
+      "review_booking": "Review Booking (PCM)",
+      "listing": "Listing (PCM)",
+      "tenant_information": "Tenant Information (PCM)",
+      "booking_details": "Booking Details (PCM)",
+      "caution_escrow": "Caution Escrow (PCM)",
+      "dispute_caution_escrow": "Dispute Caution Escrow (PCM)",
+      "approve_refund__no_damage": "Approve Refund (No Damages) (PCM)",
+      "dispute_damages": "Dispute Damages (PCM)",
+      "rate_tenant": "Rate Tenant (PCM)",
+      "cancel": "Cancel (PCM)",
+      "submit": "Submit (PCM)",
+      "tenant_reviews": "Tenant Reviews (PCM)",
+      "close": "Close (PCM)",
+      "no_written_feedback": "No written feedback. (PCM)"
+    },
+    "bookings": {
+      "bookings": "Bookings (PCM)",
+      "loading_bookings": "Loading bookings... (PCM)",
+      "no_bookings_yet": "No bookings yet (PCM)",
+      "when_students_book_your_p": "When students book your properties, they'll appear here (PCM)",
+      "tap_to_review_request": "Tap to Review Request (PCM)"
+    },
+    "boost": {
+      "boost_listing": "Boost Listing (PCM)",
+      "choose_a_boost_plan": "Choose a Boost Plan (PCM)",
+      "why_boost": "Why Boost? (PCM)",
+      "boosting_your_listing_mak": "Boosting your listing makes it appear first in search results and highlights it for maximum visibility.\n            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make! (PCM)"
+    },
+    "dashboard": {
+      "welcome_back": "Welcome back (PCM)"
+    },
+    "editlisting": {
+      "processing": "Processing... (PCM)",
+      "failed": "Failed (PCM)",
+      "loading_property_details": "Loading property details... (PCM)",
+      "edit_property": "Edit Property (PCM)",
+      "property_photos": "Property Photos (PCM)",
+      "tap_to_preview__drag_to_r": "Tap to preview, drag to reorder (coming soon) (PCM)",
+      "add_media": "Add Media (PCM)",
+      "description": "Description (PCM)",
+      "price__fcfa": "Price (FCFA) (PCM)",
+      "rooms": "Rooms (PCM)",
+      "available_for_rent": "Available for Rent (PCM)",
+      "save_changes": "Save Changes (PCM)",
+      "delete_property": "Delete Property (PCM)",
+      "uploading_media": "Uploading Media... (PCM)",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (PCM)",
+      "cancel_upload": "Cancel Upload (PCM)"
+    },
+    "kycverification": {
+      "upload_document": "Upload Document (PCM)",
+      "kyc_verification": "KYC Verification (PCM)",
+      "verified_successfully": "Verified Successfully (PCM)",
+      "your_kyc_verification_has": "Your KYC verification has been approved. You can now create and manage property listings. (PCM)",
+      "verification_pending": "Verification Pending (PCM)",
+      "processing": "Processing (PCM)",
+      "your_docs_have_been_submi": "Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run. (PCM)",
+      "want_to_resubmit": "Want to resubmit? (PCM)",
+      "personal_information": "Personal Information (PCM)",
+      "identity_verification": "Identity Verification (PCM)",
+      "upload_clear_photos_of_yo": "Upload clear photos of your government-issued ID and a selfie holding the ID. (PCM)",
+      "property_credentials": "Property Credentials (PCM)",
+      "provide_documents_proving": "Provide documents proving you own or manage properties at your address. (PCM)"
+    },
+    "listingdetails": {
+      "loading_property_details": "Loading property details... (PCM)",
+      "unable_to_load_property": "Unable to load property (PCM)",
+      "retry": "Retry (PCM)",
+      "go_back": "Go Back (PCM)",
+      "property_details": "Property Details (PCM)",
+      "share_this_listing": "Share this listing (PCM)",
+      "available_for_rent": "Available for Rent (PCM)",
+      "description": "Description (PCM)",
+      "location": "Location (PCM)",
+      "view_map": "View Map (PCM)",
+      "property_videos": "Property Videos (PCM)",
+      "landlord_information": "Landlord Information (PCM)",
+      "verify": "Verify (PCM)",
+      "why_should_i_verify_my_li": "Why should I verify my listing? (PCM)",
+      "boost": "Boost (PCM)",
+      "delete": "Delete (PCM)",
+      "why_verify_your_listing": "Why verify your listing? (PCM)",
+      "i_understand": "I understand (PCM)",
+      "request_verification": "Request Verification (PCM)",
+      "cancel": "Cancel (PCM)",
+      "video": "Video (PCM)",
+      "view_booking": "View Booking (PCM)"
+    },
+    "managelistings": {
+      "please_log_in_to_manage_l": "Please log in to manage listings. (PCM)",
+      "loading_your_listings": "Loading your listings... (PCM)",
+      "my_properties": "My Properties (PCM)",
+      "no_listings_yet": "No listings yet (PCM)",
+      "start_by_adding_your_firs": "Start by adding your first property (PCM)",
+      "add_property": "Add Property (PCM)",
+      "total_properties": "Total Properties (PCM)",
+      "active": "Active (PCM)",
+      "property_photos": "Property Photos (PCM)",
+      "edit": "Edit (PCM)",
+      "delete": "Delete (PCM)"
+    },
+    "payment": {
+      "dhub_payment_receipt": "DHUB Payment Receipt (PCM)",
+      "transaction_details": "Transaction Details (PCM)",
+      "amount_details": "Amount Details (PCM)",
+      "parties": "Parties (PCM)",
+      "payments": "Payments (PCM)",
+      "payment_history": "Payment History (PCM)",
+      "send_payment": "Send Payment (PCM)",
+      "recent_transactions": "Recent Transactions (PCM)",
+      "loading_history": "Loading history... (PCM)",
+      "retry": "Retry (PCM)",
+      "no_payment_history_yet": "No payment history yet. (PCM)",
+      "receiver": "Receiver (PCM)",
+      "description": "Description (PCM)",
+      "payment_receipt": "Payment Receipt (PCM)",
+      "scan_to_verify_transactio": "Scan to verify transaction (PCM)",
+      "download_pdf": "Download PDF (PCM)",
+      "close": "Close (PCM)",
+      "amount": "Amount (PCM)",
+      "payable_to": "Payable To (PCM)",
+      "this_is_the": "This is the (PCM)",
+      "initial_deposit": "Initial Deposit (PCM)",
+      "this_is_your": "This is your (PCM)",
+      "remaining_rent_balance": "remaining rent balance (PCM)",
+      "after_your_initial_deposi": "after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property. (PCM)",
+      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee (PCM)",
+      "your_momo_phone_number": "Your MoMo Phone Number (PCM)",
+      "enter_the_momo_number_tha": "Enter the MoMo number that will receive the payment prompt. (PCM)",
+      "a_payment_prompt_has_been": "A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment. (PCM)",
+      "print_pdf": "Print PDF (PCM)"
+    },
+    "uploadlisting": {
+      "add_new_property": "Add New Property (PCM)",
+      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property (PCM)",
+      "add_media": "Add Media (PCM)",
+      "basic_information": "Basic Information (PCM)",
+      "listing_type": "Listing Type (PCM)",
+      "stay_type": "Stay Type (PCM)",
+      "property_title": "Property Title (PCM)",
+      "description": "Description (PCM)",
+      "number_of_rooms": "Number of Rooms (PCM)",
+      "location": "Location (PCM)",
+      "street_address": "Street Address (PCM)",
+      "city": "City (PCM)",
+      "tap_to_select_location_on": "Tap to select location on map (PCM)",
+      "students_will_review_and": "Students will review and agree to these terms before booking (PCM)",
+      "create_property_listing": "Create Property Listing (PCM)",
+      "uploading_media": "Uploading Media... (PCM)",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (PCM)",
+      "cancel_upload": "Cancel Upload (PCM)"
+    },
+    "bookingdetails": {
+      "information_locked": "Information Locked (PCM)",
+      "complete_your_booking_to": "Complete your booking to reveal the exact coordinates and landlord contact details. (PCM)",
+      "under_review_by_dhub": "Under Review by DHUB (PCM)",
+      "submit_evidence": "Submit Evidence (PCM)",
+      "confirm_i_have_moved_in": "Confirm I Have Moved In (PCM)",
+      "move_in_confirmed_by_you": "Move-In Confirmed by You (PCM)",
+      "take_entry_picture": "Take Entry Picture (PCM)",
+      "take_exit_picture": "Take Exit Picture (PCM)",
+      "awaiting_landlord_approva": "Awaiting Landlord Approval (PCM)",
+      "the_landlord_must_review": "The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking. (PCM)",
+      "cancellation_reason": "Cancellation Reason (PCM)",
+      "back": "Back (PCM)"
+    },
+    "booking": {
+      "unverified_property": "Unverified Property (PCM)",
+      "property_may_not_match_th": "Property may not match the photos (PCM)",
+      "promised_amenities_could": "Promised amenities could be missing (PCM)",
+      "you_may_risk_losing_your": "You may risk losing your caution fee (PCM)",
+      "read_our_safety_guideline": "Read our Safety Guidelines (PCM)",
+      "cancel_booking": "Cancel Booking (PCM)",
+      "proceed_anyway": "Proceed Anyway (PCM)"
+    },
+    "favorites": {
+      "view_details": "View Details (PCM)",
+      "no_favorites_yet": "No Favorites Yet (PCM)",
+      "start_exploring_propertie": "Start exploring properties and tap the heart icon to save your favorites here (PCM)",
+      "explore_properties": "Explore Properties (PCM)",
+      "loading_your_favorites": "Loading your favorites... (PCM)",
+      "my_favorites": "My Favorites (PCM)"
+    },
+    "home": {
+      "can_t_find_what_you_re_lo": "Can't find what you're looking for? (PCM)",
+      "notify_me": "Notify Me (PCM)",
+      "fill_out_the_details_of_t": "Fill out the details of the property you need. We'll search for it and notify you as soon as it's available! (PCM)",
+      "preferred_location": "Preferred Location (PCM)",
+      "budget__fcfa": "Budget (FCFA) (PCM)",
+      "specific_requirements": "Specific Requirements (PCM)",
+      "submit_request": "Submit Request (PCM)"
+    },
+    "listingreview": {
+      "rate_this_listing": "Rate this Listing (PCM)",
+      "tap_stars_to_select_your": "Tap stars to select your rating (PCM)",
+      "optional_comment": "Optional Comment (PCM)",
+      "back_to_booking": "Back to Booking (PCM)"
+    },
+    "profile": {
+      "age": "Age (PCM)"
+    },
+    "viewbookings": {
+      "active": "Active (PCM)",
+      "pending": "Pending (PCM)",
+      "past": "Past (PCM)"
+    }
   }
 }

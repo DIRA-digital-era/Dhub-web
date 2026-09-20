@@ -3,6 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import React, { useEffect, useState } from 'react';
 import { Image, Linking, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Props for the UpdateRequiredScreen component.
@@ -22,7 +23,7 @@ interface UpdateRequiredScreenProps {
  * Handles both blocking (mandatory) and skippable (optional) updates.
  */
 const UpdateRequiredScreen: React.FC<UpdateRequiredScreenProps> = ({
-  status,
+status,
   currentVersion,
   latestVersion,
   minSupported,
@@ -30,6 +31,7 @@ const UpdateRequiredScreen: React.FC<UpdateRequiredScreenProps> = ({
   forceUpdateAfter,
   onSkip
 }) => {
+  const { t } = useTranslation();
   // State to hold the formatted time remaining until the force update deadline
   const [timeLeft, setTimeLeft] = useState<string>('');
 
@@ -127,13 +129,13 @@ const UpdateRequiredScreen: React.FC<UpdateRequiredScreenProps> = ({
 
         {/* Primary Action Button */}
         <TouchableOpacity style={styles.updateButton} onPress={handleUpdate}>
-          <Text style={styles.updateButtonText}>Update Now</Text>
+          <Text style={styles.updateButtonText}>{t('screens.updaterequired.update_now')}</Text>
         </TouchableOpacity>
 
         {/* Secondary Action Button - Only visible if the update is optional and the deadline hasn't passed */}
         {isOptional && timeLeft !== 'Expired' && onSkip && (
           <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
-            <Text style={styles.skipButtonText}>Maybe Later</Text>
+            <Text style={styles.skipButtonText}>{t('screens.updaterequired.maybe_later')}</Text>
           </TouchableOpacity>
         )}
       </View>

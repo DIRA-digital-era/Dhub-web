@@ -5,7 +5,8 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, Platform, ScrollView, StatusBar, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 const showAlert = (title: string, message?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
+  const { t } = useTranslation();
+if (Platform.OS === 'web') {
     const msg = message ? `${title}\n${message}` : title;
     if (buttons && buttons.length > 0) {
       const isConfirm = buttons.length > 1;
@@ -33,6 +34,8 @@ import ListingCard from '../../components/ListingCard';
 import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
+
 
 type LandlordStackParamList = {
   ManageListings: undefined;
@@ -47,6 +50,7 @@ const DEFAULT_IMAGE = 'https://via.placeholder.com/400x240.png?text=No+Image';
 const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const ManageListings: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp<LandlordStackParamList>>();
   const { user } = useAuth();
   const { colors: themeColors, isDark } = useTheme();
@@ -72,7 +76,7 @@ const ManageListings: React.FC = () => {
   if (!user) {
     return (
       <View style={styles.centered}>
-        <Text style={styles.errorText}>Please log in to manage listings.</Text>
+        <Text style={styles.errorText}>{t('screens.managelistings.please_log_in_to_manage_l')}</Text>
       </View>
     );
   }
@@ -187,7 +191,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading your listings...</Text>
+        <Text style={styles.loadingText}>{t('screens.managelistings.loading_your_listings')}</Text>
       </View>
     );
   }
@@ -226,7 +230,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
         >
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>My Properties</Text>
+        <Text style={styles.headerTitle}>{t('screens.managelistings.my_properties')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -235,17 +239,15 @@ const listingsWithImages = (listingData || []).map((l: any) => {
           <View style={styles.emptyIconContainer}>
             <Ionicons name="home-outline" size={64} color={colors.primary} />
           </View>
-          <Text style={styles.emptyTitle}>No listings yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Start by adding your first property
-          </Text>
+          <Text style={styles.emptyTitle}>{t('screens.managelistings.no_listings_yet')}</Text>
+          <Text style={styles.emptySubtitle}>{t('screens.managelistings.start_by_adding_your_firs')}</Text>
           <TouchableOpacity 
             style={styles.addButtonLarge} 
             onPress={handleAddListing}
             activeOpacity={0.9}
           >
             <Ionicons name="add" size={36} color={colors.background} />
-            <Text style={styles.addButtonText}>Add Property</Text>
+            <Text style={styles.addButtonText}>{t('screens.managelistings.add_property')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -257,13 +259,13 @@ const listingsWithImages = (listingData || []).map((l: any) => {
             <View style={styles.statsContainer}>
               <View style={styles.statCard}>
                 <Text style={styles.statNumber}>{listings.length}</Text>
-                <Text style={styles.statLabel}>Total Properties</Text>
+                <Text style={styles.statLabel}>{t('screens.managelistings.total_properties')}</Text>
               </View>
               <View style={styles.statCard}>
                 <Text style={styles.statNumber}>
                   {listings.filter(l => l.status === 'active').length}
                 </Text>
-                <Text style={styles.statLabel}>Active</Text>
+                <Text style={styles.statLabel}>{t('screens.managelistings.active')}</Text>
               </View>
             </View>
 
@@ -279,7 +281,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
 
                   {/* Image gallery */}
                   <View style={styles.gallerySection}>
-                    <Text style={styles.galleryLabel}>Property Photos</Text>
+                    <Text style={styles.galleryLabel}>{t('screens.managelistings.property_photos')}</Text>
                     {renderImageGallery(item.images)}
                   </View>
 
@@ -291,7 +293,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="pencil-outline" size={18} color={colors.primary} />
-                      <Text style={styles.actionText}>Edit</Text>
+                      <Text style={styles.actionText}>{t('screens.managelistings.edit')}</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
@@ -300,7 +302,7 @@ const listingsWithImages = (listingData || []).map((l: any) => {
                       activeOpacity={0.7}
                     >
                       <Ionicons name="trash-outline" size={18} color={colors.error} />
-                      <Text style={[styles.actionText, styles.deleteText]}>Delete</Text>
+                      <Text style={[styles.actionText, styles.deleteText]}>{t('screens.managelistings.delete')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

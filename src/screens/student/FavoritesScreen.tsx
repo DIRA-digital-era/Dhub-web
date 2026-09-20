@@ -21,6 +21,7 @@ import FavoritesManager, { FavoriteRecord } from '../../storage/favouritesManage
 import { supabase } from '../../utils/supabaseClient';
 import { Listing } from '../../types';
 import { getDB } from '../../storage/favourites';
+import { useTranslation } from 'react-i18next';
 
 interface ListingWithImages extends Listing {
   images: string[];
@@ -31,6 +32,7 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 
 const FavoritesScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const isFocused = useIsFocused();
 
@@ -216,7 +218,7 @@ const FavoritesScreen: React.FC = () => {
         </View>
 
         <TouchableOpacity style={styles.viewButton} onPress={() => handleListingPress(item.id)} activeOpacity={0.8}>
-          <Text style={styles.viewButtonText}>View Details</Text>
+          <Text style={styles.viewButtonText}>{t('screens.favorites.view_details')}</Text>
           <Ionicons name="arrow-forward" size={16} color={colors.gold} />
         </TouchableOpacity>
       </View>
@@ -228,12 +230,10 @@ const FavoritesScreen: React.FC = () => {
       <View style={styles.emptyIconContainer}>
         <Ionicons name="heart-outline" size={64} color={colors.gold} />
       </View>
-      <Text style={styles.emptyStateTitle}>No Favorites Yet</Text>
-      <Text style={styles.emptyStateText}>
-        Start exploring properties and tap the heart icon to save your favorites here
-      </Text>
+      <Text style={styles.emptyStateTitle}>{t('screens.favorites.no_favorites_yet')}</Text>
+      <Text style={styles.emptyStateText}>{t('screens.favorites.start_exploring_propertie')}</Text>
       <TouchableOpacity style={styles.exploreButton} onPress={() => (navigation as any).navigate('Home')} activeOpacity={0.8}>
-        <Text style={styles.exploreButtonText}>Explore Properties</Text>
+        <Text style={styles.exploreButtonText}>{t('screens.favorites.explore_properties')}</Text>
         <Ionicons name="arrow-forward" size={18} color={colors.white} />
       </TouchableOpacity>
     </View>
@@ -243,7 +243,7 @@ const FavoritesScreen: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={colors.gold} />
-        <Text style={styles.loadingText}>Loading your favorites...</Text>
+        <Text style={styles.loadingText}>{t('screens.favorites.loading_your_favorites')}</Text>
       </View>
     );
   }
@@ -252,7 +252,7 @@ const FavoritesScreen: React.FC = () => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={colors.white} />
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>My Favorites</Text>
+        <Text style={styles.headerTitle}>{t('screens.favorites.my_favorites')}</Text>
         <Text style={styles.headerSubtitle}>
           {favorites.length} {favorites.length === 1 ? 'property' : 'properties'} saved
         </Text>

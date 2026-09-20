@@ -522,7 +522,7 @@ const PaymentScreen: React.FC = () => {
                   <View style={styles.summaryDivider} />
 
                   <View style={styles.summaryRow}>
-                    <Text style={styles.summaryLabel}>Amount</Text>
+                    <Text style={styles.summaryLabel}>{t('screens.payment.amount')}</Text>
                     <Text style={styles.summaryAmount}>
                       {formatCurrency(incoming.amount ?? 0)}
                     </Text>
@@ -530,7 +530,7 @@ const PaymentScreen: React.FC = () => {
 
                   {incoming.receiverName ? (
                     <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Payable To</Text>
+                      <Text style={styles.summaryLabel}>{t('screens.payment.payable_to')}</Text>
                       <Text style={styles.summaryValue}>{incoming.receiverName}</Text>
                     </View>
                   ) : null}
@@ -538,24 +538,21 @@ const PaymentScreen: React.FC = () => {
                   {incoming.paymentType === 'initial' && (
                     <View style={styles.summaryNote}>
                       <Ionicons name="lock-open-outline" size={16} color={COLORS.primary} />
-                      <Text style={styles.summaryNoteText}>
-                        This is the <Text style={{ fontWeight: '700' }}>Initial Deposit</Text>: your caution fee (held in escrow) + XAF 5,000 service fee.{"\n\n"}Once payment is confirmed by MoMo, the property's exact map location and landlord contact will be unlocked. You can then visit the property and choose to complete your rent or request a caution refund.
+                      <Text style={styles.summaryNoteText}>{t('screens.payment.this_is_the')}<Text style={{ fontWeight: '700' }}>{t('screens.payment.initial_deposit')}</Text>: your caution fee (held in escrow) + XAF 5,000 service fee.{"\n\n"}Once payment is confirmed by MoMo, the property's exact map location and landlord contact will be unlocked. You can then visit the property and choose to complete your rent or request a caution refund.
                       </Text>
                     </View>
                   )}
                   {incoming.paymentType === 'rent_completion' && (
                     <View style={styles.summaryNote}>
                       <Ionicons name="information-circle-outline" size={16} color={COLORS.primary} />
-                      <Text style={styles.summaryNoteText}>
-                        This is your <Text style={{ fontWeight: '700' }}>remaining rent balance</Text> after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property.
-                      </Text>
+                      <Text style={styles.summaryNoteText}>{t('screens.payment.this_is_your')}<Text style={{ fontWeight: '700' }}>{t('screens.payment.remaining_rent_balance')}</Text>{t('screens.payment.after_your_initial_deposi')}</Text>
                     </View>
                   )}
                   {incoming.paymentType === 'renewal' && (
                     <View style={styles.summaryNote}>
                       <Ionicons name="refresh-circle-outline" size={16} color={COLORS.primary} />
                       <Text style={styles.summaryNoteText}>
-                        A <Text style={{ fontWeight: '700' }}>XAF 5,000 lease renewal fee</Text>. Once confirmed, your lease end date will be extended and you can continue your stay.
+                        A <Text style={{ fontWeight: '700' }}>{t('screens.payment.xaf_5_000_lease_renewal_f')}</Text>. Once confirmed, your lease end date will be extended and you can continue your stay.
                       </Text>
                     </View>
                   )}
@@ -563,7 +560,7 @@ const PaymentScreen: React.FC = () => {
 
                 {/* MoMo Phone Input */}
                 <View style={styles.inputGroup}>
-                  <Text style={styles.label}>Your MoMo Phone Number</Text>
+                  <Text style={styles.label}>{t('screens.payment.your_momo_phone_number')}</Text>
                   <TextInput
                     style={[styles.input, initiating && styles.inputDisabled]}
                     placeholder="e.g. 237XXXXXXXXX"
@@ -574,9 +571,7 @@ const PaymentScreen: React.FC = () => {
                     editable={!initiating}
                     autoCorrect={false}
                   />
-                  <Text style={styles.inputHint}>
-                    Enter the MoMo number that will receive the payment prompt.
-                  </Text>
+                  <Text style={styles.inputHint}>{t('screens.payment.enter_the_momo_number_tha')}</Text>
                 </View>
 
                 {/* Pay Button */}
@@ -598,9 +593,7 @@ const PaymentScreen: React.FC = () => {
                 </TouchableOpacity>
 
                 {initiating && (
-                  <Text style={styles.initiatingHint}>
-                    A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment.
-                  </Text>
+                  <Text style={styles.initiatingHint}>{t('screens.payment.a_payment_prompt_has_been')}</Text>
                 )}
               </>
             ) : (
@@ -811,7 +804,7 @@ const PaymentScreen: React.FC = () => {
                   style={styles.downloadButton}
                   onPress={handleDownloadPdf}
                 >
-                  <Text style={styles.downloadButtonText}>Print PDF</Text>
+                  <Text style={styles.downloadButtonText}>{t('screens.payment.print_pdf')}</Text>
                 </TouchableOpacity>
 
                 <TouchableOpacity

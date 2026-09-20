@@ -11,6 +11,7 @@ import { AuthStackParamList, RootStackParamList } from '../../types';
 import { sendOtp as sendOtpHelper, verifyOtp as verifyOtpHelper } from '../../utils/otp';
 import { supabase } from '../../utils/supabaseClient';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 type VerifyOtpScreenNavigationProp = NativeStackNavigationProp<RootStackParamList, 'AuthStack'>;
 type VerifyOtpScreenRouteProp = RouteProp<AuthStackParamList, 'VerifyOtp'>;
@@ -29,6 +30,7 @@ interface VerifyOtpParams {
 }
 
 const VerifyOtpScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<VerifyOtpScreenNavigationProp>();
   const route = useRoute<VerifyOtpScreenRouteProp>();
   const {
@@ -247,7 +249,7 @@ const VerifyOtpScreen: React.FC = () => {
     >
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={styles.container}>
-          <Text style={styles.title}>Verify WhatsApp OTP</Text>
+          <Text style={styles.title}>{t('screens.verifyotp.verify_whatsapp_otp')}</Text>
           <Text style={styles.subtitle}>
             Enter the 6-digit code sent to {whatsappNumber}
           </Text>

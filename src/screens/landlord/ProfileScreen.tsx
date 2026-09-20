@@ -3,14 +3,17 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+
 import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useAuth } from "../../hooks/useAuth";
 import { useTheme } from "../../context/ThemeContext";
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
+
 
 const showAlert = (title: string, message?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
+  const { t } = useTranslation();
+if (Platform.OS === 'web') {
     const msg = message ? `${title}\n${message}` : title;
     if (buttons && buttons.length > 0) {
       const isConfirm = buttons.length > 1;

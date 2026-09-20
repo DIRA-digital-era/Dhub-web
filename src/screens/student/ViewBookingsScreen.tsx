@@ -358,21 +358,21 @@ export default function ViewBookingsScreen() {
           style={[styles.tabButton, activeTab === 'active' && styles.tabButtonActive]}
           onPress={() => setActiveTab('active')}
         >
-          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>Active</Text>
+          <Text style={[styles.tabText, activeTab === 'active' && styles.tabTextActive]}>{t('screens.viewbookings.active')}</Text>
         </TouchableOpacity>
         
         <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'pending' && styles.tabButtonActive]}
           onPress={() => setActiveTab('pending')}
         >
-          <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>Pending</Text>
+          <Text style={[styles.tabText, activeTab === 'pending' && styles.tabTextActive]}>{t('screens.viewbookings.pending')}</Text>
         </TouchableOpacity>
 
         <TouchableOpacity 
           style={[styles.tabButton, activeTab === 'past' && styles.tabButtonActive]}
           onPress={() => setActiveTab('past')}
         >
-          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>Past</Text>
+          <Text style={[styles.tabText, activeTab === 'past' && styles.tabTextActive]}>{t('screens.viewbookings.past')}</Text>
         </TouchableOpacity>
       </View>
     </View>

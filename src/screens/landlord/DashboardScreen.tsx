@@ -14,8 +14,10 @@ import ListingsPreview from '../../components/landlord/ListingsPreview';
 import { Ionicons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 const DashboardScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<any>();
   const { user } = useAuth();
   const { colors } = useTheme();
@@ -87,7 +89,7 @@ const DashboardScreen: React.FC = () => {
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.card }]}>
         <View>
-          <Text style={[styles.welcome, { color: colors.primary }]}>Welcome back</Text>
+          <Text style={[styles.welcome, { color: colors.primary }]}>{t('screens.dashboard.welcome_back')}</Text>
           <Text style={[styles.name, { color: colors.text }]}>{user?.fullName || 'Landlord'}</Text>
         </View>
         <TouchableOpacity

@@ -4,8 +4,10 @@ import { useNavigation } from '@react-navigation/native';
 import React from 'react';
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const LegalScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation();
 
   if (Platform.OS === 'web') {
@@ -14,7 +16,7 @@ const LegalScreen: React.FC = () => {
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={22} color="#D4AF37" />
-            <Text style={styles.backText}>Back</Text>
+            <Text style={styles.backText}>{t('screens.legal.back')}</Text>
           </TouchableOpacity>
           <Text style={styles.title}>Terms & Privacy</Text>
           <View style={styles.rightSpacer} />
@@ -36,7 +38,7 @@ const LegalScreen: React.FC = () => {
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#D4AF37" />
-          <Text style={styles.backText}>Back</Text>
+          <Text style={styles.backText}>{t('screens.legal.back')}</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Terms & Privacy</Text>
         <View style={styles.rightSpacer} />

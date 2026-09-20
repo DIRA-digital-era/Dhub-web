@@ -12,6 +12,7 @@ import { setBoost } from '../../store/boostSlice';
 import { LandlordStackParamList, LandlordStackRouteProp, LandlordTabParamList } from '../../types';
 
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
 
 interface BoostPlan {
   id: string;
@@ -26,6 +27,7 @@ type BoostScreenNavigationProp = CompositeNavigationProp<
 >;
 
 const BoostScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<BoostScreenNavigationProp>();
   const route = useRoute<LandlordStackRouteProp<'BoostScreen'>>();
   const dispatch = useDispatch();
@@ -100,13 +102,13 @@ const BoostScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Boost Listing</Text>
+        <Text style={styles.headerTitle}>{t('screens.boost.boost_listing')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView contentContainerStyle={styles.content}>
         {/* Boost Plans */}
-        <Text style={styles.sectionTitle}>Choose a Boost Plan</Text>
+        <Text style={styles.sectionTitle}>{t('screens.boost.choose_a_boost_plan')}</Text>
         {fetchingPlans ? (
           <ActivityIndicator color={colors.primary} />
         ) : (
@@ -150,11 +152,8 @@ const BoostScreen: React.FC = () => {
 
         {/* Why Boost Section */}
         <View style={styles.whyBoostContainer}>
-          <Text style={styles.whyBoostTitle}>Why Boost?</Text>
-          <Text style={styles.whyBoostText}>
-            Boosting your listing makes it appear first in search results and highlights it for maximum visibility.
-            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make!
-          </Text>
+          <Text style={styles.whyBoostTitle}>{t('screens.boost.why_boost')}</Text>
+          <Text style={styles.whyBoostText}>{t('screens.boost.boosting_your_listing_mak')}</Text>
         </View>
       </ScrollView>
     </View>

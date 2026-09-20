@@ -87,6 +87,10 @@ export const usePushNotifications = (userId?: string) => {
             screen: 'Tabs',
             params: { screen: 'Payments' },
           } as any);
+        } else if (type === 'support_reply') {
+          navigationRef.navigate('LandlordStack', {
+            screen: 'Support',
+          } as any);
         } else if (listingId) {
           navigationRef.navigate('LandlordStack', {
             screen: 'ListingDetails',
@@ -107,6 +111,10 @@ export const usePushNotifications = (userId?: string) => {
         navigationRef.navigate('StudentStack', {
           screen: 'StudentTabs',
           params: { screen: 'Chat' },
+        } as any);
+      } else if (type === 'support_reply') {
+        navigationRef.navigate('StudentStack', {
+          screen: 'Support',
         } as any);
       } else if (type === 'system_announcement' && listingId) {
         navigationRef.navigate('StudentStack', {

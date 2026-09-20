@@ -16,12 +16,13 @@ import { LanguageSelector } from '../../components/LanguageSelector';
 import { AuthStackParamList } from '../../types';
 import { authLogger } from '../../utils/logger';
 import { loginWithGoogle, signUpWithEmail, signUpWithPhone } from '../../utils/login';
+import { useTranslation } from 'react-i18next';
 
 type SignUpScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
 // ─── Yup Schema ─────────────────────────────────────────────────────────────
 const schema = yup.object({
-  fullName: yup.string().required('Full name is required'),
+fullName: yup.string().required('Full name is required'),
   email: yup.string().email('Invalid email address').when('signUpMethod', {
     is: 'email',
     then: (s) => s.required('Email is required for this method'),
@@ -41,6 +42,7 @@ type FormData = yup.InferType<typeof schema>;
 
 // ─── Component ──────────────────────────────────────────────────────────────
 const SignUpScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<SignUpScreenNavigationProp>();
   const { error: globalError } = useSelector((state: any) => state.auth);
 
@@ -172,8 +174,8 @@ const SignUpScreen: React.FC = () => {
   return (
     <View style={{ flex: 1, backgroundColor: '#fff' }}>
       <View style={styles.header}>
-        <Text style={styles.title}>Create Account</Text>
-        <Text style={styles.subtitle}>Join Dhub to manage your properties</Text>
+        <Text style={styles.title}>{t('screens.signup.create_account')}</Text>
+        <Text style={styles.subtitle}>{t('screens.signup.join_dhub_to_manage_your')}</Text>
       </View>
 
       <ScrollView
@@ -359,13 +361,12 @@ const SignUpScreen: React.FC = () => {
             <View style={[styles.checkboxBox, acceptedTos && styles.checkboxBoxChecked]}>
               {acceptedTos && <Ionicons name="checkmark" size={16} color="#fff" />}
             </View>
-            <Text style={styles.tosText}>
-              I agree to the <Text style={styles.link} onPress={openTos}>Terms of Service</Text> and{' '}
-              <Text style={styles.link} onPress={openPrivacyPolicy}>Privacy Policy</Text>
+            <Text style={styles.tosText}>{t('screens.signup.i_agree_to_the')}<Text style={styles.link} onPress={openTos}>{t('screens.signup.terms_of_service')}</Text> and{' '}
+              <Text style={styles.link} onPress={openPrivacyPolicy}>{t('screens.signup.privacy_policy')}</Text>
             </Text>
           </TouchableOpacity>
           {!acceptedTos && errors.acceptedTos && (
-            <Text style={styles.errorText}>You must accept the Terms</Text>
+            <Text style={styles.errorText}>{t('screens.signup.you_must_accept_the_terms')}</Text>
           )}
         </View>
 
@@ -397,14 +398,14 @@ const SignUpScreen: React.FC = () => {
             disabled={isSubmitting || !acceptedTos}
           >
             <Ionicons name="logo-google" size={20} color="#fff" style={{ marginRight: 10 }} />
-            <Text style={styles.googleButtonText}>Sign Up with Google</Text>
+            <Text style={styles.googleButtonText}>{t('screens.signup.sign_up_with_google')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
 
       <View style={styles.footer}>
         <TouchableOpacity style={styles.signInLink} onPress={() => navigation.navigate('SignIn')}>
-          <Text style={styles.switchText}>Already have an account? <Text style={styles.link}>Sign In</Text></Text>
+          <Text style={styles.switchText}>{t('screens.signup.already_have_an_account')}<Text style={styles.link}>{t('screens.signup.sign_in')}</Text></Text>
         </TouchableOpacity>
         <View style={styles.brandingWrapper}><DiraBranding /></View>
         <View style={styles.languageWrapper}><LanguageSelector /></View>
@@ -415,8 +416,8 @@ const SignUpScreen: React.FC = () => {
         <View style={styles.loadingOverlay}>
           <View style={styles.loadingCard}>
             <ActivityIndicator size="large" color="#B8860B" />
-            <Text style={styles.loadingTitle}>Creating Your Account</Text>
-            <Text style={styles.loadingSubtitle}>Setting up your secure profile...</Text>
+            <Text style={styles.loadingTitle}>{t('screens.signup.creating_your_account')}</Text>
+            <Text style={styles.loadingSubtitle}>{t('screens.signup.setting_up_your_secure_pr')}</Text>
           </View>
         </View>
       )}
@@ -439,7 +440,7 @@ const SignUpScreen: React.FC = () => {
               </TouchableOpacity>
             ))}
             <TouchableOpacity style={styles.modalCloseButton} onPress={() => setShowRoleModal(false)}>
-              <Text style={styles.modalCloseText}>Cancel</Text>
+              <Text style={styles.modalCloseText}>{t('screens.signup.cancel')}</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

@@ -21,6 +21,7 @@ import { StudentStackParamList, Ticket, Chat, FAQ } from '../../types';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Linking from 'expo-linking';
+import { useTranslation } from 'react-i18next';
 import {
   fetchLatestTicket,
   createTicket,
@@ -45,7 +46,7 @@ const GREEN  = '#34C759';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const parseTs = (ts: string): Date => {
-  let s = ts.replace(' ', 'T');
+let s = ts.replace(' ', 'T');
   if (!s.includes('Z') && !s.includes('+')) s += 'Z';
   return new Date(s);
 };
@@ -68,6 +69,7 @@ const dayLabel = (d: Date): string => {
 
 // ─── component ────────────────────────────────────────────────────────────────
 const SupportScreen: React.FC<SupportProps> = ({ route }) => {
+  const { t } = useTranslation();
   const { currentUserId } = route.params;
 
   const [ticket,     setTicket]     = useState<Ticket | null>(null);
@@ -209,7 +211,7 @@ const SupportScreen: React.FC<SupportProps> = ({ route }) => {
               <Ionicons name="headset" size={36} color={GOLD} />
             </View>
             <ActivityIndicator size="large" color={GOLD} style={{ marginTop: 16 }} />
-            <Text style={styles.loadText}>Connecting to support...</Text>
+            <Text style={styles.loadText}>{t('screens.support.connecting_to_support')}</Text>
           </View>
         </SafeAreaView>
       </KeyboardAvoidingView>
@@ -243,10 +245,10 @@ const SupportScreen: React.FC<SupportProps> = ({ route }) => {
           </LinearGradient>
 
           <View style={styles.headerInfo}>
-            <Text style={styles.headerTitle}>DHUB Support</Text>
+            <Text style={styles.headerTitle}>{t('screens.support.dhub_support')}</Text>
             <View style={styles.onlineRow}>
               <View style={styles.onlineDot} />
-              <Text style={styles.onlineLabel}>We're online</Text>
+              <Text style={styles.onlineLabel}>{t('screens.support.we_re_online')}</Text>
             </View>
           </View>
 
@@ -256,7 +258,7 @@ const SupportScreen: React.FC<SupportProps> = ({ route }) => {
             activeOpacity={0.8}
           >
             <Ionicons name="call" size={16} color={WHITE} />
-            <Text style={styles.callBtnText}>Call</Text>
+            <Text style={styles.callBtnText}>{t('screens.support.call')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -290,7 +292,7 @@ const SupportScreen: React.FC<SupportProps> = ({ route }) => {
         {/* ── FAQ chips ── */}
         {faqs.length > 0 && (
           <View style={styles.faqSection}>
-            <Text style={styles.faqLabel}>Quick topics</Text>
+            <Text style={styles.faqLabel}>{t('screens.support.quick_topics')}</Text>
             <ScrollView
               horizontal
               showsHorizontalScrollIndicator={false}
@@ -318,10 +320,8 @@ const SupportScreen: React.FC<SupportProps> = ({ route }) => {
             <View style={styles.emptyIconWrap}>
               <Ionicons name="chatbubbles-outline" size={48} color={GOLD} />
             </View>
-            <Text style={styles.emptyTitle}>How can we help?</Text>
-            <Text style={styles.emptySub}>
-              Send a message or tap a quick topic above to get started.
-            </Text>
+            <Text style={styles.emptyTitle}>{t('screens.support.how_can_we_help')}</Text>
+            <Text style={styles.emptySub}>{t('screens.support.send_a_message_or_tap_a_q')}</Text>
           </View>
         ) : (
           <FlatList<Chat>

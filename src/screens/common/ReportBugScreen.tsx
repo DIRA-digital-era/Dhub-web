@@ -6,8 +6,10 @@ import { KeyboardAvoidingView, Linking, Platform, ScrollView, StyleSheet, Text, 
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../utils/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
+import { useTranslation } from 'react-i18next';
 
 export default function ReportBugScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { user } = useAuth();
 
@@ -85,16 +87,14 @@ export default function ReportBugScreen() {
         <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.text} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Report a Bug</Text>
+        <Text style={styles.headerTitle}>{t('screens.reportbug.report_a_bug')}</Text>
       </View>
 
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
-          <Text style={styles.description}>
-            Found a technical issue, crash, or visual bug? Let our developers know so we can fix it!
-          </Text>
+          <Text style={styles.description}>{t('screens.reportbug.found_a_technical_issue')}</Text>
 
-          <Text style={styles.label}>Subject (Optional)</Text>
+          <Text style={styles.label}>{t('screens.reportbug.subject__optional')}</Text>
           <TextInput
             value={subject}
             onChangeText={setSubject}
@@ -114,7 +114,7 @@ export default function ReportBugScreen() {
           />
 
           <TouchableOpacity style={styles.submitBtn} onPress={handleSubmitBug}>
-            <Text style={styles.submitText}>Send Email to Support</Text>
+            <Text style={styles.submitText}>{t('screens.reportbug.send_email_to_support')}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

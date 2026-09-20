@@ -15,8 +15,10 @@ import { useAuth } from '../../hooks/useAuth';
 import { useTheme } from '../../context/ThemeContext';
 import { Ionicons } from '@expo/vector-icons';
 import { NetworkDisconnectedScreen } from '../../components/NetworkDisconnectedScreen';
+import { useTranslation } from 'react-i18next';
 
 const BookingsScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { user } = useAuth();
   const [bookings, setBookings] = useState<any[]>([]);
@@ -96,7 +98,7 @@ const BookingsScreen: React.FC = () => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Bookings</Text>
+          <Text style={styles.headerTitle}>{t('screens.bookings.bookings')}</Text>
           <View style={{ width: 24 }} />
         </View>
         <NetworkDisconnectedScreen onRefresh={fetchBookings} refreshing={loading} fullScreen={false} />
@@ -110,7 +112,7 @@ const BookingsScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bookings</Text>
+        <Text style={styles.headerTitle}>{t('screens.bookings.bookings')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
@@ -126,14 +128,12 @@ const BookingsScreen: React.FC = () => {
         }
       >
         {loading && bookings.length === 0 ? (
-          <Text style={styles.loadingText}>Loading bookings...</Text>
+          <Text style={styles.loadingText}>{t('screens.bookings.loading_bookings')}</Text>
         ) : bookings.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="calendar-outline" size={64} color={colors.textSecondary} />
-            <Text style={styles.emptyStateText}>No bookings yet</Text>
-            <Text style={styles.emptyStateSubtext}>
-              When students book your properties, they'll appear here
-            </Text>
+            <Text style={styles.emptyStateText}>{t('screens.bookings.no_bookings_yet')}</Text>
+            <Text style={styles.emptyStateSubtext}>{t('screens.bookings.when_students_book_your_p')}</Text>
           </View>
         ) : (
           bookings.map(booking => (
@@ -179,9 +179,7 @@ const BookingsScreen: React.FC = () => {
               </Text>
 
               {booking.status === 'pending' && (
-                <Text style={{ color: colors.primary, marginTop: 12, textAlign: 'center', fontWeight: 'bold' }}>
-                  Tap to Review Request
-                </Text>
+                <Text style={{ color: colors.primary, marginTop: 12, textAlign: 'center', fontWeight: 'bold' }}>{t('screens.bookings.tap_to_review_request')}</Text>
               )}
             </TouchableOpacity>
           ))

@@ -955,7 +955,7 @@ const handleDownloadPDF = async () => {
               <Ionicons name="shield-half-outline" size={32} color={COLORS.danger} />
             </View>
             
-            <Text style={styles.unverifiedModalTitle}>Unverified Property</Text>
+            <Text style={styles.unverifiedModalTitle}>{t('screens.booking.unverified_property')}</Text>
             <Text style={styles.unverifiedModalDesc}>
               This listing has not been physically verified by DHUB. Booking unverified properties carries risks:
             </Text>
@@ -963,15 +963,15 @@ const handleDownloadPDF = async () => {
             <View style={styles.unverifiedRiskList}>
               <View style={styles.riskItem}>
                 <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>Property may not match the photos</Text>
+                <Text style={styles.riskText}>{t('screens.booking.property_may_not_match_th')}</Text>
               </View>
               <View style={styles.riskItem}>
                 <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>Promised amenities could be missing</Text>
+                <Text style={styles.riskText}>{t('screens.booking.promised_amenities_could')}</Text>
               </View>
               <View style={styles.riskItem}>
                 <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>You may risk losing your caution fee</Text>
+                <Text style={styles.riskText}>{t('screens.booking.you_may_risk_losing_your')}</Text>
               </View>
             </View>
 
@@ -982,7 +982,7 @@ const handleDownloadPDF = async () => {
                 navigation.navigate('Legal');
               }}
             >
-              <Text style={styles.unverifiedLearnMoreText}>Read our Safety Guidelines</Text>
+              <Text style={styles.unverifiedLearnMoreText}>{t('screens.booking.read_our_safety_guideline')}</Text>
               <Ionicons name="arrow-forward" size={14} color={COLORS.gold} />
             </TouchableOpacity>
 
@@ -991,7 +991,7 @@ const handleDownloadPDF = async () => {
                 style={styles.unverifiedCancelBtn}
                 onPress={() => setShowUnverifiedModal(false)}
               >
-                <Text style={styles.unverifiedCancelBtnText}>Cancel Booking</Text>
+                <Text style={styles.unverifiedCancelBtnText}>{t('screens.booking.cancel_booking')}</Text>
               </TouchableOpacity>
               
               <TouchableOpacity
@@ -1001,7 +1001,7 @@ const handleDownloadPDF = async () => {
                   performBooking();
                 }}
               >
-                <Text style={styles.unverifiedProceedBtnText}>Proceed Anyway</Text>
+                <Text style={styles.unverifiedProceedBtnText}>{t('screens.booking.proceed_anyway')}</Text>
               </TouchableOpacity>
             </View>
           </View>

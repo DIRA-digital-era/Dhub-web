@@ -18,11 +18,13 @@ import {
 } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
 import { uploadListingMedia } from '../../utils/upload';
+import { useTranslation } from 'react-i18next';
 
 type EditListingNavigationProp = NativeStackNavigationProp<LandlordStackParamList>;
 const { width } = Dimensions.get('window');
 
 const EditListingScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<EditListingNavigationProp>();
   const route = useRoute();
   const { listingId } = route.params as { listingId: string };
@@ -301,14 +303,14 @@ const EditListingScreen: React.FC = () => {
           {isVideo && isProcessing && (
             <View style={[styles.videoOverlay, styles.processingOverlay]}>
               <ActivityIndicator size="small" color={colors.text} />
-              <Text style={styles.processingText}>Processing...</Text>
+              <Text style={styles.processingText}>{t('screens.editlisting.processing')}</Text>
             </View>
           )}
 
           {isVideo && isFailed && (
             <View style={[styles.videoOverlay, styles.failedOverlay]}>
               <Ionicons name="alert-circle" size={24} color={colors.error} />
-              <Text style={[styles.processingText, { color: colors.error }]}>Failed</Text>
+              <Text style={[styles.processingText, { color: colors.error }]}>{t('screens.editlisting.failed')}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -331,7 +333,7 @@ const EditListingScreen: React.FC = () => {
     return (
       <View style={styles.loader}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading property details...</Text>
+        <Text style={styles.loadingText}>{t('screens.editlisting.loading_property_details')}</Text>
       </View>
     );
   }
@@ -348,7 +350,7 @@ const EditListingScreen: React.FC = () => {
         >
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Edit Property</Text>
+        <Text style={styles.headerTitle}>{t('screens.editlisting.edit_property')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -361,11 +363,9 @@ const EditListingScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="images-outline" size={20} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Property Photos</Text>
+            <Text style={styles.sectionTitle}>{t('screens.editlisting.property_photos')}</Text>
           </View>
-          <Text style={styles.sectionSubtitle}>
-            Tap to preview, drag to reorder (coming soon)
-          </Text>
+          <Text style={styles.sectionSubtitle}>{t('screens.editlisting.tap_to_preview__drag_to_r')}</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -376,7 +376,7 @@ const EditListingScreen: React.FC = () => {
               onPress={pickMedia}
             >
               <Ionicons name="add-circle-outline" size={32} color={colors.primary} />
-              <Text style={styles.addMediaText}>Add Media</Text>
+              <Text style={styles.addMediaText}>{t('screens.editlisting.add_media')}</Text>
             </TouchableOpacity>
 
             {media.map((item, index) => {
@@ -394,7 +394,7 @@ const EditListingScreen: React.FC = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-            <Text style={styles.sectionTitle}>Description</Text>
+            <Text style={styles.sectionTitle}>{t('screens.editlisting.description')}</Text>
           </View>
           <TextInput
             style={[styles.input, styles.textArea]}
@@ -413,7 +413,7 @@ const EditListingScreen: React.FC = () => {
           <View style={[styles.section, styles.halfWidth]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="cash-outline" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Price (FCFA)</Text>
+              <Text style={styles.sectionTitle}>{t('screens.editlisting.price__fcfa')}</Text>
             </View>
             <TextInput
               style={styles.input}
@@ -428,7 +428,7 @@ const EditListingScreen: React.FC = () => {
           <View style={[styles.section, styles.halfWidth]}>
             <View style={styles.sectionHeader}>
               <Ionicons name="bed-outline" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Rooms</Text>
+              <Text style={styles.sectionTitle}>{t('screens.editlisting.rooms')}</Text>
             </View>
             <TextInput
               style={styles.input}
@@ -446,7 +446,7 @@ const EditListingScreen: React.FC = () => {
           <View style={styles.switchRow}>
             <View style={styles.switchLeft}>
               <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Available for Rent</Text>
+              <Text style={styles.sectionTitle}>{t('screens.editlisting.available_for_rent')}</Text>
             </View>
             <Switch
               value={available}
@@ -474,7 +474,7 @@ const EditListingScreen: React.FC = () => {
             ) : (
               <>
                 <Ionicons name="save-outline" size={20} color={colors.background} />
-                <Text style={styles.updateButtonText}>Save Changes</Text>
+                <Text style={styles.updateButtonText}>{t('screens.editlisting.save_changes')}</Text>
               </>
             )}
           </TouchableOpacity>
@@ -486,7 +486,7 @@ const EditListingScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             <Ionicons name="trash-outline" size={20} color={colors.error} />
-            <Text style={styles.deleteButtonText}>Delete Property</Text>
+            <Text style={styles.deleteButtonText}>{t('screens.editlisting.delete_property')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -499,10 +499,8 @@ const EditListingScreen: React.FC = () => {
         <View style={styles.overlay}>
           <View style={styles.progressCard}>
             <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.progressTitle}>Uploading Media...</Text>
-            <Text style={styles.progressSubtitle}>
-              Please do not close the app or turn off your screen.
-            </Text>
+            <Text style={styles.progressTitle}>{t('screens.editlisting.uploading_media')}</Text>
+            <Text style={styles.progressSubtitle}>{t('screens.editlisting.please_do_not_close_the_a')}</Text>
 
             <View style={{ width: '100%' }}>
               <View style={styles.progressBarContainer}>
@@ -526,7 +524,7 @@ const EditListingScreen: React.FC = () => {
                 }}
               >
                 <Ionicons name="close-circle-outline" size={20} color={colors.error} />
-                <Text style={[styles.deleteButtonText, { color: colors.error }]}>Cancel Upload</Text>
+                <Text style={[styles.deleteButtonText, { color: colors.error }]}>{t('screens.editlisting.cancel_upload')}</Text>
               </TouchableOpacity>
             </View>
           </View>

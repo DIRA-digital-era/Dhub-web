@@ -13,10 +13,12 @@ import { clearInitiateState, fetchPayments, initiateCollection, initiateVerifica
 import type { RootState } from '../../store/store';
 import { LandlordTabRouteProp } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
 
 const RECEIVER_NAME = 'DHUB';
 
 const PaymentsScreen: React.FC = () => {
+  const { t } = useTranslation();
   const dispatch = useAppDispatch();
 
   // Redux state
@@ -245,22 +247,22 @@ const PaymentsScreen: React.FC = () => {
           .total-row{border-top:2px solid #EAECEF;padding-top:10px;margin-top:10px;font-weight:bold}
           .footer{text-align:center;margin-top:40px;color:#7F8C8D;font-size:12px;border-top:1px solid #EAECEF;padding-top:20px}
         </style></head><body>
-        <div class="header"><h1>DHUB Payment Receipt</h1><p>Transaction ID: ${payment.transactionId}</p></div>
+        <div class="header"><h1>{t('screens.payment.dhub_payment_receipt')}</h1><p>Transaction ID: ${payment.transactionId}</p></div>
         <div class="section">
-          <div class="section-title">Transaction Details</div>
+          <div class="section-title">{t('screens.payment.transaction_details')}</div>
           <div class="row"><span class="label">Transaction ID:</span><span class="value">${payment.transactionId}</span></div>
           <div class="row"><span class="label">Description:</span><span class="value">${payment.description}</span></div>
           <div class="row"><span class="label">Date:</span><span class="value">${formatDate(payment.date)}</span></div>
           <div class="row"><span class="label">Status:</span><span class="value">${getStatusText(payment.status)}</span></div>
         </div>
         <div class="section">
-          <div class="section-title">Amount Details</div>
+          <div class="section-title">{t('screens.payment.amount_details')}</div>
           <div class="row"><span class="label">Amount:</span><span class="value">${formatCurrency(payment.amount)}</span></div>
           <div class="row"><span class="label">Fee:</span><span class="value">${formatCurrency(payment.fee || 0)}</span></div>
           <div class="row total-row"><span class="label">Net Amount:</span><span class="value">${formatCurrency(payment.netAmount || 0)}</span></div>
         </div>
         <div class="section">
-          <div class="section-title">Parties</div>
+          <div class="section-title">{t('screens.payment.parties')}</div>
           <div class="row"><span class="label">From:</span><span class="value">${payment.sender}</span></div>
           <div class="row"><span class="label">To:</span><span class="value">${RECEIVER_NAME} (${payment.receiver})</span></div>
         </div>
@@ -283,7 +285,7 @@ const PaymentsScreen: React.FC = () => {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.headerTitle}>Payments</Text>
+        <Text style={styles.headerTitle}>{t('screens.payment.payments')}</Text>
       </View>
 
       <View style={styles.tabContainer}>
@@ -291,24 +293,20 @@ const PaymentsScreen: React.FC = () => {
           style={[styles.tab, activeTab === 'history' && styles.activeTab]}
           onPress={() => setActiveTab('history')}
         >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>
-            Payment History
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>{t('screens.payment.payment_history')}</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'send' && styles.activeTab]}
           onPress={() => setActiveTab('send')}
         >
-          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>
-            Send Payment
-          </Text>
+          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>{t('screens.payment.send_payment')}</Text>
         </TouchableOpacity>
       </View>
 
       {activeTab === 'history' ? (
         <ScrollView style={styles.historyContainer}>
           <View style={styles.historyHeader}>
-            <Text style={styles.sectionTitle}>Recent Transactions</Text>
+            <Text style={styles.sectionTitle}>{t('screens.payment.recent_transactions')}</Text>
             <TouchableOpacity
               onPress={() => user?.id && dispatch(fetchPayments(user.id))}
               disabled={fetchingHistory}
@@ -322,7 +320,7 @@ const PaymentsScreen: React.FC = () => {
           {fetchingHistory ? (
             <View style={styles.loadingContainer}>
               <ActivityIndicator size="large" color="#D4AF37" />
-              <Text style={styles.loadingText}>Loading history...</Text>
+              <Text style={styles.loadingText}>{t('screens.payment.loading_history')}</Text>
             </View>
           ) : fetchError ? (
             <View style={styles.errorContainer}>
@@ -331,11 +329,11 @@ const PaymentsScreen: React.FC = () => {
                 style={styles.retryButton}
                 onPress={() => user?.id && dispatch(fetchPayments(user.id))}
               >
-                <Text style={styles.retryButtonText}>Retry</Text>
+                <Text style={styles.retryButtonText}>{t('screens.payment.retry')}</Text>
               </TouchableOpacity>
             </View>
           ) : payments.length === 0 ? (
-            <Text style={styles.emptyText}>No payment history yet.</Text>
+            <Text style={styles.emptyText}>{t('screens.payment.no_payment_history_yet')}</Text>
           ) : (
             payments.map((payment: any) => (
               <TouchableOpacity
@@ -375,12 +373,12 @@ const PaymentsScreen: React.FC = () => {
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Receiver</Text>
+            <Text style={styles.label}>{t('screens.payment.receiver')}</Text>
             <TextInput style={[styles.input, styles.disabledInput]} value={RECEIVER_NAME} editable={false} />
           </View>
 
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Description</Text>
+            <Text style={styles.label}>{t('screens.payment.description')}</Text>
             <TextInput
               style={[styles.input, styles.textArea, (boostParams || verificationParams) && styles.disabledInput]}
               value={boostParams ? 'Boost Listing' : description}
@@ -398,7 +396,7 @@ const PaymentsScreen: React.FC = () => {
           >
             {initiating
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.sendButtonText}>Send Payment</Text>
+              : <Text style={styles.sendButtonText}>{t('screens.payment.send_payment')}</Text>
             }
           </TouchableOpacity>
         </ScrollView>
@@ -408,7 +406,7 @@ const PaymentsScreen: React.FC = () => {
       <Modal visible={showReceiptModal} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={styles.modalContainer}>
           <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Payment Receipt</Text>
+            <Text style={styles.modalTitle}>{t('screens.payment.payment_receipt')}</Text>
             <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
               <Text style={styles.closeButtonText}>×</Text>
             </TouchableOpacity>
@@ -418,11 +416,11 @@ const PaymentsScreen: React.FC = () => {
             <ScrollView style={styles.receiptContent}>
               <View style={styles.qrContainer}>
                 <QRCode value={generateQRData(selectedPayment)} size={200} color="#000" backgroundColor="#fff" />
-                <Text style={styles.qrHelpText}>Scan to verify transaction</Text>
+                <Text style={styles.qrHelpText}>{t('screens.payment.scan_to_verify_transactio')}</Text>
               </View>
 
               <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Transaction Details</Text>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.transaction_details')}</Text>
                 {[
                   ['Transaction ID', selectedPayment.transactionId],
                   ['Description', selectedPayment.description],
@@ -437,7 +435,7 @@ const PaymentsScreen: React.FC = () => {
               </View>
 
               <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Amount Details</Text>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.amount_details')}</Text>
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>Amount:</Text>
                   <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.amount)}</Text>
@@ -453,7 +451,7 @@ const PaymentsScreen: React.FC = () => {
               </View>
 
               <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>Parties</Text>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.parties')}</Text>
                 <View style={styles.receiptRow}>
                   <Text style={styles.receiptLabel}>From:</Text>
                   <Text style={styles.receiptValue}>{selectedPayment.sender}</Text>
@@ -472,11 +470,11 @@ const PaymentsScreen: React.FC = () => {
                 >
                   {pdfLoading
                     ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.downloadButtonText}>Download PDF</Text>
+                    : <Text style={styles.downloadButtonText}>{t('screens.payment.download_pdf')}</Text>
                   }
                 </TouchableOpacity>
                 <TouchableOpacity style={styles.closeReceiptButton} onPress={() => setShowReceiptModal(false)}>
-                  <Text style={styles.closeReceiptText}>Close</Text>
+                  <Text style={styles.closeReceiptText}>{t('screens.payment.close')}</Text>
                 </TouchableOpacity>
               </View>
             </ScrollView>

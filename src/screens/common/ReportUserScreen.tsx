@@ -6,8 +6,10 @@ import { ActivityIndicator, KeyboardAvoidingView, Platform, ScrollView, StyleShe
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from "../../utils/supabaseClient";
 import { useTheme } from "../../context/ThemeContext";
+import { useTranslation } from 'react-i18next';
 
 export default function ReportUserScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { user } = useAuth();
   
@@ -88,9 +90,7 @@ export default function ReportUserScreen() {
 
       <ScrollView contentContainerStyle={styles.scrollContainer} keyboardShouldPersistTaps="handled">
         <View style={styles.section}>
-          <Text style={styles.description}>
-            If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report.
-          </Text>
+          <Text style={styles.description}>{t('screens.reportuser.if_you_have_experienced_i')}</Text>
 
           <Text style={styles.label}>{targetLabel} Name *</Text>
           <TextInput
@@ -128,7 +128,7 @@ export default function ReportUserScreen() {
             {loading ? (
               <ActivityIndicator color={colors.text} />
             ) : (
-              <Text style={styles.submitText}>Submit Report</Text>
+              <Text style={styles.submitText}>{t('screens.reportuser.submit_report')}</Text>
             )}
           </TouchableOpacity>
         </View>

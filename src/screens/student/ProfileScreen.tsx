@@ -3,15 +3,18 @@ import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useNavigation } from "@react-navigation/native";
 import React, { useEffect, useState } from "react";
-import { useTranslation } from "react-i18next";
+
 import { KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import { useTheme } from "../../context/ThemeContext";
 import { useAuth } from "../../hooks/useAuth";
 import { supabase } from '../../utils/supabaseClient';
 import ActionGateModal from '../../components/ActionGateModal';
+import { useTranslation } from 'react-i18next';
+
 
 const showAlert = (title: string, message?: string, buttons?: any[]) => {
-  if (Platform.OS === 'web') {
+  const { t } = useTranslation();
+if (Platform.OS === 'web') {
     const msg = message ? `${title}\n${message}` : title;
     // For simple ok/cancel, find the first button that isn't cancel
     if (buttons && buttons.length > 0) {
@@ -247,7 +250,7 @@ export default function ProfileScreen() {
           <Text style={[styles.label, { color: colors.textSecondary }]}>{t('profile.momo')}</Text>
           <TextInput value={momo} onChangeText={setMomo} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={9} placeholderTextColor={colors.textSecondary} />
 
-          <Text style={[styles.label, { color: colors.textSecondary }]}>Age</Text>
+          <Text style={[styles.label, { color: colors.textSecondary }]}>{t('screens.profile.age')}</Text>
           <TextInput value={age} onChangeText={setAge} style={[styles.input, { backgroundColor: colors.background, borderColor: colors.border, color: colors.text }]} keyboardType="number-pad" maxLength={2} placeholder="e.g. 22" placeholderTextColor={colors.textSecondary} />
 
           <Text style={[styles.label, { color: colors.textSecondary }]}>Profession / Level of Study</Text>

@@ -21,6 +21,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { StudentStackParamList } from '../../types';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 type ThreadItemProcessed = {
   threadId: string;
@@ -32,12 +33,13 @@ type ThreadItemProcessed = {
 };
 
 const STATIC_COLORS = {
-  success: '#34C759',
+success: '#34C759',
 } as const;
 
 type ChatWrapperNavProp = NativeStackNavigationProp<StudentStackParamList>;
 
 const ChatWrapper: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<ChatWrapperNavProp>();
   const route = useRoute<RouteProp<{ Chat: { threadId?: string } }, 'Chat'>>();
   const currentUser = useSelector((state: RootState) => state.auth.user);
@@ -168,7 +170,7 @@ const ChatWrapper: React.FC = () => {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text>Loading user...</Text>
+        <Text>{t('screens.chatwrapper.loading_user')}</Text>
       </View>
     );
   }
@@ -239,7 +241,7 @@ const ChatWrapper: React.FC = () => {
       {/* Header */}
       <SafeAreaView style={styles.headerSafeArea}>
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Chats</Text>
+          <Text style={styles.headerTitle}>{t('screens.chatwrapper.chats')}</Text>
           <TouchableOpacity style={styles.newChatButton}>
             <Ionicons name="create-outline" size={24} color={COLORS.primary} />
           </TouchableOpacity>
@@ -249,7 +251,7 @@ const ChatWrapper: React.FC = () => {
       {loading ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={COLORS.primary} />
-          <Text style={styles.loadingText}>Loading conversations...</Text>
+          <Text style={styles.loadingText}>{t('screens.chatwrapper.loading_conversations')}</Text>
         </View>
       ) : visibleThreads.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -258,10 +260,8 @@ const ChatWrapper: React.FC = () => {
             size={64}
             color={COLORS.textTertiary}
           />
-          <Text style={styles.emptyTitle}>No conversations yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Start a new conversation to chat with others
-          </Text>
+          <Text style={styles.emptyTitle}>{t('screens.chatwrapper.no_conversations_yet')}</Text>
+          <Text style={styles.emptySubtitle}>{t('screens.chatwrapper.start_a_new_conversation')}</Text>
         </View>
       ) : (
         <FlatList

@@ -10,12 +10,14 @@ import { useNavigation, useRoute } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { StudentStackParamList } from "../../types";
 import { useTheme } from "../../context/ThemeContext";
+import { useTranslation } from 'react-i18next';
 
 type ListingReviewParams = {
   listing_id: string;
 };
 
 export default function ListingReviewScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigation =
     useNavigation<NativeStackNavigationProp<StudentStackParamList>>();
@@ -104,12 +106,12 @@ export default function ListingReviewScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.heading}>Rate this Listing</Text>
-        <Text style={styles.subheading}>Tap stars to select your rating</Text>
+        <Text style={styles.heading}>{t('screens.listingreview.rate_this_listing')}</Text>
+        <Text style={styles.subheading}>{t('screens.listingreview.tap_stars_to_select_your')}</Text>
 
         {renderStars()}
 
-        <Text style={styles.label}>Optional Comment</Text>
+        <Text style={styles.label}>{t('screens.listingreview.optional_comment')}</Text>
         <TextInput
           value={comment}
           onChangeText={setComment}
@@ -134,7 +136,7 @@ export default function ListingReviewScreen() {
           onPress={() => navigation.goBack()}
         >
           <Ionicons name="arrow-back" size={22} color={colors.text} />
-          <Text style={styles.backBtnText}>Back to Booking</Text>
+          <Text style={styles.backBtnText}>{t('screens.listingreview.back_to_booking')}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>

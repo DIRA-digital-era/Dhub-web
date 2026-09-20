@@ -274,7 +274,7 @@ const ListingDetailsScreen: React.FC = () => {
             ) : (
               <View style={[styles.mediaItem, styles.videoFallback]}>
                 <Ionicons name="film-outline" size={36} color={COLORS.greyMedium} />
-                <Text style={styles.videoFallbackText}>Video</Text>
+                <Text style={styles.videoFallbackText}>{t('screens.listingdetails.video')}</Text>
               </View>
             )}
 
@@ -485,7 +485,7 @@ const ListingDetailsScreen: React.FC = () => {
             activeOpacity={0.8}
           >
             <Ionicons name="arrow-redo" size={24} color={COLORS.white} />
-            <Text style={[styles.quickActionText, { color: COLORS.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
+            <Text style={[styles.quickActionText, { color: COLORS.white, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>{t('screens.listingdetails.share_this_listing')}</Text>
           </TouchableOpacity>
 
           {/* Description */}
@@ -630,7 +630,7 @@ const ListingDetailsScreen: React.FC = () => {
               onPress={() => navigation.navigate('BookingDetails', { bookingId: existingBookingId })}
             >
               <Ionicons name="eye-outline" size={20} color={COLORS.greyDark} />
-              <Text style={[styles.bookButtonText, { color: COLORS.greyDark, fontSize: 15 }]}>View Booking</Text>
+              <Text style={[styles.bookButtonText, { color: COLORS.greyDark, fontSize: 15 }]}>{t('screens.listingdetails.view_booking')}</Text>
             </TouchableOpacity>
           </View>
         ) : (

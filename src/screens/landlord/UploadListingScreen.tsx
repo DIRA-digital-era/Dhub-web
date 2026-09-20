@@ -351,7 +351,7 @@ const UploadListingScreen: React.FC = () => {
         >
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Add New Property</Text>
+        <Text style={styles.headerTitle}>{t('screens.uploadlisting.add_new_property')}</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -389,9 +389,7 @@ const UploadListingScreen: React.FC = () => {
                 <Ionicons name="images-outline" size={20} color={colors.primary} />
                 <Text style={styles.sectionTitle}>Property Photos & Videos</Text>
               </View>
-              <Text style={styles.sectionSubtitle}>
-                Add up to 10 photos or videos of your property
-              </Text>
+              <Text style={styles.sectionSubtitle}>{t('screens.uploadlisting.add_up_to_10_photos_or_vi')}</Text>
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false} 
@@ -403,7 +401,7 @@ const UploadListingScreen: React.FC = () => {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="camera-outline" size={32} color={colors.primary} />
-                  <Text style={styles.addPhotoText}>Add Media</Text>
+                  <Text style={styles.addPhotoText}>{t('screens.uploadlisting.add_media')}</Text>
                 </TouchableOpacity>
 
                 {media.map((item, index) => (
@@ -418,11 +416,11 @@ const UploadListingScreen: React.FC = () => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="home-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Basic Information</Text>
+                <Text style={styles.sectionTitle}>{t('screens.uploadlisting.basic_information')}</Text>
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Listing Type <Text style={styles.requiredStar}>*</Text></Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.listing_type')}<Text style={styles.requiredStar}>*</Text></Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                   {LISTING_TYPES.map((type) => (
                     <TouchableOpacity
@@ -439,7 +437,7 @@ const UploadListingScreen: React.FC = () => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Stay Type <Text style={styles.requiredStar}>*</Text></Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.stay_type')}<Text style={styles.requiredStar}>*</Text></Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.chipScroll}>
                   {STAY_TYPES.map((type) => (
                     <TouchableOpacity
@@ -456,7 +454,7 @@ const UploadListingScreen: React.FC = () => {
               </View>
               
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Property Title <Text style={styles.requiredStar}>*</Text></Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.property_title')}<Text style={styles.requiredStar}>*</Text></Text>
                 <TextInput
                   style={[styles.input, focusedInput === 'title' && styles.inputFocused]}
                   value={form.title}
@@ -469,7 +467,7 @@ const UploadListingScreen: React.FC = () => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Description</Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.description')}</Text>
                 <TextInput
                   style={[styles.input, styles.textArea, focusedInput === 'description' && styles.inputFocused]}
                   value={form.description}
@@ -521,7 +519,7 @@ const UploadListingScreen: React.FC = () => {
                 </View>
 
                 <View style={[styles.inputGroup, styles.halfWidthRight]}>
-                  <Text style={styles.label}>Number of Rooms</Text>
+                  <Text style={styles.label}>{t('screens.uploadlisting.number_of_rooms')}</Text>
                   <TextInput
                     style={[styles.input, focusedInput === 'rooms' && styles.inputFocused]}
                     value={form.rooms}
@@ -540,11 +538,11 @@ const UploadListingScreen: React.FC = () => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="location-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Location</Text>
+                <Text style={styles.sectionTitle}>{t('screens.uploadlisting.location')}</Text>
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>Street Address <Text style={styles.requiredStar}>*</Text></Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.street_address')}<Text style={styles.requiredStar}>*</Text></Text>
                 <TextInput
                   style={[styles.input, focusedInput === 'address' && styles.inputFocused]}
                   value={form.address}
@@ -557,7 +555,7 @@ const UploadListingScreen: React.FC = () => {
               </View>
 
               <View style={styles.inputGroup}>
-                <Text style={styles.label}>City <Text style={styles.requiredStar}>*</Text></Text>
+                <Text style={styles.label}>{t('screens.uploadlisting.city')}<Text style={styles.requiredStar}>*</Text></Text>
                 <TextInput
                   style={[styles.input, focusedInput === 'city' && styles.inputFocused]}
                   value={form.city}
@@ -583,7 +581,7 @@ const UploadListingScreen: React.FC = () => {
                     Selected: {form.latitude.toFixed(5)}, {form.longitude.toFixed(5)}
                   </Text>
                 ) : (
-                  <Text style={styles.locationPickerText}>Tap to select location on map</Text>
+                  <Text style={styles.locationPickerText}>{t('screens.uploadlisting.tap_to_select_location_on')}</Text>
                 )}
               </TouchableOpacity>
             </View>
@@ -610,9 +608,7 @@ const UploadListingScreen: React.FC = () => {
               
               <View style={styles.termsHint}>
                 <Ionicons name="information-circle-outline" size={16} color={colors.textSecondary} />
-                <Text style={styles.hintText}>
-                  Students will review and agree to these terms before booking
-                </Text>
+                <Text style={styles.hintText}>{t('screens.uploadlisting.students_will_review_and')}</Text>
               </View>
             </View>
 
@@ -628,7 +624,7 @@ const UploadListingScreen: React.FC = () => {
               ) : (
                 <>
                   <Ionicons name="checkmark-circle-outline" size={20} color={colors.background} />
-                  <Text style={styles.submitBtnText}>Create Property Listing</Text>
+                  <Text style={styles.submitBtnText}>{t('screens.uploadlisting.create_property_listing')}</Text>
                 </>
               )}
             </TouchableOpacity>
@@ -642,10 +638,8 @@ const UploadListingScreen: React.FC = () => {
         <View style={styles.overlay}>
           <View style={styles.progressCard}>
             <ActivityIndicator size="large" color={colors.primary} style={{ marginBottom: 16 }} />
-            <Text style={styles.progressTitle}>Uploading Media...</Text>
-            <Text style={styles.progressSubtitle}>
-              Please do not close the app or turn off your screen.
-            </Text>
+            <Text style={styles.progressTitle}>{t('screens.uploadlisting.uploading_media')}</Text>
+            <Text style={styles.progressSubtitle}>{t('screens.uploadlisting.please_do_not_close_the_a')}</Text>
 
             <View style={{ width: '100%' }}>
               <View style={styles.progressBarContainer}>
@@ -662,7 +656,7 @@ const UploadListingScreen: React.FC = () => {
                 style={[styles.submitBtn, { backgroundColor: '#E74C3C', marginTop: 24, width: '100%' }]} 
                 onPress={handleCancelUpload}
               >
-                <Text style={styles.submitBtnText}>Cancel Upload</Text>
+                <Text style={styles.submitBtnText}>{t('screens.uploadlisting.cancel_upload')}</Text>
               </TouchableOpacity>
             </View>
           </View>

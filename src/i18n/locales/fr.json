@@ -21,7 +21,9 @@
     "mins_ago": "il y a {{count}}m",
     "hours_ago": "il y a {{count}}h",
     "days_ago": "il y a {{count}}j",
-    "close": "Fermer"
+    "close": "Fermer",
+    "delete": "Delete (FR)",
+    "home": "Home (FR)"
   },
   "profile": {
     "title": "Mon Profil",
@@ -52,7 +54,8 @@
     "delete_confirm_msg": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
     "delete": "Supprimer",
     "session_missing": "Session manquante",
-    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter."
+    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter.",
+    "theme_label": "Theme Label (FR)"
   },
   "listing": {
     "available": "Disponible",
@@ -87,7 +90,8 @@
     "no_description_card": "Aucune description disponible.",
     "spacious": "Spacieux",
     "available_now": "Disponible maintenant",
-    "view_details": "Voir les détails"
+    "view_details": "Voir les détails",
+    "video": "Video (FR)"
   },
   "home": {
     "title": "DHUB",
@@ -287,7 +291,9 @@
     "yesterday": "Hier",
     "empty_title": "Démarrer la conversation",
     "empty_subtitle": "Dites bonjour ! Vos messages sont privés entre vous et {{name}}.",
-    "other_user": "l'autre utilisateur"
+    "other_user": "l'autre utilisateur",
+    "delete_chat_confirm": "Delete Chat Confirm (FR)",
+    "delete_chat": "Delete Chat (FR)"
   },
   "bookings": {
     "title": "Mes Réservations",
@@ -406,6 +412,311 @@
     "agree_tos": "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité",
     "signing_up": "Inscription en cours...",
     "has_account": "Vous avez déjà un compte ?",
-    "sign_in_link": "Se connecter"
+    "sign_in_link": "Se connecter",
+    "email_or_phone_placeholder": "Email Or Phone Placeholder (FR)",
+    "resend_otp": "Resend Otp (FR)",
+    "secure_account_msg": "Secure Account Msg (FR)",
+    "reset_failed": "Reset Failed (FR)",
+    "password_reset_success": "Password Reset Success (FR)",
+    "back_to_signin": "Back To Signin (FR)",
+    "forgot_password_title": "Forgot Password Title (FR)",
+    "enter_email_or_phone": "Enter Email Or Phone (FR)",
+    "invalid_phone_cameroon": "Invalid Phone Cameroon (FR)",
+    "passwords_no_match": "Passwords No Match (FR)",
+    "reset_password_title": "Reset Password Title (FR)",
+    "password_min_length": "Password Min Length (FR)",
+    "resend_in": "Resend In (FR)",
+    "reset_password_btn": "Reset Password Btn (FR)",
+    "update_failed": "Update Failed (FR)",
+    "forgot_password_subtitle": "Forgot Password Subtitle (FR)",
+    "enter_otp_sent_to": "Enter Otp Sent To (FR)",
+    "enter_otp_error": "Enter Otp Error (FR)",
+    "send_reset_link": "Send Reset Link (FR)"
+  },
+  "screens": {
+    "networkerror": {
+      "oops__no_internet": "Oops! No Internet (FR)",
+      "please_check_your_connect": "Please check your connection and try again.\n        If this error persists you can contact support. (FR)",
+      "retry": "Retry (FR)"
+    },
+    "emailverification": {
+      "finalizing_account": "Finalizing Account (FR)",
+      "back_to_sign_up": "Back to Sign Up (FR)"
+    },
+    "signin": {
+      "welcome_back": "Welcome Back (FR)",
+      "sign_in_to_your_account": "Sign in to your account (FR)",
+      "phone": "Phone (FR)",
+      "email": "Email (FR)",
+      "or_send_me_a_magic_link": "Or send me a Magic Link (No password) (FR)",
+      "continue_with_google": "Continue with Google (FR)",
+      "forgot_password": "Forgot Password? (FR)",
+      "don_t_have_an_account": "Don't have an account? (FR)",
+      "sign_up": "Sign Up (FR)"
+    },
+    "signup": {
+      "create_account": "Create Account (FR)",
+      "join_dhub_to_manage_your": "Join Dhub to manage your properties (FR)",
+      "i_agree_to_the": "I agree to the (FR)",
+      "terms_of_service": "Terms of Service (FR)",
+      "privacy_policy": "Privacy Policy (FR)",
+      "you_must_accept_the_terms": "You must accept the Terms (FR)",
+      "sign_up_with_google": "Sign Up with Google (FR)",
+      "already_have_an_account": "Already have an account? (FR)",
+      "sign_in": "Sign In (FR)",
+      "creating_your_account": "Creating Your Account (FR)",
+      "setting_up_your_secure_pr": "Setting up your secure profile... (FR)",
+      "cancel": "Cancel (FR)"
+    },
+    "verifyotp": {
+      "verify_whatsapp_otp": "Verify WhatsApp OTP (FR)"
+    },
+    "chatwrapper": {
+      "loading_user": "Loading user... (FR)",
+      "chats": "Chats (FR)",
+      "loading_conversations": "Loading conversations... (FR)",
+      "no_conversations_yet": "No conversations yet (FR)",
+      "start_a_new_conversation": "Start a new conversation to chat with others (FR)"
+    },
+    "downloadapp": {
+      "mobile_app_required": "Mobile App Required (FR)",
+      "payments_and_full_booking": "Payments and full booking management are only available on the DHUB mobile app.\n          Download now to complete your transaction. (FR)",
+      "android": "Android (FR)",
+      "ios": "iOS (FR)",
+      "go_back": "Go Back (FR)"
+    },
+    "legal": {
+      "back": "Back (FR)"
+    },
+    "reportbug": {
+      "report_a_bug": "Report a Bug (FR)",
+      "found_a_technical_issue": "Found a technical issue, crash, or visual bug? Let our developers know so we can fix it! (FR)",
+      "subject__optional": "Subject (Optional) (FR)",
+      "send_email_to_support": "Send Email to Support (FR)"
+    },
+    "reportuser": {
+      "if_you_have_experienced_i": "If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report. (FR)",
+      "submit_report": "Submit Report (FR)"
+    },
+    "support": {
+      "connecting_to_support": "Connecting to support... (FR)",
+      "dhub_support": "DHUB Support (FR)",
+      "we_re_online": "We're online (FR)",
+      "call": "Call (FR)",
+      "quick_topics": "Quick topics (FR)",
+      "how_can_we_help": "How can we help? (FR)",
+      "send_a_message_or_tap_a_q": "Send a message or tap a quick topic above to get started. (FR)"
+    },
+    "updaterequired": {
+      "update_now": "Update Now (FR)",
+      "maybe_later": "Maybe Later (FR)"
+    },
+    "approval": {
+      "review_booking": "Review Booking (FR)",
+      "listing": "Listing (FR)",
+      "tenant_information": "Tenant Information (FR)",
+      "booking_details": "Booking Details (FR)",
+      "caution_escrow": "Caution Escrow (FR)",
+      "dispute_caution_escrow": "Dispute Caution Escrow (FR)",
+      "approve_refund__no_damage": "Approve Refund (No Damages) (FR)",
+      "dispute_damages": "Dispute Damages (FR)",
+      "rate_tenant": "Rate Tenant (FR)",
+      "cancel": "Cancel (FR)",
+      "submit": "Submit (FR)",
+      "tenant_reviews": "Tenant Reviews (FR)",
+      "close": "Close (FR)",
+      "no_written_feedback": "No written feedback. (FR)"
+    },
+    "bookings": {
+      "bookings": "Bookings (FR)",
+      "loading_bookings": "Loading bookings... (FR)",
+      "no_bookings_yet": "No bookings yet (FR)",
+      "when_students_book_your_p": "When students book your properties, they'll appear here (FR)",
+      "tap_to_review_request": "Tap to Review Request (FR)"
+    },
+    "boost": {
+      "boost_listing": "Boost Listing (FR)",
+      "choose_a_boost_plan": "Choose a Boost Plan (FR)",
+      "why_boost": "Why Boost? (FR)",
+      "boosting_your_listing_mak": "Boosting your listing makes it appear first in search results and highlights it for maximum visibility.\n            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make! (FR)"
+    },
+    "dashboard": {
+      "welcome_back": "Welcome back (FR)"
+    },
+    "editlisting": {
+      "processing": "Processing... (FR)",
+      "failed": "Failed (FR)",
+      "loading_property_details": "Loading property details... (FR)",
+      "edit_property": "Edit Property (FR)",
+      "property_photos": "Property Photos (FR)",
+      "tap_to_preview__drag_to_r": "Tap to preview, drag to reorder (coming soon) (FR)",
+      "add_media": "Add Media (FR)",
+      "description": "Description (FR)",
+      "price__fcfa": "Price (FCFA) (FR)",
+      "rooms": "Rooms (FR)",
+      "available_for_rent": "Available for Rent (FR)",
+      "save_changes": "Save Changes (FR)",
+      "delete_property": "Delete Property (FR)",
+      "uploading_media": "Uploading Media... (FR)",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (FR)",
+      "cancel_upload": "Cancel Upload (FR)"
+    },
+    "kycverification": {
+      "upload_document": "Upload Document (FR)",
+      "kyc_verification": "KYC Verification (FR)",
+      "verified_successfully": "Verified Successfully (FR)",
+      "your_kyc_verification_has": "Your KYC verification has been approved. You can now create and manage property listings. (FR)",
+      "verification_pending": "Verification Pending (FR)",
+      "processing": "Processing (FR)",
+      "your_docs_have_been_submi": "Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run. (FR)",
+      "want_to_resubmit": "Want to resubmit? (FR)",
+      "personal_information": "Personal Information (FR)",
+      "identity_verification": "Identity Verification (FR)",
+      "upload_clear_photos_of_yo": "Upload clear photos of your government-issued ID and a selfie holding the ID. (FR)",
+      "property_credentials": "Property Credentials (FR)",
+      "provide_documents_proving": "Provide documents proving you own or manage properties at your address. (FR)"
+    },
+    "listingdetails": {
+      "loading_property_details": "Loading property details... (FR)",
+      "unable_to_load_property": "Unable to load property (FR)",
+      "retry": "Retry (FR)",
+      "go_back": "Go Back (FR)",
+      "property_details": "Property Details (FR)",
+      "share_this_listing": "Share this listing (FR)",
+      "available_for_rent": "Available for Rent (FR)",
+      "description": "Description (FR)",
+      "location": "Location (FR)",
+      "view_map": "View Map (FR)",
+      "property_videos": "Property Videos (FR)",
+      "landlord_information": "Landlord Information (FR)",
+      "verify": "Verify (FR)",
+      "why_should_i_verify_my_li": "Why should I verify my listing? (FR)",
+      "boost": "Boost (FR)",
+      "delete": "Delete (FR)",
+      "why_verify_your_listing": "Why verify your listing? (FR)",
+      "i_understand": "I understand (FR)",
+      "request_verification": "Request Verification (FR)",
+      "cancel": "Cancel (FR)",
+      "video": "Video (FR)",
+      "view_booking": "View Booking (FR)"
+    },
+    "managelistings": {
+      "please_log_in_to_manage_l": "Please log in to manage listings. (FR)",
+      "loading_your_listings": "Loading your listings... (FR)",
+      "my_properties": "My Properties (FR)",
+      "no_listings_yet": "No listings yet (FR)",
+      "start_by_adding_your_firs": "Start by adding your first property (FR)",
+      "add_property": "Add Property (FR)",
+      "total_properties": "Total Properties (FR)",
+      "active": "Active (FR)",
+      "property_photos": "Property Photos (FR)",
+      "edit": "Edit (FR)",
+      "delete": "Delete (FR)"
+    },
+    "payment": {
+      "dhub_payment_receipt": "DHUB Payment Receipt (FR)",
+      "transaction_details": "Transaction Details (FR)",
+      "amount_details": "Amount Details (FR)",
+      "parties": "Parties (FR)",
+      "payments": "Payments (FR)",
+      "payment_history": "Payment History (FR)",
+      "send_payment": "Send Payment (FR)",
+      "recent_transactions": "Recent Transactions (FR)",
+      "loading_history": "Loading history... (FR)",
+      "retry": "Retry (FR)",
+      "no_payment_history_yet": "No payment history yet. (FR)",
+      "receiver": "Receiver (FR)",
+      "description": "Description (FR)",
+      "payment_receipt": "Payment Receipt (FR)",
+      "scan_to_verify_transactio": "Scan to verify transaction (FR)",
+      "download_pdf": "Download PDF (FR)",
+      "close": "Close (FR)",
+      "amount": "Amount (FR)",
+      "payable_to": "Payable To (FR)",
+      "this_is_the": "This is the (FR)",
+      "initial_deposit": "Initial Deposit (FR)",
+      "this_is_your": "This is your (FR)",
+      "remaining_rent_balance": "remaining rent balance (FR)",
+      "after_your_initial_deposi": "after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property. (FR)",
+      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee (FR)",
+      "your_momo_phone_number": "Your MoMo Phone Number (FR)",
+      "enter_the_momo_number_tha": "Enter the MoMo number that will receive the payment prompt. (FR)",
+      "a_payment_prompt_has_been": "A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment. (FR)",
+      "print_pdf": "Print PDF (FR)"
+    },
+    "uploadlisting": {
+      "add_new_property": "Add New Property (FR)",
+      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property (FR)",
+      "add_media": "Add Media (FR)",
+      "basic_information": "Basic Information (FR)",
+      "listing_type": "Listing Type (FR)",
+      "stay_type": "Stay Type (FR)",
+      "property_title": "Property Title (FR)",
+      "description": "Description (FR)",
+      "number_of_rooms": "Number of Rooms (FR)",
+      "location": "Location (FR)",
+      "street_address": "Street Address (FR)",
+      "city": "City (FR)",
+      "tap_to_select_location_on": "Tap to select location on map (FR)",
+      "students_will_review_and": "Students will review and agree to these terms before booking (FR)",
+      "create_property_listing": "Create Property Listing (FR)",
+      "uploading_media": "Uploading Media... (FR)",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (FR)",
+      "cancel_upload": "Cancel Upload (FR)"
+    },
+    "bookingdetails": {
+      "information_locked": "Information Locked (FR)",
+      "complete_your_booking_to": "Complete your booking to reveal the exact coordinates and landlord contact details. (FR)",
+      "under_review_by_dhub": "Under Review by DHUB (FR)",
+      "submit_evidence": "Submit Evidence (FR)",
+      "confirm_i_have_moved_in": "Confirm I Have Moved In (FR)",
+      "move_in_confirmed_by_you": "Move-In Confirmed by You (FR)",
+      "take_entry_picture": "Take Entry Picture (FR)",
+      "take_exit_picture": "Take Exit Picture (FR)",
+      "awaiting_landlord_approva": "Awaiting Landlord Approval (FR)",
+      "the_landlord_must_review": "The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking. (FR)",
+      "cancellation_reason": "Cancellation Reason (FR)",
+      "back": "Back (FR)"
+    },
+    "booking": {
+      "unverified_property": "Unverified Property (FR)",
+      "property_may_not_match_th": "Property may not match the photos (FR)",
+      "promised_amenities_could": "Promised amenities could be missing (FR)",
+      "you_may_risk_losing_your": "You may risk losing your caution fee (FR)",
+      "read_our_safety_guideline": "Read our Safety Guidelines (FR)",
+      "cancel_booking": "Cancel Booking (FR)",
+      "proceed_anyway": "Proceed Anyway (FR)"
+    },
+    "favorites": {
+      "view_details": "View Details (FR)",
+      "no_favorites_yet": "No Favorites Yet (FR)",
+      "start_exploring_propertie": "Start exploring properties and tap the heart icon to save your favorites here (FR)",
+      "explore_properties": "Explore Properties (FR)",
+      "loading_your_favorites": "Loading your favorites... (FR)",
+      "my_favorites": "My Favorites (FR)"
+    },
+    "home": {
+      "can_t_find_what_you_re_lo": "Can't find what you're looking for? (FR)",
+      "notify_me": "Notify Me (FR)",
+      "fill_out_the_details_of_t": "Fill out the details of the property you need. We'll search for it and notify you as soon as it's available! (FR)",
+      "preferred_location": "Preferred Location (FR)",
+      "budget__fcfa": "Budget (FCFA) (FR)",
+      "specific_requirements": "Specific Requirements (FR)",
+      "submit_request": "Submit Request (FR)"
+    },
+    "listingreview": {
+      "rate_this_listing": "Rate this Listing (FR)",
+      "tap_stars_to_select_your": "Tap stars to select your rating (FR)",
+      "optional_comment": "Optional Comment (FR)",
+      "back_to_booking": "Back to Booking (FR)"
+    },
+    "profile": {
+      "age": "Age (FR)"
+    },
+    "viewbookings": {
+      "active": "Active (FR)",
+      "pending": "Pending (FR)",
+      "past": "Past (FR)"
+    }
   }
 }

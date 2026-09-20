@@ -1096,10 +1096,8 @@ export default function BookingDetails() {
             ) : (
               <View style={styles.lockedContainer}>
                 <Ionicons name="lock-closed" size={32} color={COLORS.greyMedium} />
-                <Text style={styles.lockedTitle}>Information Locked</Text>
-                <Text style={styles.lockedText}>
-                  Complete your booking to reveal the exact coordinates and landlord contact details.
-                </Text>
+                <Text style={styles.lockedTitle}>{t('screens.bookingdetails.information_locked')}</Text>
+                <Text style={styles.lockedText}>{t('screens.bookingdetails.complete_your_booking_to')}</Text>
               </View>
             )}
           </View>
@@ -1133,7 +1131,7 @@ export default function BookingDetails() {
 
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 10 }}>
                     <Ionicons name="checkmark-circle" size={16} color={COLORS.success} />
-                    <Text style={{ color: COLORS.success, marginLeft: 4, fontWeight: '600' }}>Under Review by DHUB</Text>
+                    <Text style={{ color: COLORS.success, marginLeft: 4, fontWeight: '600' }}>{t('screens.bookingdetails.under_review_by_dhub')}</Text>
                   </View>
                 </View>
               ) : (
@@ -1172,7 +1170,7 @@ export default function BookingDetails() {
                     onPress={handleSubmitDisputeEvidence}
                     disabled={isSubmittingDispute}
                   >
-                    {isSubmittingDispute ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.payButtonText}>Submit Evidence</Text>}
+                    {isSubmittingDispute ? <ActivityIndicator size="small" color={COLORS.white} /> : <Text style={styles.payButtonText}>{t('screens.bookingdetails.submit_evidence')}</Text>}
                   </TouchableOpacity>
                 </View>
               )}
@@ -1204,7 +1202,7 @@ export default function BookingDetails() {
                   activeOpacity={0.7}
                 >
                   <Ionicons name="checkmark-done-circle-outline" size={20} color={COLORS.white} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.white }]}>Confirm I Have Moved In</Text>
+                  <Text style={[styles.actionButtonText, { color: COLORS.white }]}>{t('screens.bookingdetails.confirm_i_have_moved_in')}</Text>
                   <Ionicons name="chevron-forward" size={18} color={COLORS.white} style={styles.actionArrow} />
                 </TouchableOpacity>
               )}
@@ -1212,7 +1210,7 @@ export default function BookingDetails() {
               {booking.tenant_confirmation && (
                 <View style={[styles.actionButton, { backgroundColor: COLORS.offWhite }]}>
                   <Ionicons name="checkmark-circle" size={20} color={COLORS.success} />
-                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>Move-In Confirmed by You</Text>
+                  <Text style={[styles.actionButtonText, { color: COLORS.greyDark }]}>{t('screens.bookingdetails.move_in_confirmed_by_you')}</Text>
                 </View>
               )}
 
@@ -1225,7 +1223,7 @@ export default function BookingDetails() {
                   disabled={uploadingMedia}
                 >
                   {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
-                  <Text style={styles.actionButtonText}>Take Entry Picture</Text>
+                  <Text style={styles.actionButtonText}>{t('screens.bookingdetails.take_entry_picture')}</Text>
                   <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
                 </TouchableOpacity>
               )}
@@ -1245,7 +1243,7 @@ export default function BookingDetails() {
                   disabled={uploadingMedia}
                 >
                   {uploadingMedia ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Ionicons name="camera-outline" size={20} color={COLORS.gold} />}
-                  <Text style={styles.actionButtonText}>Take Exit Picture</Text>
+                  <Text style={styles.actionButtonText}>{t('screens.bookingdetails.take_exit_picture')}</Text>
                   <Ionicons name="chevron-forward" size={18} color={COLORS.greyMedium} style={styles.actionArrow} />
                 </TouchableOpacity>
               )}
@@ -1298,10 +1296,8 @@ export default function BookingDetails() {
       {(!booking.approval_status || booking.approval_status === 'pending') && (
         <View style={[styles.footer, { flexDirection: 'column', alignItems: 'center', backgroundColor: COLORS.goldLight }]}>
           <Ionicons name="hourglass-outline" size={24} color={COLORS.goldDark} style={{ marginBottom: 4 }} />
-          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>Awaiting Landlord Approval</Text>
-          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>
-            The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking.
-          </Text>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.goldDark, textAlign: 'center' }}>{t('screens.bookingdetails.awaiting_landlord_approva')}</Text>
+          <Text style={{ fontSize: 13, color: COLORS.goldDark, textAlign: 'center', marginTop: 4 }}>{t('screens.bookingdetails.the_landlord_must_review')}</Text>
         </View>
       )}
 
@@ -1459,7 +1455,7 @@ export default function BookingDetails() {
       >
         <View style={styles.fullscreenModal}>
           <View style={{ width: '90%', backgroundColor: COLORS.white, borderRadius: 16, padding: 20 }}>
-            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 16 }}>Cancellation Reason</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 16 }}>{t('screens.bookingdetails.cancellation_reason')}</Text>
 
             {[
               "The house doesn't look like the pictures.",
@@ -1492,7 +1488,7 @@ export default function BookingDetails() {
                 style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', borderWidth: 1, borderColor: COLORS.border }}
                 onPress={() => setShowSurveyModal(false)}
               >
-                <Text style={{ color: COLORS.greyDark, fontWeight: '600' }}>Back</Text>
+                <Text style={{ color: COLORS.greyDark, fontWeight: '600' }}>{t('screens.bookingdetails.back')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={{ flex: 1, paddingVertical: 14, borderRadius: 12, alignItems: 'center', backgroundColor: COLORS.danger }}

@@ -9,11 +9,13 @@ import { Ionicons } from '@expo/vector-icons';
 import * as Linking from 'expo-linking';
 import ButtonPrimary from '../../components/ButtonPrimary';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 type EmailVerificationRouteProp = RouteProp<AuthStackParamList, 'EmailVerification'>;
 type EmailVerificationNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'EmailVerification'>;
 
 export const EmailVerificationScreen: React.FC = () => {
+  const { t } = useTranslation();
   const route = useRoute<EmailVerificationRouteProp>();
   const navigation = useNavigation<EmailVerificationNavigationProp>();
   const { email, mode } = route.params;
@@ -41,7 +43,7 @@ export const EmailVerificationScreen: React.FC = () => {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.container}>
           <ActivityIndicator size="large" color={colors.primary} />
-          <Text style={[styles.title, { marginTop: 24 }]}>Finalizing Account</Text>
+          <Text style={[styles.title, { marginTop: 24 }]}>{t('screens.emailverification.finalizing_account')}</Text>
           <Text style={styles.subtitle}>
             We've acknowledged your click! We're now setting up your secure profile.
             {"\n\n"}
@@ -88,7 +90,7 @@ export const EmailVerificationScreen: React.FC = () => {
         />
 
         <TouchableOpacity onPress={() => navigation.navigate('SignUp')} style={styles.backButton}>
-          <Text style={styles.backText}>Back to Sign Up</Text>
+          <Text style={styles.backText}>{t('screens.emailverification.back_to_sign_up')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

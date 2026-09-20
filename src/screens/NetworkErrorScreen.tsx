@@ -1,25 +1,25 @@
 // src/screens/NetworkErrorScreen.tsx
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onRetry: () => void; // Callback to retry network request
 }
 
-const NetworkErrorScreen: React.FC<Props> = ({ onRetry }) => {
+const NetworkErrorScreen: React.FC<Props> = ({
+onRetry }) => {
+  const { t } = useTranslation();
   return (
     <View style={styles.container}>
       {/* Replace with your actual broken cable/network image */}
       <Image source={require('../../assets/network-broken.png')} style={styles.image} />
 
-      <Text style={styles.title}>Oops! No Internet</Text>
-      <Text style={styles.subtitle}>
-        Please check your connection and try again.
-        If this error persists you can contact support.
-      </Text>
+      <Text style={styles.title}>{t('screens.networkerror.oops__no_internet')}</Text>
+      <Text style={styles.subtitle}>{t('screens.networkerror.please_check_your_connect')}</Text>
 
       <TouchableOpacity style={styles.button} onPress={onRetry} activeOpacity={0.8}>
-        <Text style={styles.buttonText}>Retry</Text>
+        <Text style={styles.buttonText}>{t('screens.networkerror.retry')}</Text>
       </TouchableOpacity>
     </View>
   );

@@ -22,10 +22,10 @@ const ListingsPreview: React.FC<Props> = ({ landlordId }) => {
 
       // Realtime listener: refresh when listings change (insert/update/delete)
       const channel = supabase
-        .channel(listings_preview:)
+        .channel(`listings_preview:${landlordId}`)
         .on(
           'postgres_changes',
-          { event: '*', schema: 'public', table: 'listings', filter: landlord_id=eq. },
+          { event: '*', schema: 'public', table: 'listings', filter: `landlord_id=eq.${landlordId}` },
           () => fetchListings()
         )
         .subscribe();

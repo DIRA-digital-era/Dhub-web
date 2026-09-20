@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import React from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 interface Props {
   onClose?: () => void;
@@ -12,7 +13,9 @@ interface Props {
 const DEFAULT_ANDROID_URL = 'https://play.google.com/store/apps/details?id=com.dira.dhub';
 const DEFAULT_IOS_URL = 'https://apps.apple.com/app/idYOUR_APP_ID';
 
-const DownloadAppScreen: React.FC<Props> = ({ onClose, iosLink, androidLink }) => {
+const DownloadAppScreen: React.FC<Props> = ({
+onClose, iosLink, androidLink }) => {
+  const { t } = useTranslation();
   const openStore = (url: string) => window.open(url, '_blank');
 
   return (
@@ -21,30 +24,27 @@ const DownloadAppScreen: React.FC<Props> = ({ onClose, iosLink, androidLink }) =
         <View style={styles.iconContainer}>
           <Ionicons name="phone-portrait-outline" size={64} color="#D4AF37" />
         </View>
-        <Text style={styles.title}>Mobile App Required</Text>
-        <Text style={styles.subtitle}>
-          Payments and full booking management are only available on the DHUB mobile app.
-          Download now to complete your transaction.
-        </Text>
+        <Text style={styles.title}>{t('screens.downloadapp.mobile_app_required')}</Text>
+        <Text style={styles.subtitle}>{t('screens.downloadapp.payments_and_full_booking')}</Text>
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={[styles.button, styles.androidButton]}
             onPress={() => openStore(androidLink || DEFAULT_ANDROID_URL)}
           >
             <Ionicons name="logo-google-playstore" size={20} color="#fff" />
-            <Text style={styles.buttonText}>Android</Text>
+            <Text style={styles.buttonText}>{t('screens.downloadapp.android')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.button, styles.iosButton]}
             onPress={() => openStore(iosLink || DEFAULT_IOS_URL)}
           >
             <Ionicons name="logo-apple" size={20} color="#fff" />
-            <Text style={styles.buttonText}>iOS</Text>
+            <Text style={styles.buttonText}>{t('screens.downloadapp.ios')}</Text>
           </TouchableOpacity>
         </View>
         {onClose && (
           <TouchableOpacity style={styles.closeLink} onPress={onClose}>
-            <Text style={styles.closeText}>Go Back</Text>
+            <Text style={styles.closeText}>{t('screens.downloadapp.go_back')}</Text>
           </TouchableOpacity>
         )}
       </View>

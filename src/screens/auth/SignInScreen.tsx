@@ -26,10 +26,12 @@ import { AuthStackParamList } from '../../types';
 import { normalizePhone } from '../../utils/authHelpers';
 import { loginWithEmail, loginWithGoogle, loginWithPhone } from '../../utils/login';
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
 
 type SignInScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
 const SignInScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<SignInScreenNavigationProp>();
   const dispatch = useDispatch<AppDispatch>();
   const { error: globalError } = useSelector((state: any) => state.auth);
@@ -189,8 +191,8 @@ const SignInScreen: React.FC = () => {
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <View style={styles.header}>
-        <Text style={styles.title}>Welcome Back</Text>
-        <Text style={styles.subtitle}>Sign in to your account</Text>
+        <Text style={styles.title}>{t('screens.signin.welcome_back')}</Text>
+        <Text style={styles.subtitle}>{t('screens.signin.sign_in_to_your_account')}</Text>
       </View>
 
       {/* Main content – simple ScrollView, no native wrappers */}
@@ -204,13 +206,13 @@ const SignInScreen: React.FC = () => {
             style={[styles.methodToggleBtn, loginMethod === 'phone' && styles.methodToggleBtnActive]}
             onPress={() => { setLoginMethod('phone'); setIdentifier(''); setErrorMessage(''); }}
           >
-            <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>Phone</Text>
+            <Text style={[styles.methodToggleText, loginMethod === 'phone' && styles.methodToggleTextActive]}>{t('screens.signin.phone')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.methodToggleBtn, loginMethod === 'email' && styles.methodToggleBtnActive]}
             onPress={() => { setLoginMethod('email'); setIdentifier(''); setErrorMessage(''); }}
           >
-            <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>Email</Text>
+            <Text style={[styles.methodToggleText, loginMethod === 'email' && styles.methodToggleTextActive]}>{t('screens.signin.email')}</Text>
           </TouchableOpacity>
         </View>
 
@@ -282,7 +284,7 @@ const SignInScreen: React.FC = () => {
               disabled={loading}
               style={styles.magicLinkBtn}
             >
-              <Text style={styles.magicLinkBtnText}>Or send me a Magic Link (No password)</Text>
+              <Text style={styles.magicLinkBtnText}>{t('screens.signin.or_send_me_a_magic_link')}</Text>
             </TouchableOpacity>
           )}
 
@@ -298,7 +300,7 @@ const SignInScreen: React.FC = () => {
             disabled={loading}
           >
             <Ionicons name="logo-google" size={20} color={colors.text} />
-            <Text style={styles.googleButtonText}>Continue with Google</Text>
+            <Text style={styles.googleButtonText}>{t('screens.signin.continue_with_google')}</Text>
           </TouchableOpacity>
 
           {loading && <ActivityIndicator size="large" color={colors.primary} style={styles.loader} />}
@@ -307,7 +309,7 @@ const SignInScreen: React.FC = () => {
 
           <View style={styles.linksContainer}>
             <TouchableOpacity onPress={handleForgotPassword} disabled={loading}>
-              <Text style={styles.linkText}>Forgot Password?</Text>
+              <Text style={styles.linkText}>{t('screens.signin.forgot_password')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -320,7 +322,7 @@ const SignInScreen: React.FC = () => {
         </View>
 
         <TouchableOpacity style={styles.signUpLink} onPress={() => navigation.navigate('SignUp')}>
-          <Text style={styles.switchText}>Don't have an account? <Text style={styles.link}>Sign Up</Text></Text>
+          <Text style={styles.switchText}>{t('screens.signin.don_t_have_an_account')}<Text style={styles.link}>{t('screens.signin.sign_up')}</Text></Text>
         </TouchableOpacity>
 
         <View style={styles.languageWrapper}>

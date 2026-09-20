@@ -9,12 +9,14 @@ import { useAuth } from '../../hooks/useAuth';
 import { LandlordStackNavigationProp, LandlordStackParamList } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
 import { triggerPushNotifications } from '../../hooks/usePushNotifications';
+import { useTranslation } from 'react-i18next';
 
 type ApprovalScreenRouteProp = RouteProp<LandlordStackParamList, 'ApprovalScreen'>;
 
 const DISPUTE_AGENT_FEE = 5000;
 
 const ApprovalScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation<LandlordStackNavigationProp>();
   const route = useRoute<ApprovalScreenRouteProp>();
   const { bookingId } = route.params;
@@ -314,7 +316,7 @@ const ApprovalScreen: React.FC = () => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Text style={styles.backButtonText}>← Back</Text>
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Review Booking</Text>
+        <Text style={styles.headerTitle}>{t('screens.approval.review_booking')}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -322,7 +324,7 @@ const ApprovalScreen: React.FC = () => {
 
         {/* ── Listing Info ────────────────────────────────────────────────── */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Listing</Text>
+          <Text style={styles.sectionTitle}>{t('screens.approval.listing')}</Text>
           <Text style={styles.label}>Title: <Text style={styles.value}>{booking.listings?.title}</Text></Text>
           <Text style={styles.label}>Location: <Text style={styles.value}>{booking.listings?.city}, {booking.listings?.address}</Text></Text>
           <Text style={styles.label}>Base Price: <Text style={styles.value}>{booking.listings?.price?.toLocaleString()} FCFA</Text></Text>
@@ -330,7 +332,7 @@ const ApprovalScreen: React.FC = () => {
 
         {/* ── Tenant Info ──────────────────────────────────────────────────── */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Tenant Information</Text>
+          <Text style={styles.sectionTitle}>{t('screens.approval.tenant_information')}</Text>
           <Text style={styles.label}>Name: <Text style={styles.value}>{booking.students?.full_name}</Text></Text>
           <Text style={styles.label}>Email: <Text style={styles.value}>{booking.students?.email}</Text></Text>
           <Text style={styles.label}>Phone: <Text style={styles.value}>{booking.students?.phone || 'N/A'}</Text></Text>
@@ -350,7 +352,7 @@ const ApprovalScreen: React.FC = () => {
 
         {/* ── Booking Details ──────────────────────────────────────────────── */}
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Booking Details</Text>
+          <Text style={styles.sectionTitle}>{t('screens.approval.booking_details')}</Text>
           <Text style={styles.label}>Start Date: <Text style={styles.value}>{new Date(booking.start_date).toDateString()}</Text></Text>
           <Text style={styles.label}>End Date: <Text style={styles.value}>{new Date(booking.end_date).toDateString()}</Text></Text>
           <Text style={styles.label}>Duration Type: <Text style={styles.value}>{booking.duration_type || 'N/A'}</Text></Text>
@@ -359,7 +361,7 @@ const ApprovalScreen: React.FC = () => {
           {/* Caution Escrow Breakdown */}
           {booking.caution_fee > 0 && (
             <View style={[styles.escrowBox, booking.caution_status === 'disputed' && styles.escrowBoxDisputed]}>
-              <Text style={styles.escrowTitle}>Caution Escrow</Text>
+              <Text style={styles.escrowTitle}>{t('screens.approval.caution_escrow')}</Text>
               <Text style={[styles.escrowStatus, booking.caution_status === 'disputed' && { color: '#E67E22' }]}>
                 {cautionStatusLabel[booking.caution_status] || booking.caution_status}
               </Text>
@@ -425,7 +427,7 @@ const ApprovalScreen: React.FC = () => {
                 {/* Caution: Held — Landlord can dispute */}
                 {booking.caution_status === 'held' && (
                   <TouchableOpacity style={[styles.btn, styles.disputeBtn]} onPress={handleDisputeCaution} disabled={updating}>
-                    {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Dispute Caution Escrow</Text>}
+                    {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{t('screens.approval.dispute_caution_escrow')}</Text>}
                   </TouchableOpacity>
                 )}
 
@@ -436,10 +438,10 @@ const ApprovalScreen: React.FC = () => {
                       <Text style={styles.alertBannerText}>⚠️  Tenant requested Escrow Refund</Text>
                     </View>
                     <TouchableOpacity style={[styles.btn, { backgroundColor: '#27AE60' }]} onPress={handleApproveRefund} disabled={updating}>
-                      <Text style={styles.btnText}>Approve Refund (No Damages)</Text>
+                      <Text style={styles.btnText}>{t('screens.approval.approve_refund__no_damage')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity style={[styles.btn, styles.disputeBtn]} onPress={handleDisputeCaution} disabled={updating}>
-                      <Text style={styles.btnText}>Dispute Damages</Text>
+                      <Text style={styles.btnText}>{t('screens.approval.dispute_damages')}</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -533,7 +535,7 @@ const ApprovalScreen: React.FC = () => {
         </TouchableWithoutFeedback>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={styles.modalWrapper}>
           <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Rate Tenant</Text>
+            <Text style={styles.modalTitle}>{t('screens.approval.rate_tenant')}</Text>
             <Text style={styles.modalSub}>Rate your experience with this tenant (1–5 stars)</Text>
             <View style={styles.starsContainer}>
               {[1, 2, 3, 4, 5].map(star => (
@@ -552,10 +554,10 @@ const ApprovalScreen: React.FC = () => {
             />
             <View style={styles.modalActions}>
               <TouchableOpacity onPress={() => setRatingModalVisible(false)} style={styles.modalBtnCancel}>
-                <Text style={{ color: colors.text, fontWeight: 'bold' }}>Cancel</Text>
+                <Text style={{ color: colors.text, fontWeight: 'bold' }}>{t('screens.approval.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={submitRating} style={styles.modalBtnSubmit}>
-                {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Submit</Text>}
+                {updating ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>{t('screens.approval.submit')}</Text>}
               </TouchableOpacity>
             </View>
           </View>
@@ -570,9 +572,9 @@ const ApprovalScreen: React.FC = () => {
         <View style={[styles.modalWrapper, { justifyContent: 'flex-end', padding: 0 }]}>
           <View style={[styles.modalContent, { maxHeight: '80%', width: '100%', borderBottomLeftRadius: 0, borderBottomRightRadius: 0 }]}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={styles.modalTitle}>Tenant Reviews</Text>
+              <Text style={styles.modalTitle}>{t('screens.approval.tenant_reviews')}</Text>
               <TouchableOpacity onPress={() => setTenantReviewsVisible(false)}>
-                <Text style={{ color: colors.primary, fontWeight: 'bold' }}>Close</Text>
+                <Text style={{ color: colors.primary, fontWeight: 'bold' }}>{t('screens.approval.close')}</Text>
               </TouchableOpacity>
             </View>
             <ScrollView>
@@ -588,7 +590,7 @@ const ApprovalScreen: React.FC = () => {
                   </View>
                   {rev.review
                     ? <Text style={{ marginTop: 8, color: colors.text, fontStyle: 'italic' }}>"{rev.review}"</Text>
-                    : <Text style={{ marginTop: 8, color: colors.textSecondary }}>No written feedback.</Text>
+                    : <Text style={{ marginTop: 8, color: colors.textSecondary }}>{t('screens.approval.no_written_feedback')}</Text>
                   }
                 </View>
               ))}

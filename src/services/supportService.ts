@@ -3,6 +3,7 @@ import { Chat, FAQ, Ticket } from '../types';
 import { supabase } from '../utils/supabaseClient';
 
 const EDGE_FUNCTION_URL = 'https://lpdszzdmhzrowtppngjb.supabase.co/functions/v1/support-bot';
+const ANON_KEY = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '';
 
 // =========================
 // TICKETS
@@ -45,62 +46,49 @@ export async function fetchChats(ticketId: string): Promise<Chat[]> {
 }
 
 /**
- * Sends a chat message AND calls Edge Function to get bot reply/options.
- * Returns both the user message and optional bot reply.
+ * Sends a chat message via the Edge Function, which:
+ * 1. Persists the user message (avoids double-insert)
+ * 2. Always auto-replies with a bot response
+ * 3. Notifies admin via email (Resend)
  */
 export async function sendChatMessageWithBot(payload: {
   ticket_id: string;
   sender_id: string;
   message: string;
 }): Promise<{ userMessage: Chat; botReply?: Chat; options?: string[] }> {
-  // 1️⃣ Persist user message
-  const { data: userMessage, error: userError } = await supabase
-    .from('chats')
-    .insert([
-      {
-        ticket_id: payload.ticket_id,
-        sender_id: payload.sender_id,
-        receiver_id: null,
-        message: payload.message,
-        read: false,
-        sender_type: 'user',
-        chat_type: 'support',
-        is_complaint: false,
-        is_faq_candidate: false,
-      },
-    ])
-    .select()
-    .single();
+  const res = await fetch(EDGE_FUNCTION_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      ticket_id: payload.ticket_id,
+      user_id: payload.sender_id,
+      message: payload.message,
+    }),
+  });
 
-  if (userError || !userMessage) throw userError ?? new Error('Failed to insert user message');
-
-  let botReply: Chat | undefined;
-  let options: string[] | undefined;
-
-  try {
-    // 2️⃣ Call Edge Function for instant bot response
-    const res = await fetch(EDGE_FUNCTION_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        ticket_id: payload.ticket_id,
-        user_id: payload.sender_id,
-        message: payload.message,
-      }),
-    });
-
-    const data = await res.json();
-    if (data?.botData) {
-      botReply = data.botData as Chat;
-    }
-    if (data?.options) {
-      options = data.options as string[];
-    }
-  } catch (err) {
-    console.error('Edge function error:', err);
+  if (!res.ok) {
+    throw new Error(`Support bot edge function returned ${res.status}`);
   }
 
-  return { userMessage: userMessage as Chat, botReply, options };
+  const data = await res.json();
+
+  // Edge function saves the user message and returns it
+  const userMessage: Chat = data.userMsg ?? {
+    ticket_id: payload.ticket_id,
+    sender_id: payload.sender_id,
+    message: payload.message,
+    sender_type: 'user',
+    chat_type: 'support',
+    read: false,
+  } as any;
+
+  const botReply: Chat | undefined = data.botData ?? undefined;
+  const options: string[] | undefined = data.options ?? undefined;
+
+  return { userMessage, botReply, options };
 }
 
 // =========================

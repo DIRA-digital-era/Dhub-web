@@ -11,6 +11,7 @@ export interface Listing {
   title?: string | null;
   price?: number | null;
   image_url?: string | null;
+  media?: Array<{ url: string; thumbUrl?: string; type?: string }> | null;
   city?: string | null;
   avg_rating?: number | null;
   rating_count?: number | null;
@@ -47,7 +48,7 @@ const ListingCard: React.FC<ListingCardProps> = ({ listing, onPress, role, onBoo
     <TouchableOpacity style={[styles.card, { backgroundColor: colors.card }]} onPress={handleViewDetails}>
       <View style={styles.imageContainer}>
         <Image
-          source={{ uri: listing.image_url || 'https://via.placeholder.com/400x250?text=No+Image' }}
+          source={{ uri: listing.image_url || listing.media?.[0]?.thumbUrl || listing.media?.[0]?.url || 'https://via.placeholder.com/400x250?text=No+Image' }}
           style={styles.image}
           resizeMode="cover"
         />

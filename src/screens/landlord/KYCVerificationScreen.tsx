@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useTheme } from '../../context/ThemeContext';
+import { useTranslation } from 'react-i18next';
 
 
 type KYCProfile = {
@@ -25,6 +26,7 @@ interface DocumentState {
 }
 
 const KYCVerificationScreen: React.FC = () => {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
@@ -243,7 +245,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
     return (
       <TouchableOpacity style={styles.docUploadBtn} onPress={onPick}>
         <Ionicons name="document-attach-outline" size={24} color={colors.primary} />
-        <Text style={styles.docUploadText}>Upload Document</Text>
+        <Text style={styles.docUploadText}>{t('screens.kycverification.upload_document')}</Text>
       </TouchableOpacity>
     );
   };
@@ -275,7 +277,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>KYC Verification</Text>
+          <Text style={styles.headerTitle}>{t('screens.kycverification.kyc_verification')}</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -283,10 +285,8 @@ const fetchLandlordProfile = async (): Promise<void> => {
           <View style={[styles.statusIcon, { backgroundColor: '#10B98120' }]}>
             <Ionicons name="checkmark-circle" size={64} color="#10B981" />
           </View>
-          <Text style={styles.approvedTitle}>Verified Successfully</Text>
-          <Text style={styles.approvedText}>
-            Your KYC verification has been approved. You can now create and manage property listings.
-          </Text>
+          <Text style={styles.approvedTitle}>{t('screens.kycverification.verified_successfully')}</Text>
+          <Text style={styles.approvedText}>{t('screens.kycverification.your_kyc_verification_has')}</Text>
         </View>
       </View>
     );
@@ -306,7 +306,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Ionicons name="arrow-back" size={24} color={colors.primary} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Verification Pending</Text>
+          <Text style={styles.headerTitle}>{t('screens.kycverification.verification_pending')}</Text>
           <View style={{ width: 24 }} />
         </View>
 
@@ -314,13 +314,11 @@ const fetchLandlordProfile = async (): Promise<void> => {
           <View style={[styles.statusIcon, { backgroundColor: '#F59E0B20' }]}>
             <Ionicons name="time" size={64} color="#F59E0B" />
           </View>
-          <Text style={[styles.approvedTitle, { color: '#F59E0B' }]}>Processing</Text>
-          <Text style={styles.approvedText}>
-            Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run.
-          </Text>
+          <Text style={[styles.approvedTitle, { color: '#F59E0B' }]}>{t('screens.kycverification.processing')}</Text>
+          <Text style={styles.approvedText}>{t('screens.kycverification.your_docs_have_been_submi')}</Text>
           
           <TouchableOpacity style={[styles.submitBtn, { marginTop: 30 }]} onPress={handleResubmit}>
-            <Text style={styles.submitBtnText}>Want to resubmit?</Text>
+            <Text style={styles.submitBtnText}>{t('screens.kycverification.want_to_resubmit')}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -333,13 +331,13 @@ const fetchLandlordProfile = async (): Promise<void> => {
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Ionicons name="arrow-back" size={24} color="#D4AF37" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>KYC Verification</Text>
+        <Text style={styles.headerTitle}>{t('screens.kycverification.kyc_verification')}</Text>
         <View style={{ width: 24 }} />
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
 
-        <Text style={styles.sectionTitle}>Personal Information</Text>
+        <Text style={styles.sectionTitle}>{t('screens.kycverification.personal_information')}</Text>
 
         <View style={styles.inputGroup}>
           <Text style={styles.label}>Full Address *</Text>
@@ -363,10 +361,8 @@ const fetchLandlordProfile = async (): Promise<void> => {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Identity Verification</Text>
-        <Text style={styles.sectionSubtitle}>
-          Upload clear photos of your government-issued ID and a selfie holding the ID.
-        </Text>
+        <Text style={styles.sectionTitle}>{t('screens.kycverification.identity_verification')}</Text>
+        <Text style={styles.sectionSubtitle}>{t('screens.kycverification.upload_clear_photos_of_yo')}</Text>
 
         <View style={styles.docSection}>
           <Text style={styles.docLabel}>ID Card Front *</Text>
@@ -395,10 +391,8 @@ const fetchLandlordProfile = async (): Promise<void> => {
           />
         </View>
 
-        <Text style={styles.sectionTitle}>Property Credentials</Text>
-        <Text style={styles.sectionSubtitle}>
-          Provide documents proving you own or manage properties at your address.
-        </Text>
+        <Text style={styles.sectionTitle}>{t('screens.kycverification.property_credentials')}</Text>
+        <Text style={styles.sectionSubtitle}>{t('screens.kycverification.provide_documents_proving')}</Text>
 
         <View style={styles.docSection}>
           <Text style={styles.docLabel}>Upload Proof of Ownership *</Text>

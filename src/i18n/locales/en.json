@@ -19,7 +19,10 @@
     "mins_ago": "{{count}}m ago",
     "hours_ago": "{{count}}h ago",
     "days_ago": "{{count}}d ago",
-    "new": "New"
+    "new": "New",
+    "unknown": "Unknown",
+    "delete": "Delete",
+    "home": "Home"
   },
   "profile": {
     "title": "My Profile",
@@ -50,7 +53,8 @@
     "delete_confirm_msg": "Are you sure you want to delete your account? This action cannot be fully undone.",
     "delete": "Delete",
     "session_missing": "Session missing",
-    "session_missing_msg": "Cannot update email. Please log out and log back in."
+    "session_missing_msg": "Cannot update email. Please log out and log back in.",
+    "theme_label": "Theme Label"
   },
   "listing": {
     "available": "Available",
@@ -85,7 +89,8 @@
     "no_description_card": "No description available.",
     "spacious": "Spacious",
     "available_now": "Available now",
-    "view_details": "View Details"
+    "view_details": "View Details",
+    "video": "Video"
   },
   "home": {
     "title": "DHUB",
@@ -285,7 +290,9 @@
     "yesterday": "Yesterday",
     "empty_title": "Start the conversation",
     "empty_subtitle": "Say hello! Your messages are private between you and {{name}}.",
-    "other_user": "the other user"
+    "other_user": "the other user",
+    "delete_chat_confirm": "Delete Chat Confirm",
+    "delete_chat": "Delete Chat"
   },
   "bookings": {
     "title": "My Bookings",
@@ -404,6 +411,311 @@
     "agree_tos": "I agree to the Terms of Service and Privacy Policy",
     "signing_up": "Signing Up...",
     "has_account": "Already have an account?",
-    "sign_in_link": "Sign In"
+    "sign_in_link": "Sign In",
+    "email_or_phone_placeholder": "Email Or Phone Placeholder",
+    "resend_otp": "Resend Otp",
+    "secure_account_msg": "Secure Account Msg",
+    "reset_failed": "Reset Failed",
+    "password_reset_success": "Password Reset Success",
+    "back_to_signin": "Back To Signin",
+    "forgot_password_title": "Forgot Password Title",
+    "enter_email_or_phone": "Enter Email Or Phone",
+    "invalid_phone_cameroon": "Invalid Phone Cameroon",
+    "passwords_no_match": "Passwords No Match",
+    "reset_password_title": "Reset Password Title",
+    "password_min_length": "Password Min Length",
+    "resend_in": "Resend In",
+    "reset_password_btn": "Reset Password Btn",
+    "update_failed": "Update Failed",
+    "forgot_password_subtitle": "Forgot Password Subtitle",
+    "enter_otp_sent_to": "Enter Otp Sent To",
+    "enter_otp_error": "Enter Otp Error",
+    "send_reset_link": "Send Reset Link"
+  },
+  "screens": {
+    "networkerror": {
+      "oops__no_internet": "Oops! No Internet",
+      "please_check_your_connect": "Please check your connection and try again.\n        If this error persists you can contact support.",
+      "retry": "Retry"
+    },
+    "emailverification": {
+      "finalizing_account": "Finalizing Account",
+      "back_to_sign_up": "Back to Sign Up"
+    },
+    "signin": {
+      "welcome_back": "Welcome Back",
+      "sign_in_to_your_account": "Sign in to your account",
+      "phone": "Phone",
+      "email": "Email",
+      "or_send_me_a_magic_link": "Or send me a Magic Link (No password)",
+      "continue_with_google": "Continue with Google",
+      "forgot_password": "Forgot Password?",
+      "don_t_have_an_account": "Don't have an account?",
+      "sign_up": "Sign Up"
+    },
+    "signup": {
+      "create_account": "Create Account",
+      "join_dhub_to_manage_your": "Join Dhub to manage your properties",
+      "i_agree_to_the": "I agree to the",
+      "terms_of_service": "Terms of Service",
+      "privacy_policy": "Privacy Policy",
+      "you_must_accept_the_terms": "You must accept the Terms",
+      "sign_up_with_google": "Sign Up with Google",
+      "already_have_an_account": "Already have an account?",
+      "sign_in": "Sign In",
+      "creating_your_account": "Creating Your Account",
+      "setting_up_your_secure_pr": "Setting up your secure profile...",
+      "cancel": "Cancel"
+    },
+    "verifyotp": {
+      "verify_whatsapp_otp": "Verify WhatsApp OTP"
+    },
+    "chatwrapper": {
+      "loading_user": "Loading user...",
+      "chats": "Chats",
+      "loading_conversations": "Loading conversations...",
+      "no_conversations_yet": "No conversations yet",
+      "start_a_new_conversation": "Start a new conversation to chat with others"
+    },
+    "downloadapp": {
+      "mobile_app_required": "Mobile App Required",
+      "payments_and_full_booking": "Payments and full booking management are only available on the DHUB mobile app.\n          Download now to complete your transaction.",
+      "android": "Android",
+      "ios": "iOS",
+      "go_back": "Go Back"
+    },
+    "legal": {
+      "back": "Back"
+    },
+    "reportbug": {
+      "report_a_bug": "Report a Bug",
+      "found_a_technical_issue": "Found a technical issue, crash, or visual bug? Let our developers know so we can fix it!",
+      "subject__optional": "Subject (Optional)",
+      "send_email_to_support": "Send Email to Support"
+    },
+    "reportuser": {
+      "if_you_have_experienced_i": "If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report.",
+      "submit_report": "Submit Report"
+    },
+    "support": {
+      "connecting_to_support": "Connecting to support...",
+      "dhub_support": "DHUB Support",
+      "we_re_online": "We're online",
+      "call": "Call",
+      "quick_topics": "Quick topics",
+      "how_can_we_help": "How can we help?",
+      "send_a_message_or_tap_a_q": "Send a message or tap a quick topic above to get started."
+    },
+    "updaterequired": {
+      "update_now": "Update Now",
+      "maybe_later": "Maybe Later"
+    },
+    "approval": {
+      "review_booking": "Review Booking",
+      "listing": "Listing",
+      "tenant_information": "Tenant Information",
+      "booking_details": "Booking Details",
+      "caution_escrow": "Caution Escrow",
+      "dispute_caution_escrow": "Dispute Caution Escrow",
+      "approve_refund__no_damage": "Approve Refund (No Damages)",
+      "dispute_damages": "Dispute Damages",
+      "rate_tenant": "Rate Tenant",
+      "cancel": "Cancel",
+      "submit": "Submit",
+      "tenant_reviews": "Tenant Reviews",
+      "close": "Close",
+      "no_written_feedback": "No written feedback."
+    },
+    "bookings": {
+      "bookings": "Bookings",
+      "loading_bookings": "Loading bookings...",
+      "no_bookings_yet": "No bookings yet",
+      "when_students_book_your_p": "When students book your properties, they'll appear here",
+      "tap_to_review_request": "Tap to Review Request"
+    },
+    "boost": {
+      "boost_listing": "Boost Listing",
+      "choose_a_boost_plan": "Choose a Boost Plan",
+      "why_boost": "Why Boost?",
+      "boosting_your_listing_mak": "Boosting your listing makes it appear first in search results and highlights it for maximum visibility.\n            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make!"
+    },
+    "dashboard": {
+      "welcome_back": "Welcome back"
+    },
+    "editlisting": {
+      "processing": "Processing...",
+      "failed": "Failed",
+      "loading_property_details": "Loading property details...",
+      "edit_property": "Edit Property",
+      "property_photos": "Property Photos",
+      "tap_to_preview__drag_to_r": "Tap to preview, drag to reorder (coming soon)",
+      "add_media": "Add Media",
+      "description": "Description",
+      "price__fcfa": "Price (FCFA)",
+      "rooms": "Rooms",
+      "available_for_rent": "Available for Rent",
+      "save_changes": "Save Changes",
+      "delete_property": "Delete Property",
+      "uploading_media": "Uploading Media...",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen.",
+      "cancel_upload": "Cancel Upload"
+    },
+    "kycverification": {
+      "upload_document": "Upload Document",
+      "kyc_verification": "KYC Verification",
+      "verified_successfully": "Verified Successfully",
+      "your_kyc_verification_has": "Your KYC verification has been approved. You can now create and manage property listings.",
+      "verification_pending": "Verification Pending",
+      "processing": "Processing",
+      "your_docs_have_been_submi": "Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run.",
+      "want_to_resubmit": "Want to resubmit?",
+      "personal_information": "Personal Information",
+      "identity_verification": "Identity Verification",
+      "upload_clear_photos_of_yo": "Upload clear photos of your government-issued ID and a selfie holding the ID.",
+      "property_credentials": "Property Credentials",
+      "provide_documents_proving": "Provide documents proving you own or manage properties at your address."
+    },
+    "listingdetails": {
+      "loading_property_details": "Loading property details...",
+      "unable_to_load_property": "Unable to load property",
+      "retry": "Retry",
+      "go_back": "Go Back",
+      "property_details": "Property Details",
+      "share_this_listing": "Share this listing",
+      "available_for_rent": "Available for Rent",
+      "description": "Description",
+      "location": "Location",
+      "view_map": "View Map",
+      "property_videos": "Property Videos",
+      "landlord_information": "Landlord Information",
+      "verify": "Verify",
+      "why_should_i_verify_my_li": "Why should I verify my listing?",
+      "boost": "Boost",
+      "delete": "Delete",
+      "why_verify_your_listing": "Why verify your listing?",
+      "i_understand": "I understand",
+      "request_verification": "Request Verification",
+      "cancel": "Cancel",
+      "video": "Video",
+      "view_booking": "View Booking"
+    },
+    "managelistings": {
+      "please_log_in_to_manage_l": "Please log in to manage listings.",
+      "loading_your_listings": "Loading your listings...",
+      "my_properties": "My Properties",
+      "no_listings_yet": "No listings yet",
+      "start_by_adding_your_firs": "Start by adding your first property",
+      "add_property": "Add Property",
+      "total_properties": "Total Properties",
+      "active": "Active",
+      "property_photos": "Property Photos",
+      "edit": "Edit",
+      "delete": "Delete"
+    },
+    "payment": {
+      "dhub_payment_receipt": "DHUB Payment Receipt",
+      "transaction_details": "Transaction Details",
+      "amount_details": "Amount Details",
+      "parties": "Parties",
+      "payments": "Payments",
+      "payment_history": "Payment History",
+      "send_payment": "Send Payment",
+      "recent_transactions": "Recent Transactions",
+      "loading_history": "Loading history...",
+      "retry": "Retry",
+      "no_payment_history_yet": "No payment history yet.",
+      "receiver": "Receiver",
+      "description": "Description",
+      "payment_receipt": "Payment Receipt",
+      "scan_to_verify_transactio": "Scan to verify transaction",
+      "download_pdf": "Download PDF",
+      "close": "Close",
+      "amount": "Amount",
+      "payable_to": "Payable To",
+      "this_is_the": "This is the",
+      "initial_deposit": "Initial Deposit",
+      "this_is_your": "This is your",
+      "remaining_rent_balance": "remaining rent balance",
+      "after_your_initial_deposi": "after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property.",
+      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee",
+      "your_momo_phone_number": "Your MoMo Phone Number",
+      "enter_the_momo_number_tha": "Enter the MoMo number that will receive the payment prompt.",
+      "a_payment_prompt_has_been": "A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment.",
+      "print_pdf": "Print PDF"
+    },
+    "uploadlisting": {
+      "add_new_property": "Add New Property",
+      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property",
+      "add_media": "Add Media",
+      "basic_information": "Basic Information",
+      "listing_type": "Listing Type",
+      "stay_type": "Stay Type",
+      "property_title": "Property Title",
+      "description": "Description",
+      "number_of_rooms": "Number of Rooms",
+      "location": "Location",
+      "street_address": "Street Address",
+      "city": "City",
+      "tap_to_select_location_on": "Tap to select location on map",
+      "students_will_review_and": "Students will review and agree to these terms before booking",
+      "create_property_listing": "Create Property Listing",
+      "uploading_media": "Uploading Media...",
+      "please_do_not_close_the_a": "Please do not close the app or turn off your screen.",
+      "cancel_upload": "Cancel Upload"
+    },
+    "bookingdetails": {
+      "information_locked": "Information Locked",
+      "complete_your_booking_to": "Complete your booking to reveal the exact coordinates and landlord contact details.",
+      "under_review_by_dhub": "Under Review by DHUB",
+      "submit_evidence": "Submit Evidence",
+      "confirm_i_have_moved_in": "Confirm I Have Moved In",
+      "move_in_confirmed_by_you": "Move-In Confirmed by You",
+      "take_entry_picture": "Take Entry Picture",
+      "take_exit_picture": "Take Exit Picture",
+      "awaiting_landlord_approva": "Awaiting Landlord Approval",
+      "the_landlord_must_review": "The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking.",
+      "cancellation_reason": "Cancellation Reason",
+      "back": "Back"
+    },
+    "booking": {
+      "unverified_property": "Unverified Property",
+      "property_may_not_match_th": "Property may not match the photos",
+      "promised_amenities_could": "Promised amenities could be missing",
+      "you_may_risk_losing_your": "You may risk losing your caution fee",
+      "read_our_safety_guideline": "Read our Safety Guidelines",
+      "cancel_booking": "Cancel Booking",
+      "proceed_anyway": "Proceed Anyway"
+    },
+    "favorites": {
+      "view_details": "View Details",
+      "no_favorites_yet": "No Favorites Yet",
+      "start_exploring_propertie": "Start exploring properties and tap the heart icon to save your favorites here",
+      "explore_properties": "Explore Properties",
+      "loading_your_favorites": "Loading your favorites...",
+      "my_favorites": "My Favorites"
+    },
+    "home": {
+      "can_t_find_what_you_re_lo": "Can't find what you're looking for?",
+      "notify_me": "Notify Me",
+      "fill_out_the_details_of_t": "Fill out the details of the property you need. We'll search for it and notify you as soon as it's available!",
+      "preferred_location": "Preferred Location",
+      "budget__fcfa": "Budget (FCFA)",
+      "specific_requirements": "Specific Requirements",
+      "submit_request": "Submit Request"
+    },
+    "listingreview": {
+      "rate_this_listing": "Rate this Listing",
+      "tap_stars_to_select_your": "Tap stars to select your rating",
+      "optional_comment": "Optional Comment",
+      "back_to_booking": "Back to Booking"
+    },
+    "profile": {
+      "age": "Age"
+    },
+    "viewbookings": {
+      "active": "Active",
+      "pending": "Pending",
+      "past": "Past"
+    }
   }
 }

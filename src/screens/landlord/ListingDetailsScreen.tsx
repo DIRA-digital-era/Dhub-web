@@ -10,6 +10,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { ListingDetails, MediaItem } from '../../types';
 import { fetchListingDetails } from '../../utils/listings';
 import { supabase } from '../../utils/supabaseClient';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -24,7 +25,9 @@ type Props = {
   route: RouteProp<LandlordStackParamList, 'ListingDetails'>;
 };
 
-const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
+const ListingDetailsScreen: React.FC<Props> = ({
+route }) => {
+  const { t } = useTranslation();
   const navigation = useNavigation<NavigationProp<LandlordStackParamList>>();
   const { listingId } = route.params;
   const { user } = useAuth();
@@ -196,7 +199,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     return (
       <View style={styles.centered}>
         <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={styles.loadingText}>Loading property details...</Text>
+        <Text style={styles.loadingText}>{t('screens.listingdetails.loading_property_details')}</Text>
       </View>
     );
   }
@@ -205,13 +208,13 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
     return (
       <View style={styles.centered}>
         <Ionicons name="alert-circle-outline" size={64} color={colors.error} />
-        <Text style={styles.errorTitle}>Unable to load property</Text>
+        <Text style={styles.errorTitle}>{t('screens.listingdetails.unable_to_load_property')}</Text>
         <Text style={styles.errorSubtitle}>{error}</Text>
         <TouchableOpacity style={styles.retryButton} onPress={loadListing}>
-          <Text style={styles.retryButtonText}>Retry</Text>
+          <Text style={styles.retryButtonText}>{t('screens.listingdetails.retry')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+          <Text style={styles.backButtonText}>{t('screens.listingdetails.go_back')}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -245,7 +248,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color={colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Property Details</Text>
+        <Text style={styles.headerTitle}>{t('screens.listingdetails.property_details')}</Text>
         <TouchableOpacity onPress={handleEdit} style={styles.editButton}>
           <Ionicons name="pencil-outline" size={22} color={colors.primary} />
         </TouchableOpacity>
@@ -316,14 +319,14 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             onPress={handleShare}
           >
             <Ionicons name="arrow-redo" size={24} color={colors.background} />
-            <Text style={[styles.quickActionText, { color: colors.background, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>Share this listing</Text>
+            <Text style={[styles.quickActionText, { color: colors.background, fontSize: 16, fontWeight: '700', letterSpacing: 0.5 }]}>{t('screens.listingdetails.share_this_listing')}</Text>
           </TouchableOpacity>
 
           <View style={[styles.section, styles.switchSection]}>
             <View style={styles.switchRow}>
               <View style={styles.switchLeft}>
                 <Ionicons name="checkmark-circle-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Available for Rent</Text>
+                <Text style={styles.sectionTitle}>{t('screens.listingdetails.available_for_rent')}</Text>
               </View>
               <Switch
                 value={!!listing.available}
@@ -341,7 +344,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="document-text-outline" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Description</Text>
+              <Text style={styles.sectionTitle}>{t('screens.listingdetails.description')}</Text>
             </View>
             <Text style={styles.description}>{listing.description || 'No description provided for this property.'}</Text>
           </View>
@@ -349,7 +352,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Ionicons name="map-outline" size={20} color={colors.primary} />
-              <Text style={styles.sectionTitle}>Location</Text>
+              <Text style={styles.sectionTitle}>{t('screens.listingdetails.location')}</Text>
             </View>
             <View style={styles.locationCard}>
               <View style={styles.locationInfo}>
@@ -359,7 +362,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               {listing.latitude && listing.longitude && (
                 <TouchableOpacity style={styles.mapButton} onPress={() => setMapModalVisible(true)}>
                   <Ionicons name="map" size={18} color={colors.background} />
-                  <Text style={styles.mapButtonText}>View Map</Text>
+                  <Text style={styles.mapButtonText}>{t('screens.listingdetails.view_map')}</Text>
                 </TouchableOpacity>
               )}
             </View>
@@ -369,7 +372,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="videocam-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Property Videos</Text>
+                <Text style={styles.sectionTitle}>{t('screens.listingdetails.property_videos')}</Text>
               </View>
               <Text style={styles.videoCount}>{videos.length} video{videos.length > 1 ? 's' : ''} available</Text>
             </View>
@@ -379,7 +382,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
             <View style={styles.section}>
               <View style={styles.sectionHeader}>
                 <Ionicons name="person-outline" size={20} color={colors.primary} />
-                <Text style={styles.sectionTitle}>Landlord Information</Text>
+                <Text style={styles.sectionTitle}>{t('screens.listingdetails.landlord_information')}</Text>
               </View>
               <View style={styles.landlordCard}>
                 <View style={styles.landlordAvatar}>
@@ -424,23 +427,23 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
                   ) : (
                     <>
                       <Ionicons name="shield-checkmark-outline" size={20} color={colors.background} />
-                      <Text style={styles.verifyButtonText}>Verify</Text>
+                      <Text style={styles.verifyButtonText}>{t('screens.listingdetails.verify')}</Text>
                     </>
                   )}
                 </TouchableOpacity>
                 <TouchableOpacity onPress={() => setInfoModalVisible(true)}>
-                  <Text style={styles.infoLinkText}>Why should I verify my listing?</Text>
+                  <Text style={styles.infoLinkText}>{t('screens.listingdetails.why_should_i_verify_my_li')}</Text>
                 </TouchableOpacity>
               </View>
             )}
             <View style={styles.actionButtons}>
               <TouchableOpacity style={styles.boostButton} onPress={handleBoost}>
                 <Ionicons name="rocket-outline" size={20} color={colors.primary} />
-                <Text style={styles.boostButtonText}>Boost</Text>
+                <Text style={styles.boostButtonText}>{t('screens.listingdetails.boost')}</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.deleteButton} onPress={handleDelete}>
                 <Ionicons name="trash-outline" size={20} color={colors.error} />
-                <Text style={styles.deleteButtonText}>Delete</Text>
+                <Text style={styles.deleteButtonText}>{t('screens.listingdetails.delete')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -452,7 +455,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
         <View style={styles.modalOverlay}>
           <View style={styles.modalContainer}>
             <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Why verify your listing?</Text>
+              <Text style={styles.modalTitle}>{t('screens.listingdetails.why_verify_your_listing')}</Text>
               <TouchableOpacity onPress={() => setInfoModalVisible(false)}>
                 <Ionicons name="close" size={24} color={colors.text} />
               </TouchableOpacity>
@@ -463,7 +466,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
               The {verificationFee.toLocaleString()} FCFA fee covers the logistics and displacement of our DHUB agents to physically inspect the property, take professional photos if needed, and guarantee its authenticity to prospective tenants.
             </Text>
             <TouchableOpacity style={styles.modalButton} onPress={() => setInfoModalVisible(false)}>
-              <Text style={styles.modalButtonText}>I understand</Text>
+              <Text style={styles.modalButtonText}>{t('screens.listingdetails.i_understand')}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -480,7 +483,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
           <View style={styles.verificationModalContent}>
             <View style={styles.verificationModalHeader}>
               <Ionicons name="shield-checkmark-outline" size={28} color={colors.primary} />
-              <Text style={styles.verificationModalTitle}>Request Verification</Text>
+              <Text style={styles.verificationModalTitle}>{t('screens.listingdetails.request_verification')}</Text>
             </View>
             <Text style={styles.verificationModalDescription}>
               This requires a non-refundable displacement fee of{' '}
@@ -494,7 +497,7 @@ const ListingDetailsScreen: React.FC<Props> = ({ route }) => {
                 style={[styles.verificationModalButton, styles.verificationCancelButton]}
                 onPress={handleCancelVerification}
               >
-                <Text style={styles.verificationCancelButtonText}>Cancel</Text>
+                <Text style={styles.verificationCancelButtonText}>{t('screens.listingdetails.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.verificationModalButton, styles.verificationProceedButton]}

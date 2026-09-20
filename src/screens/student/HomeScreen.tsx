@@ -338,7 +338,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
           )}
           <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary, paddingHorizontal: 20 }]} onPress={() => setRequestModalVisible(true)}>
             <Ionicons name="home-outline" size={18} color={colors.primary} />
-            <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
+            <Text style={[styles.requestButtonText, { color: colors.primary }]}>{t('screens.home.can_t_find_what_you_re_lo')}</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -366,7 +366,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
               <View style={[styles.requestContainer, { marginBottom: 24, marginTop: 12 }]}>
                 <TouchableOpacity style={[styles.requestButton, { backgroundColor: colors.card, borderColor: colors.primary }]} onPress={() => setRequestModalVisible(true)}>
                   <Ionicons name="home-outline" size={18} color={colors.primary} />
-                  <Text style={[styles.requestButtonText, { color: colors.primary }]}>Can't find what you're looking for?</Text>
+                  <Text style={[styles.requestButtonText, { color: colors.primary }]}>{t('screens.home.can_t_find_what_you_re_lo')}</Text>
                 </TouchableOpacity>
               </View>
               {loadingMore && <ActivityIndicator size="large" color={colors.primary} style={{ marginVertical: 20 }} />}
@@ -423,16 +423,14 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
             >
               <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: 40 }]}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>Notify Me</Text>
+                  <Text style={[styles.modalTitle, { color: colors.text, marginBottom: 0 }]}>{t('screens.home.notify_me')}</Text>
                   <TouchableOpacity onPress={() => setRequestModalVisible(false)}>
                     <Ionicons name="close" size={24} color={colors.textSecondary} />
                   </TouchableOpacity>
                 </View>
-                <Text style={{ color: colors.textSecondary, marginBottom: 20, fontSize: 15, lineHeight: 22 }}>
-                  Fill out the details of the property you need. We'll search for it and notify you as soon as it's available!
-                </Text>
+                <Text style={{ color: colors.textSecondary, marginBottom: 20, fontSize: 15, lineHeight: 22 }}>{t('screens.home.fill_out_the_details_of_t')}</Text>
 
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Preferred Location</Text>
+                <Text style={[styles.filterLabel, { color: colors.text }]}>{t('screens.home.preferred_location')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
                   placeholder="e.g., Molyko, Buea"
@@ -441,7 +439,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   onChangeText={setRequestLocation}
                 />
 
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Budget (FCFA)</Text>
+                <Text style={[styles.filterLabel, { color: colors.text }]}>{t('screens.home.budget__fcfa')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border }]}
                   placeholder="e.g., 20,000 - 40,000 per month"
@@ -451,7 +449,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   keyboardType="numeric"
                 />
 
-                <Text style={[styles.filterLabel, { color: colors.text }]}>Specific Requirements</Text>
+                <Text style={[styles.filterLabel, { color: colors.text }]}>{t('screens.home.specific_requirements')}</Text>
                 <TextInput
                   style={[styles.modalInput, { backgroundColor: isDark ? '#2a2a2a' : '#f5f5f5', color: colors.text, borderColor: colors.border, height: 100 }]}
                   placeholder="e.g., 2 bedrooms, close to campus, water included..."
@@ -470,7 +468,7 @@ const HomeScreen: React.FC<{ navigation: any }> = ({ navigation }) => {
                   {submittingRequest ? (
                     <ActivityIndicator color="#fff" />
                   ) : (
-                    <Text style={styles.applyButtonText}>Submit Request</Text>
+                    <Text style={styles.applyButtonText}>{t('screens.home.submit_request')}</Text>
                   )}
                 </TouchableOpacity>
               </View>
