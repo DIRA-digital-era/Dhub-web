@@ -386,22 +386,31 @@ const ApprovalScreen: React.FC = () => {
             </View>
           ) : null}
 
-          {/* Status */}
-          <View style={{ marginTop: 12 }}>
-            <Text style={styles.label}>
-              Platform State:{' '}
-              <Text style={{ color: colors.primary, fontWeight: '600' }}>
-                {booking.approval_status === 'approved' && booking.status === 'pending'
-                  ? 'PENDING PAYMENT'
-                  : booking.status?.toUpperCase()}
+          {/* Simplified Status Message */}
+            <View style={{ marginTop: 16, padding: 12, backgroundColor: isDark ? '#2A2A2A' : '#F8F9FA', borderRadius: 8, borderWidth: 1, borderColor: isDark ? '#444' : '#E0E0E0' }}>
+              <Text style={{ fontSize: 16, color: colors.text, fontWeight: '600', lineHeight: 22 }}>
+                {(() => {
+                  if (booking.status === 'cancelled') {
+                    return "This booking was cancelled.";
+                  }
+                  if (booking.approval_status === 'rejected') {
+                    return "You rejected this booking request.";
+                  }
+                  if (booking.approval_status === 'approved') {
+                    if (booking.status === 'pending') {
+                      return "You accepted this request. We are now waiting for the tenant to make the payment.";
+                    }
+                    if (booking.status === 'confirmed') {
+                      return "The tenant has paid! The booking is confirmed.";
+                    }
+                    if (booking.status === 'completed') {
+                      return "This renting period has finished.";
+                    }
+                  }
+                  return "A tenant wants to rent your property. Please review and accept or reject below.";
+                })()}
               </Text>
-            </Text>
-            <Text style={styles.label}>
-              Landlord Decision:{' '}
-              <Text style={{ color: colors.textSecondary }}>
-                {booking.approval_status?.toUpperCase() || 'PENDING'}
-              </Text>
-            </Text>
+            </View>
           </View>
         </View>
 
