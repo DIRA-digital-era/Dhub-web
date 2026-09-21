@@ -55,7 +55,7 @@ const fetchLandlordProfile = async (): Promise<void> => {
       const parsed: KYCProfile = JSON.parse(cached);
       setLandlordProfile(parsed);
       setForm({ address: parsed.address || '', city: parsed.city || '' });
-      return; // skip network if cached
+      // return; // skip network if cached
     }
 
     // 2️⃣ Fetch from Supabase if no cache
@@ -458,3 +458,4 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 });
 
 export default KYCVerificationScreen;
+

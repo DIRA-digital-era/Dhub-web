@@ -2,6 +2,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../../utils/alert';
 import { generateVideoThumbnail } from '../../utils/videoThumbnail';
 import React, { useEffect, useRef, useState } from 'react';
@@ -304,7 +305,20 @@ const UploadListingScreen: React.FC = () => {
       ]);
     } catch (err: any) {
       console.error('Error creating listing:', err);
-      showAlert('Error', err.message || 'Failed to create listing. Please try again.');
+      const errMsg = err.message || '';
+      if (errMsg.includes('row-level security') || errMsg.includes('42501')) {
+        AsyncStorage.removeItem(`kyc_status_${user?.id}`);
+        showAlert(
+          'KYC Verification Required',
+          'Your KYC status is pending or rejected. Please verify your identity before uploading.',
+          [
+            { text: 'Cancel', onPress: () => navigation.goBack(), style: 'cancel' },
+            { text: 'Verify Now', onPress: () => navigation.navigate('KYCVerification' as never) }
+          ]
+        );
+      } else {
+        showAlert('Error', err.message || 'Failed to create listing. Please try again.');
+      }
       abortControllerRef.current = null;
       setLoading(false);
     }
