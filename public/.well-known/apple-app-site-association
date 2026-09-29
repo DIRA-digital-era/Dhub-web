@@ -1,0 +1,11 @@
+{
+  "applinks": {
+    "apps": [],
+    "details": [
+      {
+        "appID": "A95S9KHMUG.com.dira.dhub",
+        "paths": ["/listing/*"]
+      }
+    ]
+  }
+}

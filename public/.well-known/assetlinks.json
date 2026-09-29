@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.dira.dhub",
+      "sha256_cert_fingerprints": [
+        "CB:87:1F:C7:34:EE:A3:A6:51:8A:6B:1B:4D:26:30:24:53:B5:CC:2B:48:90:B9:38:7D:52:2A:73:C9:B5:8D:04"
+      ]
+    }
+  }
+]
