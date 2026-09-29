@@ -1,0 +1,16 @@
+{
+  "short_name": "DHUB",
+  "name": "DHUB: Seamless Rental Booking",
+  "description": "Find and book properties seamlessly with DHUB.",
+  "start_url": "/?utm_source=web_app_manifest",
+  "display": "standalone",
+  "background_color": "#0D1117",
+  "theme_color": "#D4AF37",
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.dira.dhub"
+    }
+  ]
+}
