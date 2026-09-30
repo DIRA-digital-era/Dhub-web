@@ -1,4 +1,4 @@
-// src/store/authSlice.ts
+﻿// src/store/authSlice.ts
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { clearLocalSession, createLocalSession } from '../utils/localSession';
 import { supabase } from '../utils/supabaseClient';
@@ -56,6 +56,7 @@ export const signIn = createAsyncThunk(
         email: data.user.email || '',
         role: (data.user.user_metadata?.role || 'student') as 'student' | 'landlord' | 'admin',
         phone: data.user.phone || data.user.user_metadata?.phone || '',
+        momo: data.user.user_metadata?.momo || '',
         token: data.session.access_token,
         refreshToken: data.session.refresh_token,
         supabaseTokens: { access_token: data.session.access_token, refresh_token: data.session.refresh_token },
@@ -97,6 +98,7 @@ export const phoneSignIn = createAsyncThunk(
         email: result.user.email || '',
         role: (result.user.role || 'student') as 'student' | 'landlord' | 'admin',
         phone: result.user.phone || phone,
+        momo: result.user.momo || result.user.mobileMoney || '',
         token: supTokens?.access_token || null,
         refreshToken: supTokens?.refresh_token || null,
         supabaseTokens: supTokens,
@@ -143,7 +145,7 @@ const authSlice = createSlice({
       state.refreshToken = action.payload.refreshToken;
       state.isHydrated = true;
       state.error = null;
-      console.log('🟣 [authSlice] setUser called:', {
+      console.log('ðŸŸ£ [authSlice] setUser called:', {
         id: action.payload.id,
         hasToken: !!action.payload.token,
       });

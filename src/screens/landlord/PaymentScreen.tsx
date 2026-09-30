@@ -1,4 +1,4 @@
-import { showAlert } from '../../utils/alert';
+﻿import { showAlert } from '../../utils/alert';
 // src/screens/landlord/PaymentsScreen.tsx
 import { useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
@@ -99,7 +99,7 @@ const PaymentsScreen: React.FC = () => {
     }
   }, [boostParams, routeParams]);
 
-  // Success → reset form, switch to history
+  // Success â†’ reset form, switch to history
   useEffect(() => {
     if (!initiateData) return;
     const numAmount = parseFloat(amount);
@@ -108,14 +108,14 @@ const PaymentsScreen: React.FC = () => {
     setActiveTab('history');
     dispatch(clearInitiateState());
     showAlert(
-      'Payment Initiated ✅',
+      'Payment Initiated âœ…',
       boostParams
         ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
         : `${formatCurrency(numAmount)} payment initiated.\nApprove the MoMo prompt on your phone to complete.`,
     );
   }, [initiateData]);
 
-  // Failure → show alert
+  // Failure â†’ show alert
   useEffect(() => {
     if (!initiateError) return;
     showAlert('Payment Failed', initiateError);
@@ -183,7 +183,7 @@ const PaymentsScreen: React.FC = () => {
         id: `col-${Date.now()}`,
         payer_id: user.id,
         listing_id: boostParams?.listingId ?? '',
-        plan_id: boostParams?.planId ?? null,   // ← needed by webhook to activate boost
+        plan_id: boostParams?.planId ?? null,   // â† needed by webhook to activate boost
         idempotency_key: `dhub-col-${Date.now()}`,
       },
     }));
@@ -408,7 +408,7 @@ const PaymentsScreen: React.FC = () => {
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitle}>{t('screens.payment.payment_receipt')}</Text>
             <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
-              <Text style={styles.closeButtonText}>×</Text>
+              <Text style={styles.closeButtonText}>Ã—</Text>
             </TouchableOpacity>
           </View>
 
