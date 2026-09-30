@@ -357,6 +357,7 @@ export type RootStackParamList = {
   LandlordStack: NavigatorScreenParams<LandlordStackParamList> | undefined;
   ListingDetails: { listingId: string } | undefined;
   UpdatePassword: undefined;
+  CompleteProfile: undefined;
 };
 
 /* ===========================
@@ -383,3 +384,4 @@ export type StudentStackRouteProp<T extends keyof StudentStackParamList> = Route
 export type LandlordStackRouteProp<T extends keyof LandlordStackParamList> = RouteProp<LandlordStackParamList, T>;
 export type StudentTabRouteProp<T extends keyof StudentTabParamList> = RouteProp<StudentTabParamList, T>;
 export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RouteProp<LandlordTabParamList, T>;
+

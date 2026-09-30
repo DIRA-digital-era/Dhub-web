@@ -14,6 +14,9 @@ import StudentStack from './StudentStack';
 // Password Update Screen
 import UpdatePasswordScreen from '../screens/auth/UpdatePasswordScreen';
 
+// Progressive Onboarding
+import CompleteProfileScreen from '../screens/auth/CompleteProfileScreen';
+
 // Common screens
 import ListingDetailsScreen from '../screens/student/ListingDetailsScreen';
 
@@ -26,6 +29,7 @@ const RootNavigator: React.FC = () => {
   const userRole = useSelector((state: RootState) => state.auth.user?.role);
   const loading = useSelector((state: RootState) => state.auth.isLoading);
   const requiresPasswordUpdate = useSelector((state: RootState) => state.auth.requiresPasswordUpdate);
+  const needsOnboarding = useSelector((state: RootState) => state.auth.needsOnboarding);
   const { colors } = useTheme();
 
   if (loading) {
@@ -40,6 +44,8 @@ const RootNavigator: React.FC = () => {
     <Stack.Navigator screenOptions={{ headerShown: false }}>
       {requiresPasswordUpdate ? (
         <Stack.Screen name="UpdatePassword" component={UpdatePasswordScreen} />
+      ) : needsOnboarding ? (
+        <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
       ) : userRole ? (
         userRole === 'landlord' ? (
           <Stack.Screen name="LandlordStack" component={LandlordStack} />

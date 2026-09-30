@@ -10,6 +10,7 @@ import {
   setError,
   setHydrated,
   setRequiresPasswordUpdate,
+  setNeedsOnboarding,
   setSyncing,
   setUser,
   User
@@ -111,13 +112,11 @@ const AuthListener: React.FC = () => {
         ]) as any;
 
         if (!dbUser && user) {
-           authLogger.warn(STEP, 'Public record missing. Attempting emergency sync...');
-           await syncProfileData(user.id, {
-             fullName: user.user_metadata?.full_name || 'User',
-             role: user.user_metadata?.role || 'student',
-             whatsappNumber: user.user_metadata?.whatsapp || '',
-             mobileMoney: user.user_metadata?.momo || ''
-           });
+           authLogger.warn(STEP, 'Public record missing. Triggering Progressive Onboarding...');
+           dispatch(setNeedsOnboarding(true));
+           // Do not emergency-sync. Hold the user in CompleteProfileScreen until they fill in details.
+        } else {
+           dispatch(setNeedsOnboarding(false));
         }
 
         const finalUser: User = {

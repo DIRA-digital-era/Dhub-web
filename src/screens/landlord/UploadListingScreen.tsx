@@ -29,6 +29,7 @@ const UploadListingScreen: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [loading, setLoading] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'loading' | 'approved' | 'pending' | 'rejected' | 'none'>('loading');
   const [showMap, setShowMap] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);

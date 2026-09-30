@@ -22,6 +22,7 @@ interface AuthState {
   isSyncing: boolean; // New state for post-verification sync
   isHydrated: boolean;
   requiresPasswordUpdate: boolean;
+  needsOnboarding: boolean;
   error: string | null;
 }
 
@@ -33,6 +34,7 @@ const initialState: AuthState = {
   isSyncing: false,
   isHydrated: false,
   requiresPasswordUpdate: false,
+  needsOnboarding: false,
   error: null,
 };
 
@@ -164,6 +166,9 @@ const authSlice = createSlice({
     setRequiresPasswordUpdate(state, action: PayloadAction<boolean>) {
       state.requiresPasswordUpdate = action.payload;
     },
+    setNeedsOnboarding(state, action: PayloadAction<boolean>) {
+      state.needsOnboarding = action.payload;
+    },
     setSyncing(state, action: PayloadAction<boolean>) {
       state.isSyncing = action.payload;
     },
@@ -211,5 +216,5 @@ const authSlice = createSlice({
   },
 });
 
-export const { setUser, setHydrated, clearUser, clearError, setError, setRequiresPasswordUpdate, setSyncing } = authSlice.actions;
+export const { setUser, setHydrated, clearUser, clearError, setError, setRequiresPasswordUpdate, setNeedsOnboarding, setSyncing } = authSlice.actions;
 export default authSlice.reducer;
