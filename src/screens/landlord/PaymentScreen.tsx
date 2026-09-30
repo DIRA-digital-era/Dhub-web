@@ -4,6 +4,7 @@ import { useRoute } from '@react-navigation/native';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -13,7 +14,6 @@ import { clearInitiateState, fetchPayments, initiateCollection, initiateVerifica
 import type { RootState } from '../../store/store';
 import { LandlordTabRouteProp } from '../../types';
 import { supabase } from '../../utils/supabaseClient';
-import { useTranslation } from 'react-i18next';
 
 const RECEIVER_NAME = 'DHUB';
 
@@ -173,7 +173,7 @@ const PaymentsScreen: React.FC = () => {
     const tierId = reason === 'landlord_subscription' ? 'tier_monthly' : undefined;
 
     dispatch(initiateCollection({
-      payerPhone: user.phone,
+      payerPhone: user.momo || user.phone,
       amount: String(numAmount),
       reason,
       planId,
