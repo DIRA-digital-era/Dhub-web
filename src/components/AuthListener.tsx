@@ -56,9 +56,10 @@ const AuthListener: React.FC = () => {
 
       authLogger.log(STEP, `Session found for ${session.user.id}. Releasing Gatekeeper optimistically...`);
 
-      // Resolve role without any default fallback.
-      // A missing role indicates a new OAuth / Magic Link user who has not yet
-      // selected Tenant or Landlord. They must pass through CompleteProfileScreen.
+      // Route on metadata alone. Metadata is the local cache of the role that
+      // syncProfileData writes after onboarding. Do not fall back to 'student'
+      // here - a missing role means this user has not yet chosen one, and must
+      // be routed to the onboarding gate.
       const userRole = session.user.user_metadata?.role;
       const hasRole = !!userRole;
 
@@ -105,11 +106,28 @@ const AuthListener: React.FC = () => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFICATION_TIMEOUT')), 5000))
         ]) as any;
 
+        // The `user` object above is a snapshot taken BEFORE any metadata update.
+        // syncProfileData calls supabase.auth.updateUser, which mutates the
+        // server-side metadata but not this in-memory snapshot. So we capture
+        // the role we are about to write into `pendingProfileRole` and use
+        // that value during role resolution, rather than reading the stale
+        // `user.user_metadata.role`.
+        let pendingProfileRole: string | undefined;
+
         const pendingJson = await AsyncStorage.getItem('pending_profile');
         if (pendingJson) {
-          authLogger.log(STEP, 'Pending profile found. Triggering Master Sync...');
-          const profileData = JSON.parse(pendingJson);
-          await syncProfileData(user.id, profileData);
+          // isNewUser guard: reject stale pending_profile left behind by a
+          // different (abandoned) signup on this device. Only apply the pending
+          // profile if the current auth user was created moments ago.
+          const isNewUser = new Date().getTime() - new Date(user.created_at).getTime() < 60000;
+          if (isNewUser) {
+            authLogger.log(STEP, 'Pending profile found for NEW user. Triggering Master Sync...');
+            const profileData = JSON.parse(pendingJson);
+            pendingProfileRole = profileData?.role;
+            await syncProfileData(user.id, profileData);
+          } else {
+            authLogger.log(STEP, 'Pending profile found but user is NOT new. Discarding to prevent data bleed.');
+          }
           await AsyncStorage.removeItem('pending_profile');
         }
 
@@ -124,22 +142,22 @@ const AuthListener: React.FC = () => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('DB_FETCH_TIMEOUT')), 5000))
         ]) as any;
 
-        // Resolve role without any fallback to 'student'.
-        // roleMissing covers both cases:
-        //   a) no public.users row exists yet (brand-new OAuth user)
-        //   b) row exists but the role column is null/empty
-        // In both scenarios we hold the user in CompleteProfileScreen until they
-        // explicitly select Tenant or Landlord. We never silently default them.
-        const finalRole = dbUser?.role || user.user_metadata?.role;
-        const roleMissing = !dbUser || !dbUser.role;
+        // Role Resolution
+        //
+        // Priority:
+        //   1. pendingProfileRole - set when we just wrote the role this run
+        //   2. session.user.user_metadata.role - for returning users
+        //
+        // We intentionally do NOT read dbUser.role. public.users has no role
+        // column; roles live in public.user_roles. A missing role across both
+        // sources means the user has not completed onboarding yet.
+        const resolvedRole = pendingProfileRole || session.user.user_metadata?.role;
+        const roleMissing = !resolvedRole;
 
         if (roleMissing) {
-          authLogger.warn(STEP, 'Role missing (no public record OR no role column). Forcing JIT Onboarding...');
+          authLogger.warn(STEP, 'No role resolved from pending_profile or metadata. Routing to onboarding.');
           dispatch(setNeedsOnboarding(true));
-          // Do not emergency-sync to 'student'. Leave the DB record empty until
-          // the user completes CompleteProfileScreen.
         } else {
-          // Returning user with a confirmed role: route them straight to their stack.
           dispatch(setNeedsOnboarding(false));
         }
 
@@ -147,7 +165,7 @@ const AuthListener: React.FC = () => {
           id: user.id,
           fullName: dbUser?.full_name || user.user_metadata?.full_name || 'User',
           email: dbUser?.email || user.email || '',
-          role: finalRole as any, // intentionally undefined when role is missing
+          role: resolvedRole as any, // intentionally undefined when role is missing
           phone: dbUser?.phone || user.phone || '',
           momo: dbUser?.momo || user.user_metadata?.momo || '',
           token: session.access_token,

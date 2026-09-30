@@ -17,16 +17,17 @@ import {
 import { useDispatch, useSelector } from 'react-redux';
 
 import * as Linking from 'expo-linking';
+import { useTranslation } from 'react-i18next';
 import ButtonPrimary from '../../components/ButtonPrimary';
 import { DiraBranding } from '../../components/DiraBranding';
 import { LanguageSelector } from '../../components/LanguageSelector';
 import { useTheme } from '../../context/ThemeContext';
 import type { AppDispatch } from '../../store/store';
 import { AuthStackParamList } from '../../types';
+import { showAlert } from '../../utils/alert';
 import { normalizePhone } from '../../utils/authHelpers';
 import { loginWithEmail, loginWithGoogle, loginWithPhone } from '../../utils/login';
 import { supabase } from '../../utils/supabaseClient';
-import { useTranslation } from 'react-i18next';
 
 type SignInScreenNavigationProp = NativeStackNavigationProp<AuthStackParamList, 'SignIn'>;
 
@@ -138,6 +139,7 @@ const SignInScreen: React.FC = () => {
     }
     setLoading(true);
     setErrorMessage('');
+
     try {
       const redirectUrl = Platform.OS === 'web'
         ? `${window.location.origin}/auth/callback`
@@ -147,17 +149,31 @@ const SignInScreen: React.FC = () => {
         email: identifier.trim(),
         options: {
           emailRedirectTo: redirectUrl,
-          shouldCreateUser: true,
+          // Sign-in only. New accounts are created via the SignUp screen,
+          // Google OAuth, or Apple OAuth. This prevents attackers from probing
+          // the API to discover which emails are registered.
+          shouldCreateUser: false,
         },
       });
-      if (error) throw error;
 
-      navigation.navigate('EmailVerification', {
-        email: identifier.trim(),
-        mode: 'signup'
-      });
+      // Suppress GoTrue errors that would reveal whether the email is
+      // registered. Any other error (network, rate limit, invalid email) still
+      // propagates to the catch block below.
+      if (error
+        && !error.message.includes('Signups not allowed')
+        && !error.message.includes('User not found')) {
+        throw error;
+      }
+
+      // Generic, privacy-safe confirmation. Always shown regardless of whether
+      // the email exists so attackers cannot probe account existence.
+      showAlert(
+        'Check Your Email',
+        'If an account with that email exists, we have sent a magic link to your inbox.',
+        [{ text: 'OK' }]
+      );
     } catch (err: any) {
-      setErrorMessage(err.message || 'Could not send Magic Link.');
+      setErrorMessage(err.message || 'Could not process request.');
     } finally {
       setLoading(false);
     }
@@ -195,7 +211,7 @@ const SignInScreen: React.FC = () => {
         <Text style={styles.subtitle}>{t('screens.signin.sign_in_to_your_account')}</Text>
       </View>
 
-      {/* Main content – simple ScrollView, no native wrappers */}
+      {/* Main content - simple ScrollView, no native wrappers */}
       <ScrollView
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
