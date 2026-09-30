@@ -1,6 +1,6 @@
 // src/store/authSlice.ts
 import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { clearLocalSession, createLocalSession, getLocalSession } from '../utils/localSession';
+import { clearLocalSession, createLocalSession } from '../utils/localSession';
 import { supabase } from '../utils/supabaseClient';
 
 export interface User {
@@ -9,6 +9,7 @@ export interface User {
   email: string;
   role: 'student' | 'landlord' | 'admin';
   phone?: string;
+  momo?: string;
   token: string | null;
   refreshToken: string | null;
   supabaseTokens?: { access_token: string; refresh_token: string };

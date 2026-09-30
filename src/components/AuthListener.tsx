@@ -1,4 +1,4 @@
-// src/components/AuthListener.tsx
+﻿// src/components/AuthListener.tsx
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Session } from "@supabase/supabase-js";
 import * as Linking from 'expo-linking';
@@ -62,6 +62,7 @@ const AuthListener: React.FC = () => {
         email: session.user.email || '',
         role: (session.user.user_metadata?.role || 'student') as any,
         phone: session.user.phone || '',
+        momo: session.user.user_metadata?.momo || '',
         token: session.access_token,
         refreshToken: session.refresh_token || '',
         supabaseTokens: {
@@ -125,6 +126,7 @@ const AuthListener: React.FC = () => {
           email: dbUser?.email || user.email || '',
           role: (dbUser?.role || user.user_metadata?.role || 'student') as any,
           phone: dbUser?.phone || user.phone || '',
+          momo: dbUser?.momo || user.user_metadata?.momo || '',
           token: session.access_token,
           refreshToken: session.refresh_token || '',
           supabaseTokens: {
@@ -135,7 +137,7 @@ const AuthListener: React.FC = () => {
 
         await createLocalSession(finalUser, finalUser.supabaseTokens);
         dispatch(setUser(finalUser));
-        authLogger.success(STEP, '🏁 Background sync complete. State refined.');
+        authLogger.success(STEP, 'ðŸ Background sync complete. State refined.');
 
       } catch (err: any) {
         authLogger.warn(STEP, `Background sync failed/delayed: ${err.message}`);
@@ -219,3 +221,4 @@ const AuthListener: React.FC = () => {
 };
 
 export default AuthListener;
+
