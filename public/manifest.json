@@ -1,4 +1,4 @@
-{
+﻿{
   "short_name": "DHUB",
   "name": "DHUB: Seamless Rental Booking",
   "description": "Find and book properties seamlessly with DHUB.",
@@ -6,6 +6,21 @@
   "display": "standalone",
   "background_color": "#0D1117",
   "theme_color": "#D4AF37",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "48x48 72x72 96x96 128x128 192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
   "prefer_related_applications": true,
   "related_applications": [
     {

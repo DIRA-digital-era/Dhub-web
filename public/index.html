@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="%LANG_ISO_CODE%">
   <head>
     <meta charset="utf-8" />
@@ -8,9 +8,11 @@
     
     <!-- Android Native Install Prompt Configuration -->
     <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
 
-    <!-- dYF iOS Smart App Banner: Automatically shows the native App Store banner at the top of Safari -->
-    <!-- Note: We need the actual App Store App ID (e.g., id123456789) here once published. -->
+    <!-- iOS Smart App Banner: shows native App Store banner in Safari -->
+    <!-- TODO: Replace 000000000 with your real App Store numeric ID once DHUB is live -->
     <meta name="apple-itunes-app" content="app-id=000000000">
 
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
@@ -42,4 +44,5 @@
     <div id="root"></div>
   </body>
 </html>
+
 
