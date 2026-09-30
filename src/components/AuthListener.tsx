@@ -9,8 +9,8 @@ import {
   clearUser,
   setError,
   setHydrated,
-  setRequiresPasswordUpdate,
   setNeedsOnboarding,
+  setRequiresPasswordUpdate,
   setSyncing,
   setUser,
   User
@@ -55,12 +55,18 @@ const AuthListener: React.FC = () => {
       }
 
       authLogger.log(STEP, `Session found for ${session.user.id}. Releasing Gatekeeper optimistically...`);
-      
+
+      // Resolve role without any default fallback.
+      // A missing role indicates a new OAuth / Magic Link user who has not yet
+      // selected Tenant or Landlord. They must pass through CompleteProfileScreen.
+      const userRole = session.user.user_metadata?.role;
+      const hasRole = !!userRole;
+
       const optimisticUser: User = {
         id: session.user.id,
         fullName: session.user.user_metadata?.full_name || 'User',
         email: session.user.email || '',
-        role: (session.user.user_metadata?.role || 'student') as any,
+        role: userRole as any, // intentionally undefined when role is missing
         phone: session.user.phone || '',
         momo: session.user.user_metadata?.momo || '',
         token: session.access_token,
@@ -73,7 +79,13 @@ const AuthListener: React.FC = () => {
 
       dispatch(setUser(optimisticUser));
       dispatch(setHydrated());
-      
+
+      // JIT onboarding gate: no role in metadata means we force the profile picker.
+      if (!hasRole) {
+        authLogger.warn(STEP, 'No role in metadata. Forcing JIT onboarding gate.');
+        dispatch(setNeedsOnboarding(true));
+      }
+
       performBackgroundSync(session);
     };
 
@@ -112,19 +124,30 @@ const AuthListener: React.FC = () => {
           new Promise((_, reject) => setTimeout(() => reject(new Error('DB_FETCH_TIMEOUT')), 5000))
         ]) as any;
 
-        if (!dbUser && user) {
-           authLogger.warn(STEP, 'Public record missing. Triggering Progressive Onboarding...');
-           dispatch(setNeedsOnboarding(true));
-           // Do not emergency-sync. Hold the user in CompleteProfileScreen until they fill in details.
+        // Resolve role without any fallback to 'student'.
+        // roleMissing covers both cases:
+        //   a) no public.users row exists yet (brand-new OAuth user)
+        //   b) row exists but the role column is null/empty
+        // In both scenarios we hold the user in CompleteProfileScreen until they
+        // explicitly select Tenant or Landlord. We never silently default them.
+        const finalRole = dbUser?.role || user.user_metadata?.role;
+        const roleMissing = !dbUser || !dbUser.role;
+
+        if (roleMissing) {
+          authLogger.warn(STEP, 'Role missing (no public record OR no role column). Forcing JIT Onboarding...');
+          dispatch(setNeedsOnboarding(true));
+          // Do not emergency-sync to 'student'. Leave the DB record empty until
+          // the user completes CompleteProfileScreen.
         } else {
-           dispatch(setNeedsOnboarding(false));
+          // Returning user with a confirmed role: route them straight to their stack.
+          dispatch(setNeedsOnboarding(false));
         }
 
         const finalUser: User = {
           id: user.id,
           fullName: dbUser?.full_name || user.user_metadata?.full_name || 'User',
           email: dbUser?.email || user.email || '',
-          role: (dbUser?.role || user.user_metadata?.role || 'student') as any,
+          role: finalRole as any, // intentionally undefined when role is missing
           phone: dbUser?.phone || user.phone || '',
           momo: dbUser?.momo || user.user_metadata?.momo || '',
           token: session.access_token,
@@ -137,7 +160,7 @@ const AuthListener: React.FC = () => {
 
         await createLocalSession(finalUser, finalUser.supabaseTokens);
         dispatch(setUser(finalUser));
-        authLogger.success(STEP, 'ðŸ Background sync complete. State refined.');
+        authLogger.success(STEP, 'Background sync complete. State refined.');
 
       } catch (err: any) {
         authLogger.warn(STEP, `Background sync failed/delayed: ${err.message}`);
@@ -221,4 +244,3 @@ const AuthListener: React.FC = () => {
 };
 
 export default AuthListener;
-

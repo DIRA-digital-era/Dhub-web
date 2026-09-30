@@ -84,6 +84,8 @@ public/
   .well-known/
     apple-app-site-association
     assetlinks.json
+  favicon.png
+  icon-512.png
   index.html
   manifest.json
 scripts/
@@ -148,6 +150,7 @@ src/
     StudentTabNavigator.tsx
   screens/
     auth/
+      CompleteProfileScreen.tsx
       EmailVerificationScreen.tsx
       ForgotPasswordScreen.tsx
       ResetPasswordScreen.tsx
@@ -829,72 +832,6 @@ export default async (request: Request) => {
     }
   }
 ]
-</file>
-
-<file path="public/index.html">
-<!DOCTYPE html>
-<html lang="%LANG_ISO_CODE%">
-  <head>
-    <meta charset="utf-8" />
-    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
-    <title>%WEB_TITLE%</title>
-    
-    <!-- Android Native Install Prompt Configuration -->
-    <link rel="manifest" href="/manifest.json" />
-
-    <!-- dYF iOS Smart App Banner: Automatically shows the native App Store banner at the top of Safari -->
-    <!-- Note: We need the actual App Store App ID (e.g., id123456789) here once published. -->
-    <meta name="apple-itunes-app" content="app-id=000000000">
-
-    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
-    <style id="expo-reset">
-      /* These styles make the body full-height */
-      html,
-      body {
-        height: 100%;
-      }
-      /* These styles disable body scrolling if you are using <ScrollView> */
-      body {
-        overflow: hidden;
-      }
-      /* These styles make the root element full-height */
-      #root {
-        display: flex;
-        height: 100%;
-        flex: 1;
-      }
-    </style>
-  </head>
-
-  <body>
-    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
-    <noscript>
-      You need to enable JavaScript to run this app.
-    </noscript>
-    <!-- The root element for your Expo app. -->
-    <div id="root"></div>
-  </body>
-</html>
-</file>
-
-<file path="public/manifest.json">
-{
-  "short_name": "DHUB",
-  "name": "DHUB: Seamless Rental Booking",
-  "description": "Find and book properties seamlessly with DHUB.",
-  "start_url": "/?utm_source=web_app_manifest",
-  "display": "standalone",
-  "background_color": "#0D1117",
-  "theme_color": "#D4AF37",
-  "prefer_related_applications": true,
-  "related_applications": [
-    {
-      "platform": "play",
-      "id": "com.dira.dhub"
-    }
-  ]
-}
 </file>
 
 <file path="scripts/reset-project.js">
@@ -2775,6 +2712,383 @@ const StudentTabNavigator: React.FC = () => {
 export default StudentTabNavigator;
 </file>
 
+<file path="src/screens/auth/CompleteProfileScreen.tsx">
+// src/screens/auth/CompleteProfileScreen.tsx
+import React, { useState } from 'react';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  ActivityIndicator,
+  StatusBar,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useDispatch, useSelector } from 'react-redux';
+import { supabase } from '../../utils/supabaseClient';
+import { syncProfileData } from '../../utils/login';
+import { setUser, setNeedsOnboarding } from '../../store/authSlice';
+import { createLocalSession } from '../../utils/localSession';
+import type { AppDispatch } from '../../store/store';
+import type { RootState } from '../../store/store';
+
+// â”€â”€â”€ Design Tokens â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const GOLD   = '#D4AF37';
+const GOLD_D = '#B8960C';
+const GOLD_L = '#FDF9EE';
+const WHITE  = '#FFFFFF';
+const BG     = '#F8F9FA';
+const GREY1  = '#1A1A1A';
+const GREY2  = '#555555';
+const GREY3  = '#999999';
+const BORDER = '#E5E7EB';
+const ERROR  = '#EF4444';
+
+type Role = 'student' | 'landlord';
+
+const CompleteProfileScreen: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const authUser = useSelector((state: RootState) => state.auth.user);
+
+  const [fullName, setFullName] = useState(
+    authUser?.fullName && authUser.fullName !== 'User' ? authUser.fullName : ''
+  );
+  const [whatsapp, setWhatsapp] = useState('');
+  const [mobileMoney, setMobileMoney] = useState('');
+  const [role, setRole] = useState<Role | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const userEmail = authUser?.email || '';
+  const isValid = fullName.trim().length >= 2 && whatsapp.trim().length >= 9 && mobileMoney.trim().length >= 9 && role !== null;
+
+  const handleSubmit = async () => {
+    if (!isValid || !authUser) return;
+    setLoading(true);
+    setError('');
+    try {
+      await syncProfileData(authUser.id, {
+        fullName: fullName.trim(),
+        role: role!,
+        whatsappNumber: whatsapp.trim(),
+        mobileMoney: mobileMoney.trim(),
+        language: 'en',
+      });
+
+      const { data: dbUser } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', authUser.id)
+        .single();
+
+      const { data: { session } } = await supabase.auth.getSession();
+
+      const finalUser = {
+        id: authUser.id,
+        fullName: dbUser?.full_name || fullName.trim(),
+        email: dbUser?.email || userEmail,
+        role: (dbUser?.role || role) as 'student' | 'landlord' | 'admin',
+        phone: dbUser?.phone || whatsapp.trim(),
+        token: session?.access_token || authUser.token,
+        refreshToken: session?.refresh_token || authUser.refreshToken || '',
+        supabaseTokens: session
+          ? { access_token: session.access_token, refresh_token: session.refresh_token }
+          : authUser.supabaseTokens,
+      };
+
+      await createLocalSession(finalUser, finalUser.supabaseTokens);
+      dispatch(setUser(finalUser));
+      dispatch(setNeedsOnboarding(false));
+    } catch (err: any) {
+      setError(err.message || 'Could not save your profile. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <KeyboardAvoidingView
+      style={{ flex: 1, backgroundColor: WHITE }}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+    >
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+        <StatusBar barStyle="dark-content" backgroundColor={WHITE} />
+
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* â”€â”€ Card wrapper (web-centric centering) â”€â”€ */}
+          <View style={styles.card}>
+
+            {/* â”€â”€ Hero â”€â”€ */}
+            <View style={styles.heroWrap}>
+              <LinearGradient colors={[GOLD, GOLD_D]} style={styles.heroIcon}>
+                <Ionicons name="person-add" size={32} color={WHITE} />
+              </LinearGradient>
+              <Text style={styles.heroTitle}>Welcome to DHUB ðŸŽ‰</Text>
+              <Text style={styles.heroSub}>
+                Complete your profile to get started.
+                {userEmail ? "\nLogged in as " + userEmail : ''}
+              </Text>
+            </View>
+
+            {/* â”€â”€ Role Picker â”€â”€ */}
+            <Text style={styles.label}>I am a <Text style={styles.required}>*</Text></Text>
+            <View style={styles.roleRow}>
+              <TouchableOpacity
+                style={[styles.roleCard, role === 'student' && styles.roleCardActive]}
+                onPress={() => setRole('student')}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={role === 'student' ? [GOLD, GOLD_D] : ['#F3F4F6', '#E5E7EB']}
+                  style={styles.roleIconWrap}
+                >
+                  <Ionicons name="school" size={22} color={role === 'student' ? WHITE : GREY3} />
+                </LinearGradient>
+                <Text style={[styles.roleLabel, role === 'student' && styles.roleLabelActive]}>Tenant</Text>
+                <Text style={[styles.roleDesc, role === 'student' && styles.roleDescActive]}>
+                  Looking for a place
+                </Text>
+                {role === 'student' && (
+                  <View style={styles.roleCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={GOLD} />
+                  </View>
+                )}
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.roleCard, role === 'landlord' && styles.roleCardActive]}
+                onPress={() => setRole('landlord')}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={role === 'landlord' ? [GOLD, GOLD_D] : ['#F3F4F6', '#E5E7EB']}
+                  style={styles.roleIconWrap}
+                >
+                  <Ionicons name="home" size={22} color={role === 'landlord' ? WHITE : GREY3} />
+                </LinearGradient>
+                <Text style={[styles.roleLabel, role === 'landlord' && styles.roleLabelActive]}>Landlord</Text>
+                <Text style={[styles.roleDesc, role === 'landlord' && styles.roleDescActive]}>
+                  Listing a property
+                </Text>
+                {role === 'landlord' && (
+                  <View style={styles.roleCheck}>
+                    <Ionicons name="checkmark-circle" size={18} color={GOLD} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            </View>
+
+            {/* â”€â”€ Full Name â”€â”€ */}
+            <Text style={styles.label}>Full Name <Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrap}>
+              <Ionicons name="person-outline" size={18} color={GREY3} style={styles.inputIcon} />
+              <TextInput
+                style={styles.input}
+                value={fullName}
+                onChangeText={setFullName}
+                placeholder="e.g. Jean-Paul Ekwala"
+                placeholderTextColor={GREY3}
+                autoCapitalize="words"
+                returnKeyType="next"
+              />
+            </View>
+
+            {/* â”€â”€ WhatsApp â”€â”€ */}
+            <Text style={styles.label}>WhatsApp Number <Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrap}>
+              <Text style={styles.dialCode}>+237</Text>
+              <TextInput
+                style={[styles.input, { paddingLeft: 4 }]}
+                value={whatsapp}
+                onChangeText={setWhatsapp}
+                placeholder="6XXXXXXXX"
+                placeholderTextColor={GREY3}
+                keyboardType="phone-pad"
+                maxLength={9}
+                returnKeyType="next"
+              />
+            </View>
+            <Text style={styles.fieldHint}>Used to receive booking notifications</Text>
+
+            {/* â”€â”€ Mobile Money â”€â”€ */}
+            <Text style={styles.label}>Mobile Money Number <Text style={styles.required}>*</Text></Text>
+            <View style={styles.inputWrap}>
+              <Text style={styles.dialCode}>+237</Text>
+              <TextInput
+                style={[styles.input, { paddingLeft: 4 }]}
+                value={mobileMoney}
+                onChangeText={setMobileMoney}
+                placeholder="6XXXXXXXX"
+                placeholderTextColor={GREY3}
+                keyboardType="phone-pad"
+                maxLength={9}
+                returnKeyType="done"
+                onSubmitEditing={handleSubmit}
+              />
+            </View>
+            <Text style={styles.fieldHint}>MTN MoMo or Orange Money â€” for deposits & payouts</Text>
+
+            {/* â”€â”€ Error â”€â”€ */}
+            {!!error && (
+              <View style={styles.errorBox}>
+                <Ionicons name="alert-circle" size={16} color={ERROR} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            )}
+
+            {/* â”€â”€ Submit â”€â”€ */}
+            <TouchableOpacity
+              style={[styles.submitBtn, !isValid && styles.submitBtnOff]}
+              onPress={handleSubmit}
+              disabled={!isValid || loading}
+              activeOpacity={0.85}
+            >
+              {loading ? (
+                <ActivityIndicator color={WHITE} />
+              ) : (
+                <>
+                  <Text style={styles.submitText}>Continue to DHUB</Text>
+                  <Ionicons name="arrow-forward" size={18} color={WHITE} />
+                </>
+              )}
+            </TouchableOpacity>
+
+            <Text style={styles.disclaimer}>
+              Your information is secured and only used within the DHUB platform.
+            </Text>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    </KeyboardAvoidingView>
+  );
+};
+
+// â”€â”€â”€ Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+const styles = StyleSheet.create({
+  safe:   { flex: 1, backgroundColor: BG },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingVertical: 40,
+    paddingHorizontal: 16,
+  },
+
+  // Card â€” centered on web, full-width on small screens
+  card: {
+    width: '100%',
+    maxWidth: 520,
+    backgroundColor: WHITE,
+    borderRadius: 20,
+    padding: 36,
+    // Web shadow
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 32px rgba(0,0,0,0.08)',
+      } as any,
+      default: {
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 6,
+      },
+    }),
+  },
+
+  // Hero
+  heroWrap: { alignItems: 'center', marginBottom: 32 },
+  heroIcon: {
+    width: 80, height: 80, borderRadius: 40,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 16,
+    ...Platform.select({
+      web: { boxShadow: '0 6px 20px rgba(212,175,55,0.4)' } as any,
+      default: {
+        shadowColor: GOLD, shadowOffset: { width: 0, height: 6 },
+        shadowOpacity: 0.35, shadowRadius: 12, elevation: 8,
+      },
+    }),
+  },
+  heroTitle: { fontSize: 24, fontWeight: '800', color: GREY1, textAlign: 'center', marginBottom: 8 },
+  heroSub:   { fontSize: 14, color: GREY2, textAlign: 'center', lineHeight: 22 },
+
+  // Role cards
+  roleRow: { flexDirection: 'row', gap: 12, marginBottom: 24 },
+  roleCard: {
+    flex: 1, alignItems: 'center', padding: 16, borderRadius: 16,
+    borderWidth: 1.5, borderColor: BORDER,
+    backgroundColor: BG, position: 'relative',
+    ...Platform.select({ web: { cursor: 'pointer' } as any }),
+  },
+  roleCardActive: { borderColor: GOLD, backgroundColor: GOLD_L },
+  roleIconWrap: {
+    width: 48, height: 48, borderRadius: 24,
+    justifyContent: 'center', alignItems: 'center', marginBottom: 10,
+  },
+  roleLabel:       { fontSize: 15, fontWeight: '700', color: GREY1, marginBottom: 4 },
+  roleLabelActive: { color: GOLD_D },
+  roleDesc:        { fontSize: 12, color: GREY3, textAlign: 'center' },
+  roleDescActive:  { color: GOLD_D },
+  roleCheck: { position: 'absolute', top: 10, right: 10 },
+
+  // Fields
+  label:    { fontSize: 13, fontWeight: '600', color: GREY2, marginBottom: 8 },
+  required: { color: ERROR },
+  inputWrap: {
+    flexDirection: 'row', alignItems: 'center',
+    borderWidth: 1.5, borderColor: BORDER, borderRadius: 12,
+    backgroundColor: BG, paddingHorizontal: 14, minHeight: 52,
+    marginBottom: 4,
+  },
+  inputIcon:  { marginRight: 10 },
+  dialCode:   { fontSize: 15, color: GREY1, fontWeight: '600', marginRight: 6 },
+  input:      { flex: 1, fontSize: 15, color: GREY1, paddingVertical: 0 },
+  fieldHint:  { fontSize: 12, color: GREY3, marginBottom: 20 },
+
+  // Error
+  errorBox: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: '#FEF2F2', borderRadius: 10,
+    padding: 12, marginBottom: 16,
+    borderWidth: 1, borderColor: '#FECACA',
+  },
+  errorText: { flex: 1, fontSize: 13, color: ERROR, fontWeight: '500' },
+
+  // Submit
+  submitBtn: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: GOLD, borderRadius: 14,
+    paddingVertical: 16, marginTop: 8, marginBottom: 16,
+    ...Platform.select({
+      web: { cursor: 'pointer', boxShadow: '0 4px 14px rgba(212,175,55,0.4)' } as any,
+      default: {
+        shadowColor: GOLD, shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.4, shadowRadius: 10, elevation: 6,
+      },
+    }),
+  },
+  submitBtnOff: {
+    backgroundColor: BORDER,
+    ...Platform.select({ web: { boxShadow: 'none' } as any, default: { shadowOpacity: 0, elevation: 0 } }),
+  },
+  submitText:  { fontSize: 16, fontWeight: '800', color: WHITE },
+  disclaimer:  { fontSize: 12, color: GREY3, textAlign: 'center', lineHeight: 18 },
+});
+
+export default CompleteProfileScreen;
+</file>
+
 <file path="src/screens/common/NetworkStatusBanner.tsx">
 // src/common/networkstatus/NetworkStatusBanner.tsx
 
@@ -3417,224 +3731,6 @@ export async function markMessagesReadLocal(threadId: string, userId: string) {
     [threadId, userId]
   );
 }
-</file>
-
-<file path="src/store/authSlice.ts">
-// src/store/authSlice.ts
-import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { clearLocalSession, createLocalSession, getLocalSession } from '../utils/localSession';
-import { supabase } from '../utils/supabaseClient';
-
-export interface User {
-  id: string;
-  fullName: string;
-  email: string;
-  role: 'student' | 'landlord' | 'admin';
-  phone?: string;
-  token: string | null;
-  refreshToken: string | null;
-  supabaseTokens?: { access_token: string; refresh_token: string };
-}
-
-interface AuthState {
-  user: User | null;
-  token: string | null;
-  refreshToken: string | null;
-  isLoading: boolean;
-  isSyncing: boolean; // New state for post-verification sync
-  isHydrated: boolean;
-  requiresPasswordUpdate: boolean;
-  error: string | null;
-}
-
-const initialState: AuthState = {
-  user: null,
-  token: null,
-  refreshToken: null,
-  isLoading: false,
-  isSyncing: false,
-  isHydrated: false,
-  requiresPasswordUpdate: false,
-  error: null,
-};
-
-// -------------------------
-// EMAIL SIGN IN
-// -------------------------
-export const signIn = createAsyncThunk(
-  'auth/signIn',
-  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
-    try {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
-      if (!data?.user || !data?.session) throw new Error('Login failed');
-
-      const user: User = {
-        id: data.user.id,
-        fullName: data.user.user_metadata?.full_name || data.user.email || 'User',
-        email: data.user.email || '',
-        role: (data.user.user_metadata?.role || 'student') as 'student' | 'landlord' | 'admin',
-        phone: data.user.phone || data.user.user_metadata?.phone || '',
-        token: data.session.access_token,
-        refreshToken: data.session.refresh_token,
-        supabaseTokens: { access_token: data.session.access_token, refresh_token: data.session.refresh_token },
-      };
-
-      await createLocalSession(user, user.supabaseTokens);
-      return { user, token: user.token, refreshToken: user.refreshToken };
-    } catch (err: any) {
-      console.error('[signIn] Failed:', err.message || err);
-      return rejectWithValue(err.message || 'Login failed');
-    }
-  }
-);
-
-// -------------------------
-// PHONE SIGN IN
-// -------------------------
-export const phoneSignIn = createAsyncThunk(
-  'auth/phoneSignIn',
-  async ({ phone, password }: { phone: string; password: string }, { rejectWithValue }) => {
-    try {
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: phone, password }),
-      });
-      const result = await response.json();
-
-      if (!result.success || !result.user) throw new Error(result.message || 'Phone login failed');
-
-      const supTokens = result.session
-        ? { access_token: result.session.access_token, refresh_token: result.session.refresh_token }
-        : undefined;
-
-      const user: User = {
-        id: result.user.id,
-        fullName: result.user.fullName || result.user.full_name || '',
-        email: result.user.email || '',
-        role: (result.user.role || 'student') as 'student' | 'landlord' | 'admin',
-        phone: result.user.phone || phone,
-        token: supTokens?.access_token || null,
-        refreshToken: supTokens?.refresh_token || null,
-        supabaseTokens: supTokens,
-      };
-
-      // Save local session
-      await createLocalSession(user, supTokens);
-
-      // Sync Supabase session if available
-      if (supTokens) await supabase.auth.setSession(supTokens);
-
-      return { user, token: user.token, refreshToken: user.refreshToken };
-    } catch (err: any) {
-      console.error('[phoneSignIn] Failed:', err.message || err);
-      return rejectWithValue(err.message || 'Phone login failed');
-    }
-  }
-);
-
-// -------------------------
-// SIGN OUT
-// -------------------------
-export const signOut = createAsyncThunk('auth/signOut', async (_, { rejectWithValue }) => {
-  try {
-    await supabase.auth.signOut();
-    await clearLocalSession();
-    return null;
-  } catch (err: any) {
-    console.error('[signOut] Failed:', err.message || err);
-    return rejectWithValue(err.message || 'Logout failed');
-  }
-});
-
-// -------------------------
-// SLICE
-// -------------------------
-const authSlice = createSlice({
-  name: 'auth',
-  initialState,
-  reducers: {
-    setUser(state, action: PayloadAction<User>) {
-      state.user = action.payload;
-      state.token = action.payload.token;
-      state.refreshToken = action.payload.refreshToken;
-      state.isHydrated = true;
-      state.error = null;
-      console.log('🟣 [authSlice] setUser called:', {
-        id: action.payload.id,
-        hasToken: !!action.payload.token,
-      });
-    },
-    setHydrated(state) {
-      state.isHydrated = true;
-    },
-    clearUser(state) {
-      state.user = null;
-      state.token = null;
-      state.refreshToken = null;
-      state.error = null;
-      state.isHydrated = true;
-    },
-    clearError(state) {
-      state.error = null;
-    },
-    setError(state, action: PayloadAction<string>) {
-      state.error = action.payload;
-    },
-    setRequiresPasswordUpdate(state, action: PayloadAction<boolean>) {
-      state.requiresPasswordUpdate = action.payload;
-    },
-    setSyncing(state, action: PayloadAction<boolean>) {
-      state.isSyncing = action.payload;
-    },
-  },
-  extraReducers: (builder) => {
-    builder
-      // Email sign in
-      .addCase(signIn.pending, (state) => { state.isLoading = true; state.error = null; })
-      .addCase(signIn.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refreshToken;
-        state.isHydrated = true;
-      })
-      .addCase(signIn.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-        state.isHydrated = true;
-      })
-
-      // Phone sign in
-      .addCase(phoneSignIn.pending, (state) => { state.isLoading = true; state.error = null; })
-      .addCase(phoneSignIn.fulfilled, (state, action) => {
-        state.isLoading = false;
-        state.user = action.payload.user;
-        state.token = action.payload.token;
-        state.refreshToken = action.payload.refreshToken;
-        state.isHydrated = true;
-      })
-      .addCase(phoneSignIn.rejected, (state, action) => {
-        state.isLoading = false;
-        state.error = action.payload as string;
-        state.isHydrated = true;
-      })
-
-      // Sign out
-      .addCase(signOut.fulfilled, (state) => {
-        state.user = null;
-        state.token = null;
-        state.refreshToken = null;
-        state.isHydrated = true;
-        state.error = null;
-      });
-  },
-});
-
-export const { setUser, setHydrated, clearUser, clearError, setError, setRequiresPasswordUpdate, setSyncing } = authSlice.actions;
-export default authSlice.reducer;
 </file>
 
 <file path="src/store/boostSlice.ts">
@@ -7546,6 +7642,89 @@ export default async () => {
 };
 </file>
 
+<file path="public/index.html">
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <title>%WEB_TITLE%</title>
+    
+    <!-- Android Native Install Prompt Configuration -->
+    <link rel="manifest" href="/manifest.json" />
+    <link rel="icon" type="image/png" href="/favicon.png" />
+    <link rel="apple-touch-icon" href="/icon-512.png" />
+
+    <!-- iOS Smart App Banner: shows native App Store banner in Safari -->
+    <!-- TODO: Replace 000000000 with your real App Store numeric ID once DHUB is live -->
+    <meta name="apple-itunes-app" content="app-id=000000000">
+
+    <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
+    <style id="expo-reset">
+      /* These styles make the body full-height */
+      html,
+      body {
+        height: 100%;
+      }
+      /* These styles disable body scrolling if you are using <ScrollView> */
+      body {
+        overflow: hidden;
+      }
+      /* These styles make the root element full-height */
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- Use static rendering with Expo Router to support running without JavaScript. -->
+    <noscript>
+      You need to enable JavaScript to run this app.
+    </noscript>
+    <!-- The root element for your Expo app. -->
+    <div id="root"></div>
+  </body>
+</html>
+</file>
+
+<file path="public/manifest.json">
+{
+  "short_name": "DHUB",
+  "name": "DHUB: Seamless Rental Booking",
+  "description": "Find and book properties seamlessly with DHUB.",
+  "start_url": "/?utm_source=web_app_manifest",
+  "display": "standalone",
+  "background_color": "#0D1117",
+  "theme_color": "#D4AF37",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "48x48 72x72 96x96 128x128 192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "prefer_related_applications": true,
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.dira.dhub"
+    }
+  ]
+}
+</file>
+
 <file path="src/components/ConfirmModal.tsx">
 // src/components/ConfirmModal.tsx
 // A premium in-app modal to replace native window.alert / window.confirm on web.
@@ -8500,68 +8679,6 @@ const AuthStack: React.FC = () => {
 };
 
 export default AuthStack;
-</file>
-
-<file path="src/navigation/RootNavigator.tsx">
-// src/navigation/RootNavigator.tsx
-import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import React from 'react';
-import { ActivityIndicator, SafeAreaView } from 'react-native';
-import { useSelector } from 'react-redux';
-import { useTheme } from '../context/ThemeContext';
-import { RootState } from '../store/store';
-
-// Stacks
-import AuthStack from './AuthStack';
-import LandlordStack from './LandlordStack';
-import StudentStack from './StudentStack';
-
-// Password Update Screen
-import UpdatePasswordScreen from '../screens/auth/UpdatePasswordScreen';
-
-// Common screens
-import ListingDetailsScreen from '../screens/student/ListingDetailsScreen';
-
-// Types
-import { RootStackParamList } from '../types';
-
-const Stack = createNativeStackNavigator<RootStackParamList>();
-
-const RootNavigator: React.FC = () => {
-  const userRole = useSelector((state: RootState) => state.auth.user?.role);
-  const loading = useSelector((state: RootState) => state.auth.isLoading);
-  const requiresPasswordUpdate = useSelector((state: RootState) => state.auth.requiresPasswordUpdate);
-  const { colors } = useTheme();
-
-  if (loading) {
-    return (
-      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
-        <ActivityIndicator size="large" color={colors.tint} />
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {requiresPasswordUpdate ? (
-        <Stack.Screen name="UpdatePassword" component={UpdatePasswordScreen} />
-      ) : userRole ? (
-        userRole === 'landlord' ? (
-          <Stack.Screen name="LandlordStack" component={LandlordStack} />
-        ) : (
-          <Stack.Screen name="StudentStack" component={StudentStack} />
-        )
-      ) : (
-        <Stack.Screen name="AuthStack" component={AuthStack} />
-      )}
-
-      {/* Common screens accessible from anywhere */}
-      <Stack.Screen name="ListingDetails" component={ListingDetailsScreen} />
-    </Stack.Navigator>
-  );
-};
-
-export default RootNavigator;
 </file>
 
 <file path="src/screens/auth/EmailVerificationScreen.tsx">
@@ -12418,231 +12535,6 @@ const styles = StyleSheet.create({
 export default RecentActivity;
 </file>
 
-<file path="src/components/AuthListener.tsx">
-// src/components/AuthListener.tsx
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Session } from "@supabase/supabase-js";
-import * as Linking from 'expo-linking';
-import React, { useEffect, useRef } from "react";
-import { AppState, AppStateStatus } from "react-native";
-import { useDispatch } from "react-redux";
-import {
-  clearUser,
-  setError,
-  setHydrated,
-  setRequiresPasswordUpdate,
-  setSyncing,
-  setUser,
-  User
-} from "../store/authSlice";
-import type { AppDispatch } from "../store/store";
-import { clearLocalSession, createLocalSession } from '../utils/localSession';
-import { authLogger } from "../utils/logger";
-import { createSessionFromUrl, isProcessingRedirect, syncProfileData } from '../utils/login';
-import { supabase } from '../utils/supabaseClient';
-
-const AuthListener: React.FC = () => {
-  const dispatch = useDispatch<AppDispatch>();
-  const appState = useRef(AppState.currentState);
-  const lastProcessedUrl = useRef<string | null>(null);
-
-  useEffect(() => {
-    let isMounted = true;
-    const STEP = 'GATEKEEPER';
-
-    const performLogout = async (message: string) => {
-      authLogger.warn(STEP, `FORCED LOGOUT: ${message}`);
-      await supabase.auth.signOut();
-      await clearLocalSession();
-      await AsyncStorage.multiRemove(['pending_profile', 'supabase.auth.token']);
-      dispatch(clearUser());
-      dispatch(setError(message));
-      dispatch(setHydrated());
-    };
-
-    const handleUserSession = async (session: Session | null) => {
-      if (!isMounted) return;
-
-      if (!session) {
-        if (isProcessingRedirect) {
-          authLogger.log(STEP, 'Deep link in progress. Skipping clearUser.');
-          return;
-        }
-        authLogger.log(STEP, 'No active session. Redirecting to Auth Stack.');
-        dispatch(clearUser());
-        dispatch(setHydrated());
-        return;
-      }
-
-      authLogger.log(STEP, `Session found for ${session.user.id}. Releasing Gatekeeper optimistically...`);
-      
-      const optimisticUser: User = {
-        id: session.user.id,
-        fullName: session.user.user_metadata?.full_name || 'User',
-        email: session.user.email || '',
-        role: (session.user.user_metadata?.role || 'student') as any,
-        phone: session.user.phone || '',
-        token: session.access_token,
-        refreshToken: session.refresh_token || '',
-        supabaseTokens: {
-          access_token: session.access_token,
-          refresh_token: session.refresh_token || ''
-        }
-      };
-
-      dispatch(setUser(optimisticUser));
-      dispatch(setHydrated());
-      
-      performBackgroundSync(session);
-    };
-
-    const performBackgroundSync = async (session: Session) => {
-      authLogger.log(STEP, 'Starting background verification pipeline...');
-      dispatch(setSyncing(true));
-
-      try {
-        const verifyUser = async () => {
-          const { data: { user }, error: userError } = await supabase.auth.getUser();
-          if (userError || !user) throw new Error('SESSION_EXPIRED');
-          return user;
-        };
-
-        const user = await Promise.race([
-          verifyUser(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFICATION_TIMEOUT')), 5000))
-        ]) as any;
-
-        const pendingJson = await AsyncStorage.getItem('pending_profile');
-        if (pendingJson) {
-          authLogger.log(STEP, 'Pending profile found. Triggering Master Sync...');
-          const profileData = JSON.parse(pendingJson);
-          await syncProfileData(user.id, profileData);
-          await AsyncStorage.removeItem('pending_profile');
-        }
-
-        const fetchDbUser = async () => {
-          const { data, error } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
-          if (error) throw error;
-          return data;
-        };
-
-        const dbUser = await Promise.race([
-          fetchDbUser(),
-          new Promise((_, reject) => setTimeout(() => reject(new Error('DB_FETCH_TIMEOUT')), 5000))
-        ]) as any;
-
-        if (!dbUser && user) {
-           authLogger.warn(STEP, 'Public record missing. Attempting emergency sync...');
-           await syncProfileData(user.id, {
-             fullName: user.user_metadata?.full_name || 'User',
-             role: user.user_metadata?.role || 'student',
-             whatsappNumber: user.user_metadata?.whatsapp || '',
-             mobileMoney: user.user_metadata?.momo || ''
-           });
-        }
-
-        const finalUser: User = {
-          id: user.id,
-          fullName: dbUser?.full_name || user.user_metadata?.full_name || 'User',
-          email: dbUser?.email || user.email || '',
-          role: (dbUser?.role || user.user_metadata?.role || 'student') as any,
-          phone: dbUser?.phone || user.phone || '',
-          token: session.access_token,
-          refreshToken: session.refresh_token || '',
-          supabaseTokens: {
-            access_token: session.access_token,
-            refresh_token: session.refresh_token || ''
-          }
-        };
-
-        await createLocalSession(finalUser, finalUser.supabaseTokens);
-        dispatch(setUser(finalUser));
-        authLogger.success(STEP, '🏁 Background sync complete. State refined.');
-
-      } catch (err: any) {
-        authLogger.warn(STEP, `Background sync failed/delayed: ${err.message}`);
-        if (err.message === 'SESSION_EXPIRED') {
-          await performLogout('Your session has expired. Please log in again.');
-        }
-      } finally {
-        dispatch(setSyncing(false));
-      }
-    };
-
-    // --- INITIALIZATION ---
-    const init = async () => {
-      authLogger.log(STEP, 'Initializing Gatekeeper...');
-      const { data: { session } } = await supabase.auth.getSession();
-      await handleUserSession(session);
-    };
-    init();
-
-    // --- EVENT LISTENERS ---
-
-    // 1. Supabase Auth State
-    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!isMounted) return;
-      authLogger.log(STEP, `Supabase Event: ${event}`);
-
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-        await handleUserSession(session);
-      } else if (event === 'SIGNED_OUT') {
-        await clearLocalSession();
-        dispatch(clearUser());
-        dispatch(setHydrated());
-      } else if (event === 'PASSWORD_RECOVERY') {
-        dispatch(setRequiresPasswordUpdate(true));
-      }
-    });
-
-    // 2. App State (Re-verify on resume)
-    const appStateSubscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
-      if (appState.current.match(/inactive|background/) && nextAppState === "active") {
-        authLogger.log(STEP, 'App resumed. Re-verifying session...');
-        init();
-      }
-      appState.current = nextAppState;
-    });
-
-    // 3. Deep Linking (OAuth / Email Links)
-    const handleUrl = async (url: string | null) => {
-      if (!url || !isMounted) return;
-
-      if (lastProcessedUrl.current === url) {
-        return; // Guard against multiple executions for the same URL
-      }
-
-      if (url.includes('auth/callback') || url.includes('#access_token') || url.includes('error=')) {
-        authLogger.log(STEP, 'Auth Deep Link detected. Processing URL...');
-        lastProcessedUrl.current = url;
-        try {
-          await createSessionFromUrl(url);
-        } catch (err: any) {
-          authLogger.error(STEP, `Deep link processing failed: ${err.message}`);
-          dispatch(setError(err.message || 'Login link failed.'));
-        } finally {
-          dispatch(setHydrated());
-        }
-      }
-    };
-
-    const linkSubscription = Linking.addEventListener('url', (event) => handleUrl(event.url));
-    Linking.getInitialURL().then(url => { if (url) handleUrl(url); });
-
-    return () => {
-      isMounted = false;
-      authListener.subscription.unsubscribe();
-      appStateSubscription.remove();
-      linkSubscription.remove();
-    };
-  }, [dispatch]);
-
-  return null;
-};
-
-export default AuthListener;
-</file>
-
 <file path="src/components/FullVideoPlayer.web.tsx">
 // src/components/FullVideoPlayer.web.tsx
 import { Ionicons } from '@expo/vector-icons';
@@ -12911,6 +12803,74 @@ export function usePaymentSuccessNotifier(navigationRef: NavigationRef) {
     };
   }, [user?.id]);
 }
+</file>
+
+<file path="src/navigation/RootNavigator.tsx">
+// src/navigation/RootNavigator.tsx
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import React from 'react';
+import { ActivityIndicator, SafeAreaView } from 'react-native';
+import { useSelector } from 'react-redux';
+import { useTheme } from '../context/ThemeContext';
+import { RootState } from '../store/store';
+
+// Stacks
+import AuthStack from './AuthStack';
+import LandlordStack from './LandlordStack';
+import StudentStack from './StudentStack';
+
+// Password Update Screen
+import UpdatePasswordScreen from '../screens/auth/UpdatePasswordScreen';
+
+// Progressive Onboarding
+import CompleteProfileScreen from '../screens/auth/CompleteProfileScreen';
+
+// Common screens
+import ListingDetailsScreen from '../screens/student/ListingDetailsScreen';
+
+// Types
+import { RootStackParamList } from '../types';
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+const RootNavigator: React.FC = () => {
+  const userRole = useSelector((state: RootState) => state.auth.user?.role);
+  const loading = useSelector((state: RootState) => state.auth.isLoading);
+  const requiresPasswordUpdate = useSelector((state: RootState) => state.auth.requiresPasswordUpdate);
+  const needsOnboarding = useSelector((state: RootState) => state.auth.needsOnboarding);
+  const { colors } = useTheme();
+
+  if (loading) {
+    return (
+      <SafeAreaView style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator size="large" color={colors.tint} />
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <Stack.Navigator screenOptions={{ headerShown: false }}>
+      {requiresPasswordUpdate ? (
+        <Stack.Screen name="UpdatePassword" component={UpdatePasswordScreen} />
+      ) : needsOnboarding ? (
+        <Stack.Screen name="CompleteProfile" component={CompleteProfileScreen} />
+      ) : userRole ? (
+        userRole === 'landlord' ? (
+          <Stack.Screen name="LandlordStack" component={LandlordStack} />
+        ) : (
+          <Stack.Screen name="StudentStack" component={StudentStack} />
+        )
+      ) : (
+        <Stack.Screen name="AuthStack" component={AuthStack} />
+      )}
+
+      {/* Common screens accessible from anywhere */}
+      <Stack.Screen name="ListingDetails" component={ListingDetailsScreen} />
+    </Stack.Navigator>
+  );
+};
+
+export default RootNavigator;
 </file>
 
 <file path="src/screens/auth/ForgotPasswordScreen.tsx">
@@ -17287,1456 +17247,6 @@ export const triggerPushNotifications = async () => {
 }
 </file>
 
-<file path="src/i18n/locales/fr.json">
-{
-  "common": {
-    "welcome": "Bienvenue",
-    "save": "Enregistrer",
-    "logout": "Déconnexion",
-    "language": "Langue",
-    "notifications": "Notifications",
-    "loading": "Chargement...",
-    "cancel": "Annuler",
-    "error": "Erreur",
-    "success": "Succès",
-    "updating": "Mise à jour...",
-    "back": "Retour",
-    "all": "Tous",
-    "new": "Nouveau",
-    "unknown": "Inconnu",
-    "guest": "Invité",
-    "on": "le",
-    "generated_by": "Généré par",
-    "date_locale": "fr-FR",
-    "mins_ago": "il y a {{count}}m",
-    "hours_ago": "il y a {{count}}h",
-    "days_ago": "il y a {{count}}j",
-    "close": "Fermer",
-    "delete": "Delete (FR)",
-    "home": "Home (FR)"
-  },
-  "profile": {
-    "title": "Mon Profil",
-    "full_name": "Nom Complet",
-    "email": "E-mail",
-    "phone": "Téléphone",
-    "momo": "Numéro Momo",
-    "change_password": "Modifier le mot de passe",
-    "delete_account": "Supprimer le compte",
-    "view_bookings": "Voir mes réservations",
-    "upload_listing": "Ajouter une annonce",
-    "manage_listings": "Gérer les annonces",
-    "report_tenant": "Signaler un locataire",
-    "report_landlord": "Signaler un propriétaire",
-    "report_bug": "Signaler un bug",
-    "terms": "Conditions & Politique de confidentialité",
-    "new_password": "Nouveau mot de passe",
-    "confirm_password": "Confirmer le mot de passe",
-    "update_password": "Mettre à jour",
-    "enter_new_password": "Entrez le nouveau mot de passe",
-    "reenter_password": "Confirmez le mot de passe",
-    "language_label": "Langue",
-    "saved": "Profil mis à jour avec succès",
-    "verification_required": "Vérification requise",
-    "verification_msg": "Un lien de confirmation a été envoyé à votre nouvelle adresse. Veuillez vérifier avant de vous connecter.",
-    "open_gmail": "Ouvrir Gmail",
-    "delete_confirm_title": "Supprimer le compte",
-    "delete_confirm_msg": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
-    "delete": "Supprimer",
-    "session_missing": "Session manquante",
-    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter.",
-    "theme_label": "Theme Label (FR)"
-  },
-  "listing": {
-    "available": "Disponible",
-    "rented": "Loué",
-    "fcfa": "FCFA",
-    "per_month": "/mois",
-    "message": "Message",
-    "call": "Appeler",
-    "saved": "Enregistré",
-    "save": "Enregistrer",
-    "description": "Description",
-    "no_description": "Aucune description fournie.",
-    "key_details": "Détails clés",
-    "city": "Ville",
-    "rooms": "Pièces",
-    "status": "Statut",
-    "location": "Localisation",
-    "landlord": "Propriétaire",
-    "responds_within": "Répond généralement en 1 heure",
-    "reviews": "Avis",
-    "book_now": "Réserver cette propriété",
-    "no_media": "Aucun média disponible",
-    "click_fullscreen": "Cliquez pour plein écran",
-    "location_locked": "Localisation verrouillée",
-    "location_locked_msg": "La carte interactive n'est disponible qu'après la réservation, sauf si cette annonce est boostée.",
-    "no_location": "Pas de localisation",
-    "no_coords_msg": "Le propriétaire n'a pas fourni de coordonnées",
-    "boost_now": "BOOSTER MAINTENANT !",
-    "boosted": "Boosté",
-    "processing_video": "Traitement de la vidéo...",
-    "untitled": "Sans titre",
-    "no_description_card": "Aucune description disponible.",
-    "spacious": "Spacieux",
-    "available_now": "Disponible maintenant",
-    "view_details": "Voir les détails",
-    "video": "Video (FR)"
-  },
-  "home": {
-    "title": "DHUB",
-    "subtitle": "Trouvez un meilleur foyer",
-    "search_placeholder": "Rechercher par ville, titre...",
-    "filter_title": "Filtres",
-    "price_range": "Gamme de prix",
-    "listing_type": "Type de propriété",
-    "stay_type": "Type de séjour",
-    "distance": "Distance",
-    "apply_filters": "Appliquer les filtres",
-    "reset": "Réinitialiser",
-    "near_me": "Près de moi",
-    "types": {
-      "room": "Chambre",
-      "studio": "Studio",
-      "apartment": "Appartement",
-      "house": "Maison",
-      "guest_house": "Maison d'hôtes",
-      "hotel": "Hôtel"
-    },
-    "stays": {
-      "short_term": "Court Terme",
-      "long_term": "Long Terme",
-      "both": "Les deux"
-    },
-    "no_listings": "Aucune propriété trouvée correspondant à vos critères",
-    "listings_available": "propriétés trouvées"
-  },
-  "booking": {
-    "title": "Réserver la propriété",
-    "check_in": "Date d'arrivée",
-    "check_out": "Date de départ",
-    "confirm": "Confirmer la demande de réservation",
-    "terms_agree": "J'ai lu et j'accepte les conditions générales",
-    "select_dates": "Sélectionner les dates",
-    "total": "Total",
-    "loading": "Chargement des détails de la propriété...",
-    "not_found": "Annonce non trouvée",
-    "base_price": "Prix de base / mois",
-    "duration_type": "Type de durée",
-    "monthly": "Mensuel",
-    "yearly": "Annuel",
-    "discount_note": "-10%",
-    "yearly_discount_applied": "Remise annuelle de 10% incluse",
-    "move_in": "Date d'entrée",
-    "landlord_placeholder": "Le propriétaire",
-    "tap_to_change": "Appuyez pour modifier",
-    "estimated_move_in": "Date d'emménagement estimée",
-    "estimated_total": "Total estimé",
-    "terms_title": "Conditions générales",
-    "no_terms": "Aucune condition spécifique n'a été fournie pour cette annonce. Les conditions de location standard s'appliquent.",
-    "download_pdf": "Télécharger le contrat",
-    "save_pdf_sub": "Enregistrer une copie en PDF",
-    "accept_to_continue": "Acceptez les conditions pour continuer",
-    "agreement_required": "Accord requis",
-    "agreement_msg": "Veuillez lire et accepter les conditions générales d'abord.",
-    "select_duration_msg": "Veuillez choisir un type de durée (Mensuel ou Annuel).",
-    "invalid_dates_msg": "La date de fin doit être postérieure à la date de début.",
-    "failed": "Échec de la réservation",
-    "failed_msg": "Un problème est survenu. Veuillez réessayer.",
-    "declined_title": "Réservation déclinée",
-    "declined_msg": "Le propriétaire a décliné votre demande de réservation.",
-    "not_approved_title": "Pas encore approuvé",
-    "not_approved_msg": "Le propriétaire n'a pas encore approuvé cette réservation. Veuillez patienter.",
-    "pending_title": "Demande de réservation",
-    "hero_payment_complete": "Paiement terminé !",
-    "hero_ready_to_pay": "Prêt à payer",
-    "hero_awaiting_approval": "En attente d'approbation",
-    "hero_payment_complete_sub": "Votre réservation a été confirmée. Bienvenue chez vous !",
-    "hero_ready_to_pay_sub": "Le propriétaire a approuvé votre demande. Effectuez votre paiement pour confirmer.",
-    "hero_awaiting_approval_sub": "Votre demande de réservation a été envoyée. Le propriétaire l'examinera sous peu.",
-    "progress": "Progrès",
-    "step_request_sent": "Demande envoyée",
-    "step_request_sent_sub": "En attente de l'examen du propriétaire",
-    "step_approved": "Approuvé par le propriétaire",
-    "step_approved_sub": "Prêt à passer au paiement",
-    "step_confirmed": "Réservation confirmée",
-    "step_confirmed_sub": "Paiement reçu et séjour confirmé",
-    "property": "Propriété",
-    "amount_due": "Montant dû",
-    "booking_status": "Statut de la réservation",
-    "approval": "Approbation",
-    "proceed_to_payment": "Passer au paiement",
-    "wait_notice": "Nous vous informerons dès que le propriétaire répondra. Cela prend généralement quelques heures.",
-    "success_notice": "Paiement effectué avec succès. Votre réservation est maintenant confirmée!",
-    "move_out": "Déménager",
-    "fee_info_button": "Info sur les frais",
-    "fee_info_title": "Pourquoi ce montant?",
-    "fee_info_description": "Ceci inclut votre caution (conservée en toute sécurité) et nos frais de service de 5000 FCFA.",
-    "learn_more": "En savoir plus",
-    "view_agreement": "Voir le contrat",
-    "contract_view_title": "Contrat de location",
-    "contract_title": "Contrat de location numérique",
-    "default_terms_template": "Conditions standards...",
-    "student_placeholder": "Étudiant",
-    "contract_intro": "Ce contrat est entre le Propriétaire et le Locataire.",
-    "contract_amount": "Montant du loyer",
-    "contract_escrow": "Caution (Séquestre)",
-    "contract_enforceability": "Ce contrat est juridiquement contraignant.",
-    "contract_terms_version": "Version des termes",
-    "contract_expiration": "Expiration du contrat",
-    "contract_signature_clause": "En signant, vous acceptez toutes les conditions.",
-    "sign_agreement": "Signer le contrat",
-    "signature_prompt": "Veuillez signer ci-dessous",
-    "signature_prompt_title": "Signature requise",
-    "signature_description": "Saisissez votre nom complet comme signature électronique.",
-    "signature_placeholder": "Votre nom complet",
-    "signature_error": "La signature ne peut pas être vide",
-    "sign_now": "Signer maintenant",
-    "signature_summary_title": "Résumé de la signature",
-    "signature_summary_sub": "Examen des détails",
-    "signature_review_title": "Examen de la signature",
-    "signature_review_description": "Veuillez vérifier votre signature avant de soumettre.",
-    "agreement_details": "Détails du contrat",
-    "agreement_id_label": "ID du contrat",
-    "signed_at_label": "Signé le",
-    "signature_method_label": "Méthode",
-    "signature_method_typed": "Saisie",
-    "signature_text_label": "Texte de signature",
-    "agreement_hash_label": "Empreinte numérique",
-    "contract_status_label": "Statut",
-    "contract_status_signed": "Signé",
-    "enforceable_note": "Ce document numérique tient lieu de contrat officiel.",
-    "qr_code_label": "Code QR",
-    "signed_by": "Signé par",
-    "signature_required_title": "Signature requise",
-    "signature_required_msg": "Vous devez signer le contrat avant de continuer.",
-    "signature_required_hint": "Appuyez ici pour signer",
-    "key_details": "Détails clés",
-    "expired_title": "Expiré",
-    "expired_msg": "Ce document a expiré."
-  },
-  "notifications": {
-    "title": "Notifications",
-    "clear_all": "Tout effacer",
-    "empty": "Pas encore de notifications",
-    "clear_all_confirm_title": "Tout effacer",
-    "clear_all_confirm_msg": "Marquer toutes les notifications comme lues ?",
-    "view_details": "Voir les détails",
-    "reply_now": "Répondre maintenant",
-    "dismiss": "Ignorer"
-  },
-  "payment": {
-    "title": "Paiements",
-    "history_tab": "Historique",
-    "send_tab": "Envoyer",
-    "recent_transactions": "Transactions récentes",
-    "refresh": "Actualiser",
-    "refreshing": "Actualisation...",
-    "loading_history": "Chargement de l'historique...",
-    "no_history": "Aucun historique de paiement.",
-    "retry": "Réessayer",
-    "momo_number_label": "Votre numéro MTN MoMo *",
-    "momo_placeholder": "6XX XXX XXX",
-    "amount_label": "Montant (XAF) *",
-    "amount_placeholder": "Entrez le montant",
-    "receiver_label": "Destinataire *",
-    "description_label": "Description",
-    "description_placeholder": "Motif du paiement (optionnel)",
-    "send_button": "Envoyer le paiement",
-    "receipt_title": "Reçu de paiement",
-    "qr_verify": "Scanner pour vérifier la transaction",
-    "transaction_details": "Détails de la transaction",
-    "amount_details": "Détails du montant",
-    "parties_title": "Parties",
-    "transaction_id": "ID Transaction",
-    "date": "Date",
-    "status": "Statut",
-    "amount": "Montant",
-    "fee": "Frais",
-    "net_amount": "Montant net",
-    "from": "De",
-    "to": "À",
-    "download_pdf": "Télécharger PDF",
-    "close": "Fermer",
-    "statuses": {
-      "completed": "Terminé",
-      "pending": "En attente",
-      "failed": "Échoué"
-    },
-    "initiate_success_title": "Paiement initié 🎉",
-    "initiate_success_msg": "Votre paiement a été envoyé. Veuillez valider la demande MoMo sur votre téléphone pour terminer la transaction.",
-    "validation_error": "Erreur de validation",
-    "validation_msg": "Veuillez remplir tous les champs obligatoires (Montant et numéros de téléphone)",
-    "amount_error": "Veuillez entrer un montant valide",
-    "session_error": "Erreur de session",
-    "session_msg": "Session utilisateur non trouvée. Veuillez vous reconnecter.",
-    "payment_error": "Erreur de paiement"
-  },
-  "chat": {
-    "placeholder": "Écrivez un message...",
-    "loading": "Chargement de la conversation...",
-    "online": "En ligne",
-    "unknown_user": "Utilisateur inconnu",
-    "today": "Aujourd'hui",
-    "yesterday": "Hier",
-    "empty_title": "Démarrer la conversation",
-    "empty_subtitle": "Dites bonjour ! Vos messages sont privés entre vous et {{name}}.",
-    "other_user": "l'autre utilisateur",
-    "delete_chat_confirm": "Delete Chat Confirm (FR)",
-    "delete_chat": "Delete Chat (FR)"
-  },
-  "bookings": {
-    "title": "Mes Réservations",
-    "details_title": "Détails de la réservation",
-    "total": "Total",
-    "confirmed": "Confirmé",
-    "paid": "Payé",
-    "pending": "En attente",
-    "cancelled": "Annulé",
-    "active": "Actif",
-    "upcoming": "À venir",
-    "from": "Du",
-    "to": "Au",
-    "days_left": "{{count}}j restants",
-    "days_left_label": "Jours restants",
-    "amount_label": "Montant (XAF)",
-    "rooms_label": "Pièces",
-    "info_title": "Informations de réservation",
-    "check_in": "Arrivée",
-    "check_out": "Départ",
-    "payment_status_label": "Statut du paiement",
-    "agreed_to_terms": "Conditions acceptées",
-    "property_details": "Détails de la propriété",
-    "actions": "Actions",
-    "rate_property": "Noter cette propriété",
-    "report_issue": "Signaler un problème",
-    "help_title": "Besoin d'aide ?",
-    "call_support": "Appeler le support",
-    "email_support": "Email support",
-    "pay_now": "Procéder au paiement",
-    "cancel_booking": "Annuler la réservation",
-    "ended": "Terminé",
-    "no_bookings": "Aucune réservation",
-    "no_bookings_msg": "Lorsque vous réservez une propriété, vos réservations apparaîtront ici",
-    "explore": "Explorer les propriétés",
-    "offline_mode": "Mode Hors Ligne",
-    "offline_msg": "Vous consultez des données en cache. Certaines informations peuvent être obsolètes.",
-    "cache_notice": "Affichage des réservations en cache",
-    "renew_grace_subtitle": "Payez les frais de traitement de loyer de 5 000 FCFA pour renouveler, ou confirmez votre déménagement maintenant. Résiliation automatique dans {{days}} jour(s).",
-    "renew_lease_subtitle": "Votre bail se termine bientôt. Choisissez de prolonger votre séjour ou planifiez votre déménagement.",
-    "why_am_i_paying": "Pourquoi je paie ça ?",
-    "why_payment_title": "Pourquoi ce paiement ?",
-    "why_payment_caution": "1. Garantie de Caution :",
-    "why_payment_caution_desc": "Votre argent est conservé en toute sécurité sur le compte séquestre de DHUB. Il sert de garantie et est 100% remboursable.",
-    "why_payment_fee": "2. Frais de Traitement :",
-    "why_payment_fee_desc": " Des frais non remboursables de 5 000 FCFA sont appliqués pour le service.",
-    "why_payment_unlocks": "3. Débloque la propriété :",
-    "why_payment_unlocks_desc": " Une fois payé, vous recevrez l'emplacement exact de la propriété pour visiter et inspecter.",
-    "why_payment_refund": "4. Politique de Remboursement :",
-    "why_payment_refund_desc": "Si vous n'aimez pas la propriété et annulez la réservation, votre caution est 100% remboursable.",
-    "i_understand": "Je Comprends",
-    "initial_deposit_label": "Dépôt Initial (Caution + 5 000 FCFA Frais de Traitement)",
-    "complete_rent_payment": "Compléter le Paiement du Loyer",
-    "cancel_booking_refund_caution": "Annuler la Réservation & Rembourser la Caution",
-    "refund_processing": "Remboursement en Cours",
-    "refund_processing_desc": "Pour des raisons de sécurité et pour protéger nos propriétaires, DHUB prend jusqu'à 72 heures pour vérifier et traiter les remboursements de caution. Votre argent sera envoyé sur votre compte Mobile Money en toute sécurité.",
-    "refund_paused": "Remboursement Suspendu",
-    "refund_paused_desc": "Votre remboursement de caution a été mis en attente par DHUB pour un examen manuel. Veuillez contacter le support à support@dhubcmr.com pour obtenir de l'aide.",
-    "i_have_moved_in": "J'ai Emménagé ✓",
-    "location_not_available": "Emplacement non disponible",
-    "tap_to_open_maps": "Appuyez pour ouvrir les cartes",
-    "dispute_resolution": "Résolution de Litige",
-    "dispute_resolution_desc": "Le propriétaire a soulevé un problème concernant l'état de la propriété. Veuillez fournir votre explication et télécharger jusqu'à 3 photos comme preuve. DHUB examinera et rendra une décision finale.",
-    "your_evidence_submitted": "Votre Preuve Soumise :",
-    "photos_count": "Photos ({{count}}/3):",
-    "unable_to_load": "Impossible de charger la réservation",
-    "try_again": "Réessayer",
-    "extend_stay": "Prolonger le séjour",
-    "confirm_checkout": "Confirmer le départ",
-    "unknown_property": "Propriété inconnue",
-    "size": "Taille",
-    "not_specified": "Non spécifié",
-    "utilities": "Services publics",
-    "included": "Inclus",
-    "parking": "Parking",
-    "available": "Disponible",
-    "duration_label": "Durée :",
-    "time_remaining_label": "Temps restant :",
-    "status_label": "Statut :",
-    "pending_move_in": "En attente d'emménagement",
-    "location_and_landlord": "Emplacement et propriétaire",
-    "unknown": "Inconnu",
-    "one_year": "1 An",
-    "days_count": "{{count}} Jours",
-    "daily": "Quotidien",
-    "monthly": "Mensuel",
-    "yearly": "Annuel"
-  },
-  "auth": {
-    "welcome_back": "Bon retour",
-    "sign_in_subtitle": "Connectez-vous à votre compte",
-    "phone": "Téléphone",
-    "email": "Email",
-    "phone_placeholder": "Numéro de téléphone (ex: 6xxxxxxxx)",
-    "email_placeholder": "Adresse email",
-    "password": "Mot de passe",
-    "sign_in": "Se connecter",
-    "signing_in": "Connexion en cours...",
-    "magic_link": "Ou envoyez-moi un Lien Magique (sans mot de passe)",
-    "or": "OU",
-    "continue_with_google": "Continuer avec Google",
-    "forgot_password": "Mot de passe oublié ?",
-    "no_account": "Vous n'avez pas de compte ?",
-    "sign_up": "S'inscrire",
-    "create_account": "Créer un compte",
-    "sign_up_subtitle": "Rejoignez DHUB pour trouver votre prochaine maison",
-    "i_am_student": "Je suis un Étudiant",
-    "i_am_landlord": "Je suis un Propriétaire",
-    "full_name": "Nom complet",
-    "whatsapp_number": "Numéro WhatsApp (9 chiffres)",
-    "mobile_money": "Numéro Mobile Money (9 chiffres)",
-    "password_placeholder": "Mot de passe (min 6 caractères)",
-    "confirm_password": "Confirmer le mot de passe",
-    "age_placeholder": "Âge",
-    "address_placeholder": "Adresse du domicile",
-    "agree_tos": "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité",
-    "signing_up": "Inscription en cours...",
-    "has_account": "Vous avez déjà un compte ?",
-    "sign_in_link": "Se connecter",
-    "email_or_phone_placeholder": "Email Or Phone Placeholder (FR)",
-    "resend_otp": "Resend Otp (FR)",
-    "secure_account_msg": "Secure Account Msg (FR)",
-    "reset_failed": "Reset Failed (FR)",
-    "password_reset_success": "Password Reset Success (FR)",
-    "back_to_signin": "Back To Signin (FR)",
-    "forgot_password_title": "Forgot Password Title (FR)",
-    "enter_email_or_phone": "Enter Email Or Phone (FR)",
-    "invalid_phone_cameroon": "Invalid Phone Cameroon (FR)",
-    "passwords_no_match": "Passwords No Match (FR)",
-    "reset_password_title": "Reset Password Title (FR)",
-    "password_min_length": "Password Min Length (FR)",
-    "resend_in": "Resend In (FR)",
-    "reset_password_btn": "Reset Password Btn (FR)",
-    "update_failed": "Update Failed (FR)",
-    "forgot_password_subtitle": "Forgot Password Subtitle (FR)",
-    "enter_otp_sent_to": "Enter Otp Sent To (FR)",
-    "enter_otp_error": "Enter Otp Error (FR)",
-    "send_reset_link": "Send Reset Link (FR)"
-  },
-  "screens": {
-    "networkerror": {
-      "oops__no_internet": "Oops! No Internet (FR)",
-      "please_check_your_connect": "Please check your connection and try again.\n        If this error persists you can contact support. (FR)",
-      "retry": "Retry (FR)"
-    },
-    "emailverification": {
-      "finalizing_account": "Finalizing Account (FR)",
-      "back_to_sign_up": "Back to Sign Up (FR)"
-    },
-    "signin": {
-      "welcome_back": "Welcome Back (FR)",
-      "sign_in_to_your_account": "Sign in to your account (FR)",
-      "phone": "Phone (FR)",
-      "email": "Email (FR)",
-      "or_send_me_a_magic_link": "Or send me a Magic Link (No password) (FR)",
-      "continue_with_google": "Continue with Google (FR)",
-      "forgot_password": "Forgot Password? (FR)",
-      "don_t_have_an_account": "Don't have an account? (FR)",
-      "sign_up": "Sign Up (FR)"
-    },
-    "signup": {
-      "create_account": "Create Account (FR)",
-      "join_dhub_to_manage_your": "Join Dhub to manage your properties (FR)",
-      "i_agree_to_the": "I agree to the (FR)",
-      "terms_of_service": "Terms of Service (FR)",
-      "privacy_policy": "Privacy Policy (FR)",
-      "you_must_accept_the_terms": "You must accept the Terms (FR)",
-      "sign_up_with_google": "Sign Up with Google (FR)",
-      "already_have_an_account": "Already have an account? (FR)",
-      "sign_in": "Sign In (FR)",
-      "creating_your_account": "Creating Your Account (FR)",
-      "setting_up_your_secure_pr": "Setting up your secure profile... (FR)",
-      "cancel": "Cancel (FR)"
-    },
-    "verifyotp": {
-      "verify_whatsapp_otp": "Verify WhatsApp OTP (FR)"
-    },
-    "chatwrapper": {
-      "loading_user": "Loading user... (FR)",
-      "chats": "Chats (FR)",
-      "loading_conversations": "Loading conversations... (FR)",
-      "no_conversations_yet": "No conversations yet (FR)",
-      "start_a_new_conversation": "Start a new conversation to chat with others (FR)"
-    },
-    "downloadapp": {
-      "mobile_app_required": "Mobile App Required (FR)",
-      "payments_and_full_booking": "Payments and full booking management are only available on the DHUB mobile app.\n          Download now to complete your transaction. (FR)",
-      "android": "Android (FR)",
-      "ios": "iOS (FR)",
-      "go_back": "Go Back (FR)"
-    },
-    "legal": {
-      "back": "Back (FR)"
-    },
-    "reportbug": {
-      "report_a_bug": "Report a Bug (FR)",
-      "found_a_technical_issue": "Found a technical issue, crash, or visual bug? Let our developers know so we can fix it! (FR)",
-      "subject__optional": "Subject (Optional) (FR)",
-      "send_email_to_support": "Send Email to Support (FR)"
-    },
-    "reportuser": {
-      "if_you_have_experienced_i": "If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report. (FR)",
-      "submit_report": "Submit Report (FR)"
-    },
-    "support": {
-      "connecting_to_support": "Connecting to support... (FR)",
-      "dhub_support": "DHUB Support (FR)",
-      "we_re_online": "We're online (FR)",
-      "call": "Call (FR)",
-      "quick_topics": "Quick topics (FR)",
-      "how_can_we_help": "How can we help? (FR)",
-      "send_a_message_or_tap_a_q": "Send a message or tap a quick topic above to get started. (FR)"
-    },
-    "updaterequired": {
-      "update_now": "Update Now (FR)",
-      "maybe_later": "Maybe Later (FR)"
-    },
-    "approval": {
-      "review_booking": "Review Booking (FR)",
-      "listing": "Listing (FR)",
-      "tenant_information": "Tenant Information (FR)",
-      "booking_details": "Booking Details (FR)",
-      "caution_escrow": "Caution Escrow (FR)",
-      "dispute_caution_escrow": "Dispute Caution Escrow (FR)",
-      "approve_refund__no_damage": "Approve Refund (No Damages) (FR)",
-      "dispute_damages": "Dispute Damages (FR)",
-      "rate_tenant": "Rate Tenant (FR)",
-      "cancel": "Cancel (FR)",
-      "submit": "Submit (FR)",
-      "tenant_reviews": "Tenant Reviews (FR)",
-      "close": "Close (FR)",
-      "no_written_feedback": "No written feedback. (FR)"
-    },
-    "bookings": {
-      "bookings": "Bookings (FR)",
-      "loading_bookings": "Loading bookings... (FR)",
-      "no_bookings_yet": "No bookings yet (FR)",
-      "when_students_book_your_p": "When students book your properties, they'll appear here (FR)",
-      "tap_to_review_request": "Tap to Review Request (FR)"
-    },
-    "boost": {
-      "boost_listing": "Boost Listing (FR)",
-      "choose_a_boost_plan": "Choose a Boost Plan (FR)",
-      "why_boost": "Why Boost? (FR)",
-      "boosting_your_listing_mak": "Boosting your listing makes it appear first in search results and highlights it for maximum visibility.\n            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make! (FR)"
-    },
-    "dashboard": {
-      "welcome_back": "Welcome back (FR)"
-    },
-    "editlisting": {
-      "processing": "Processing... (FR)",
-      "failed": "Failed (FR)",
-      "loading_property_details": "Loading property details... (FR)",
-      "edit_property": "Edit Property (FR)",
-      "property_photos": "Property Photos (FR)",
-      "tap_to_preview__drag_to_r": "Tap to preview, drag to reorder (coming soon) (FR)",
-      "add_media": "Add Media (FR)",
-      "description": "Description (FR)",
-      "price__fcfa": "Price (FCFA) (FR)",
-      "rooms": "Rooms (FR)",
-      "available_for_rent": "Available for Rent (FR)",
-      "save_changes": "Save Changes (FR)",
-      "delete_property": "Delete Property (FR)",
-      "uploading_media": "Uploading Media... (FR)",
-      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (FR)",
-      "cancel_upload": "Cancel Upload (FR)"
-    },
-    "kycverification": {
-      "upload_document": "Upload Document (FR)",
-      "kyc_verification": "KYC Verification (FR)",
-      "verified_successfully": "Verified Successfully (FR)",
-      "your_kyc_verification_has": "Your KYC verification has been approved. You can now create and manage property listings. (FR)",
-      "verification_pending": "Verification Pending (FR)",
-      "processing": "Processing (FR)",
-      "your_docs_have_been_submi": "Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run. (FR)",
-      "want_to_resubmit": "Want to resubmit? (FR)",
-      "personal_information": "Personal Information (FR)",
-      "identity_verification": "Identity Verification (FR)",
-      "upload_clear_photos_of_yo": "Upload clear photos of your government-issued ID and a selfie holding the ID. (FR)",
-      "property_credentials": "Property Credentials (FR)",
-      "provide_documents_proving": "Provide documents proving you own or manage properties at your address. (FR)"
-    },
-    "listingdetails": {
-      "loading_property_details": "Loading property details... (FR)",
-      "unable_to_load_property": "Unable to load property (FR)",
-      "retry": "Retry (FR)",
-      "go_back": "Go Back (FR)",
-      "property_details": "Property Details (FR)",
-      "share_this_listing": "Share this listing (FR)",
-      "available_for_rent": "Available for Rent (FR)",
-      "description": "Description (FR)",
-      "location": "Location (FR)",
-      "view_map": "View Map (FR)",
-      "property_videos": "Property Videos (FR)",
-      "landlord_information": "Landlord Information (FR)",
-      "verify": "Verify (FR)",
-      "why_should_i_verify_my_li": "Why should I verify my listing? (FR)",
-      "boost": "Boost (FR)",
-      "delete": "Delete (FR)",
-      "why_verify_your_listing": "Why verify your listing? (FR)",
-      "i_understand": "I understand (FR)",
-      "request_verification": "Request Verification (FR)",
-      "cancel": "Cancel (FR)",
-      "video": "Video (FR)",
-      "view_booking": "View Booking (FR)"
-    },
-    "managelistings": {
-      "please_log_in_to_manage_l": "Please log in to manage listings. (FR)",
-      "loading_your_listings": "Loading your listings... (FR)",
-      "my_properties": "My Properties (FR)",
-      "no_listings_yet": "No listings yet (FR)",
-      "start_by_adding_your_firs": "Start by adding your first property (FR)",
-      "add_property": "Add Property (FR)",
-      "total_properties": "Total Properties (FR)",
-      "active": "Active (FR)",
-      "property_photos": "Property Photos (FR)",
-      "edit": "Edit (FR)",
-      "delete": "Delete (FR)"
-    },
-    "payment": {
-      "dhub_payment_receipt": "DHUB Payment Receipt (FR)",
-      "transaction_details": "Transaction Details (FR)",
-      "amount_details": "Amount Details (FR)",
-      "parties": "Parties (FR)",
-      "payments": "Payments (FR)",
-      "payment_history": "Payment History (FR)",
-      "send_payment": "Send Payment (FR)",
-      "recent_transactions": "Recent Transactions (FR)",
-      "loading_history": "Loading history... (FR)",
-      "retry": "Retry (FR)",
-      "no_payment_history_yet": "No payment history yet. (FR)",
-      "receiver": "Receiver (FR)",
-      "description": "Description (FR)",
-      "payment_receipt": "Payment Receipt (FR)",
-      "scan_to_verify_transactio": "Scan to verify transaction (FR)",
-      "download_pdf": "Download PDF (FR)",
-      "close": "Close (FR)",
-      "amount": "Amount (FR)",
-      "payable_to": "Payable To (FR)",
-      "this_is_the": "This is the (FR)",
-      "initial_deposit": "Initial Deposit (FR)",
-      "this_is_your": "This is your (FR)",
-      "remaining_rent_balance": "remaining rent balance (FR)",
-      "after_your_initial_deposi": "after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property. (FR)",
-      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee (FR)",
-      "your_momo_phone_number": "Your MoMo Phone Number (FR)",
-      "enter_the_momo_number_tha": "Enter the MoMo number that will receive the payment prompt. (FR)",
-      "a_payment_prompt_has_been": "A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment. (FR)",
-      "print_pdf": "Print PDF (FR)"
-    },
-    "uploadlisting": {
-      "add_new_property": "Add New Property (FR)",
-      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property (FR)",
-      "add_media": "Add Media (FR)",
-      "basic_information": "Basic Information (FR)",
-      "listing_type": "Listing Type (FR)",
-      "stay_type": "Stay Type (FR)",
-      "property_title": "Property Title (FR)",
-      "description": "Description (FR)",
-      "number_of_rooms": "Number of Rooms (FR)",
-      "location": "Location (FR)",
-      "street_address": "Street Address (FR)",
-      "city": "City (FR)",
-      "tap_to_select_location_on": "Tap to select location on map (FR)",
-      "students_will_review_and": "Students will review and agree to these terms before booking (FR)",
-      "create_property_listing": "Create Property Listing (FR)",
-      "uploading_media": "Uploading Media... (FR)",
-      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (FR)",
-      "cancel_upload": "Cancel Upload (FR)"
-    },
-    "bookingdetails": {
-      "information_locked": "Information Locked (FR)",
-      "complete_your_booking_to": "Complete your booking to reveal the exact coordinates and landlord contact details. (FR)",
-      "under_review_by_dhub": "Under Review by DHUB (FR)",
-      "submit_evidence": "Submit Evidence (FR)",
-      "confirm_i_have_moved_in": "Confirm I Have Moved In (FR)",
-      "move_in_confirmed_by_you": "Move-In Confirmed by You (FR)",
-      "take_entry_picture": "Take Entry Picture (FR)",
-      "take_exit_picture": "Take Exit Picture (FR)",
-      "awaiting_landlord_approva": "Awaiting Landlord Approval (FR)",
-      "the_landlord_must_review": "The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking. (FR)",
-      "cancellation_reason": "Cancellation Reason (FR)",
-      "back": "Back (FR)"
-    },
-    "booking": {
-      "unverified_property": "Unverified Property (FR)",
-      "property_may_not_match_th": "Property may not match the photos (FR)",
-      "promised_amenities_could": "Promised amenities could be missing (FR)",
-      "you_may_risk_losing_your": "You may risk losing your caution fee (FR)",
-      "read_our_safety_guideline": "Read our Safety Guidelines (FR)",
-      "cancel_booking": "Cancel Booking (FR)",
-      "proceed_anyway": "Proceed Anyway (FR)"
-    },
-    "favorites": {
-      "view_details": "View Details (FR)",
-      "no_favorites_yet": "No Favorites Yet (FR)",
-      "start_exploring_propertie": "Start exploring properties and tap the heart icon to save your favorites here (FR)",
-      "explore_properties": "Explore Properties (FR)",
-      "loading_your_favorites": "Loading your favorites... (FR)",
-      "my_favorites": "My Favorites (FR)"
-    },
-    "home": {
-      "can_t_find_what_you_re_lo": "Can't find what you're looking for? (FR)",
-      "notify_me": "Notify Me (FR)",
-      "fill_out_the_details_of_t": "Fill out the details of the property you need. We'll search for it and notify you as soon as it's available! (FR)",
-      "preferred_location": "Preferred Location (FR)",
-      "budget__fcfa": "Budget (FCFA) (FR)",
-      "specific_requirements": "Specific Requirements (FR)",
-      "submit_request": "Submit Request (FR)"
-    },
-    "listingreview": {
-      "rate_this_listing": "Rate this Listing (FR)",
-      "tap_stars_to_select_your": "Tap stars to select your rating (FR)",
-      "optional_comment": "Optional Comment (FR)",
-      "back_to_booking": "Back to Booking (FR)"
-    },
-    "profile": {
-      "age": "Age (FR)"
-    },
-    "viewbookings": {
-      "active": "Active (FR)",
-      "pending": "Pending (FR)",
-      "past": "Past (FR)"
-    }
-  }
-}
-</file>
-
-<file path="src/i18n/locales/pcm.json">
-{
-  "common": {
-    "welcome": "Welcome",
-    "save": "Save Am",
-    "logout": "Log Out",
-    "language": "Language",
-    "notifications": "Notifications",
-    "loading": "E dey load...",
-    "cancel": "Cancel",
-    "error": "Error",
-    "success": "E don work",
-    "updating": "E dey update...",
-    "back": "Go Back",
-    "all": "All",
-    "new": "New",
-    "unknown": "E no know",
-    "guest": "Visitor",
-    "on": "for",
-    "generated_by": "Make by",
-    "date_locale": "en-GB",
-    "mins_ago": "{{count}}m ago",
-    "hours_ago": "{{count}}h ago",
-    "days_ago": "{{count}}d ago",
-    "close": "Close",
-    "delete": "Delete (PCM)",
-    "home": "Home (PCM)"
-  },
-  "profile": {
-    "title": "My Profile",
-    "full_name": "Your Full Name",
-    "email": "Email",
-    "phone": "Phone Number",
-    "momo": "Momo Number",
-    "change_password": "Change Password",
-    "delete_account": "Delete Account",
-    "view_bookings": "See My Bookings",
-    "upload_listing": "Post House",
-    "manage_listings": "Manage Houses",
-    "report_tenant": "Report Tenant",
-    "report_landlord": "Report Landlord",
-    "report_bug": "Report Bug",
-    "terms": "Terms & Privacy",
-    "new_password": "New Password",
-    "confirm_password": "Confirm Password",
-    "update_password": "Update Password",
-    "enter_new_password": "Enter new password",
-    "reenter_password": "Enter password again",
-    "language_label": "Language",
-    "saved": "Profile don update",
-    "verification_required": "You need to verify",
-    "verification_msg": "We don send confirm link go your new email. Check am before you login.",
-    "open_gmail": "Open Gmail",
-    "delete_confirm_title": "Delete Account",
-    "delete_confirm_msg": "You sure say you want delete your account? E no fit undo.",
-    "delete": "Delete",
-    "session_missing": "Session no dey",
-    "session_missing_msg": "You no fit update email. Commot the app then enta back.",
-    "theme_label": "Theme Label (PCM)"
-  },
-  "listing": {
-    "available": "E dey available",
-    "rented": "People don rent am",
-    "fcfa": "FCFA",
-    "message": "Message",
-    "call": "Call Am",
-    "saved": "Saved",
-    "save": "Save",
-    "description": "Description",
-    "no_description": "No description for here.",
-    "key_details": "Important Info",
-    "city": "City",
-    "rooms": "Rooms",
-    "status": "Status",
-    "location": "Location",
-    "landlord": "Landlord",
-    "responds_within": "E dey reply sharp sharp",
-    "reviews": "What people talk",
-    "book_now": "Book This House",
-    "no_media": "No pictures/video",
-    "click_fullscreen": "Click to see big",
-    "location_locked": "Location lock",
-    "location_locked_msg": "You must book before you see map, or if the house get boost.",
-    "no_location": "No map",
-    "no_coords_msg": "Landlord no put map location",
-    "per_month": "/month",
-    "boost_now": "MAKE E POP!",
-    "boosted": "E dey pop",
-    "processing_video": "Video de load...",
-    "untitled": "No name",
-    "no_description_card": "No description here.",
-    "spacious": "Big space",
-    "available_now": "E dey ready",
-    "view_details": "See more",
-    "video": "Video (PCM)"
-  },
-  "home": {
-    "title": "DHUB",
-    "subtitle": "Find better house for your head",
-    "search_placeholder": "Search city or house name...",
-    "filter_title": "Filters",
-    "price_range": "How much you want pay",
-    "listing_type": "Which kind house",
-    "stay_type": "How long you go stay",
-    "distance": "How far e dey",
-    "apply_filters": "Check am",
-    "reset": "Clean am",
-    "near_me": "Near me",
-    "types": {
-      "room": "Room",
-      "studio": "Studio",
-      "apartment": "Apartment",
-      "house": "House",
-      "guest_house": "Guest House",
-      "hotel": "Hotel"
-    },
-    "stays": {
-      "short_term": "Small time",
-      "long_term": "Long time",
-      "both": "Any one"
-    },
-    "no_listings": "No house dey for your head",
-    "listings_available": "house dem dey"
-  },
-  "booking": {
-    "title": "Book This House",
-    "check_in": "When you dey come",
-    "check_out": "When you dey go",
-    "confirm": "Confirm Booking Request",
-    "terms_agree": "I don read and I gree for the terms",
-    "select_dates": "Pick Dates",
-    "total": "Total",
-    "loading": "We dey load house info...",
-    "not_found": "House no dey",
-    "base_price": "Base price / month",
-    "duration_type": "Duration Type",
-    "monthly": "Monthly",
-    "yearly": "Yearly",
-    "discount_note": "10% off",
-    "yearly_discount_applied": "10% off since na for year",
-    "move_in": "When you go enter",
-    "landlord_placeholder": "Di landlord",
-    "tap_to_change": "Tap to change",
-    "estimated_move_in": "Estimated Move-In Date",
-    "estimated_total": "Estimated Total",
-    "terms_title": "Terms & Conditions",
-    "no_terms": "No specific terms for here. Standard rental terms apply.",
-    "download_pdf": "Download Booking Agreement",
-    "save_pdf_sub": "Save copy as PDF",
-    "accept_to_continue": "Gree for terms before you continue",
-    "agreement_required": "You must gree",
-    "agreement_msg": "Abeg read and gree for the terms first.",
-    "select_duration_msg": "Pick how long you go stay (Month or Year).",
-    "invalid_dates_msg": "Date you dey commot must be after date you enter.",
-    "failed": "Booking Failed",
-    "failed_msg": "Something go wrong. Abeg try again.",
-    "declined_title": "Dem decline am",
-    "declined_msg": "Landlord don decline your booking.",
-    "not_approved_title": "E neva ready",
-    "not_approved_msg": "Landlord neva approve this booking yet. Wait small.",
-    "pending_title": "Booking Request",
-    "hero_payment_complete": "Money don enter!",
-    "hero_ready_to_pay": "Ready for pay",
-    "hero_awaiting_approval": "We dey wait landlord",
-    "hero_payment_complete_sub": "Your booking don set. Welcome home!",
-    "hero_ready_to_pay_sub": "Landlord don gree. Pay money now make e confirm.",
-    "hero_awaiting_approval_sub": "We don send your request. Landlord go check am small time.",
-    "progress": "How e dey go",
-    "step_request_sent": "Request don go",
-    "step_request_sent_sub": "Wait make landlord check am",
-    "step_approved": "Landlord don gree",
-    "step_approved_sub": "Pay money now",
-    "step_confirmed": "Booking don set",
-    "step_confirmed_sub": "Money don enter & house don set",
-    "property": "House",
-    "amount_due": "Money for pay",
-    "booking_status": "Status",
-    "approval": "Approval",
-    "proceed_to_payment": "Go pay money",
-    "wait_notice": "We go tell you when landlord answer. E no go long.",
-    "success_notice": "Money don enter sharp sharp. Your booking don confirm!",
-    "move_out": "Comot",
-    "fee_info_button": "Fee Info",
-    "fee_info_title": "Why this amount?",
-    "fee_info_description": "This one include your caution (we keep am safe) and our 5000 FCFA service fee.",
-    "learn_more": "Learn more",
-    "view_agreement": "See agreement",
-    "contract_view_title": "Rent Agreement",
-    "contract_title": "Digital Rent Agreement",
-    "default_terms_template": "Normal terms...",
-    "student_placeholder": "Student",
-    "contract_intro": "This agreement na between Landlord and Tenant.",
-    "contract_amount": "Rent amount",
-    "contract_escrow": "Caution (Escrow)",
-    "contract_enforceability": "This agreement bind by law.",
-    "contract_terms_version": "Terms Version",
-    "contract_expiration": "Agreement Expiry",
-    "contract_signature_clause": "As you sign, you agree to all conditions.",
-    "sign_agreement": "Sign Agreement",
-    "signature_prompt": "Abeg sign below",
-    "signature_prompt_title": "Signature needed",
-    "signature_description": "Type your full name as digital signature.",
-    "signature_placeholder": "Your full name",
-    "signature_error": "Signature no fit empty",
-    "sign_now": "Sign Now",
-    "signature_summary_title": "Signature Summary",
-    "signature_summary_sub": "Check details",
-    "signature_review_title": "Signature Review",
-    "signature_review_description": "Abeg check your signature before you submit.",
-    "agreement_details": "Agreement Details",
-    "agreement_id_label": "Agreement ID",
-    "signed_at_label": "Signed on",
-    "signature_method_label": "Method",
-    "signature_method_typed": "Typed",
-    "signature_text_label": "Signature Text",
-    "agreement_hash_label": "Digital Hash",
-    "contract_status_label": "Status",
-    "contract_status_signed": "Signed",
-    "enforceable_note": "This digital document stand as official agreement.",
-    "qr_code_label": "QR Code",
-    "signed_by": "Signed by",
-    "signature_required_title": "Signature Needed",
-    "signature_required_msg": "You must sign agreement before you continue.",
-    "signature_required_hint": "Tap here to sign",
-    "key_details": "Key Details",
-    "expired_title": "Expired",
-    "expired_msg": "This document don expire."
-  },
-  "notifications": {
-    "title": "Notifications",
-    "clear_all": "Clear All",
-    "empty": "No message yet",
-    "clear_all_confirm_title": "Clear All",
-    "clear_all_confirm_msg": "Read all the messages?",
-    "view_details": "See more",
-    "reply_now": "Answer now",
-    "dismiss": "Comot am"
-  },
-  "payment": {
-    "title": "Pay Money",
-    "history_tab": "Payment History",
-    "send_tab": "Send Money",
-    "recent_transactions": "Recent Transactions",
-    "refresh": "Refresh",
-    "refreshing": "E dey refresh...",
-    "loading_history": "We dey load history...",
-    "no_history": "No payment history yet.",
-    "retry": "Try again",
-    "momo_number_label": "Your MTN MoMo Number *",
-    "momo_placeholder": "6XX XXX XXX",
-    "amount_label": "Money (XAF) *",
-    "amount_placeholder": "Enter how much",
-    "receiver_label": "Who you dey send am to *",
-    "description_label": "Description",
-    "description_placeholder": "Why you dey pay (if you like)",
-    "send_button": "Send Money",
-    "receipt_title": "Payment Receipt",
-    "qr_verify": "Scan to check transaction",
-    "transaction_details": "Transaction Details",
-    "amount_details": "Money Details",
-    "parties_title": "People wey follow for talk",
-    "transaction_id": "Transaction ID",
-    "date": "Date",
-    "status": "Status",
-    "amount": "Amount",
-    "fee": "Fee",
-    "net_amount": "Total Money",
-    "from": "From",
-    "to": "To",
-    "download_pdf": "Download PDF",
-    "close": "Close",
-    "statuses": {
-      "completed": "E don finish",
-      "pending": "E dey wait",
-      "failed": "E no work"
-    },
-    "initiate_success_title": "Money don go! 🎉",
-    "initiate_success_msg": "Your payment don start. Abeg check your phone for MoMo prompt to finish am.",
-    "validation_error": "Error for what you write",
-    "validation_msg": "Abeg put everything (Money and Phone numbers)",
-    "amount_error": "Abeg put correct money",
-    "session_error": "Session error",
-    "session_msg": "We no see you. Abeg login again.",
-    "payment_error": "Payment error"
-  },
-  "chat": {
-    "placeholder": "Write something...",
-    "loading": "We dey load chat...",
-    "online": "Online",
-    "unknown_user": "Unknown Person",
-    "today": "Today",
-    "yesterday": "Yesterday",
-    "empty_title": "Start to talk",
-    "empty_subtitle": "Say hello! Your messages dey private between you and {{name}}.",
-    "other_user": "the other person",
-    "delete_chat": "Delete Chat (PCM)",
-    "delete_chat_confirm": "Delete Chat Confirm (PCM)"
-  },
-  "bookings": {
-    "title": "My Bookings",
-    "details_title": "Booking Details",
-    "total": "Total",
-    "confirmed": "Confirmed",
-    "paid": "Paid",
-    "pending": "E dey wait",
-    "cancelled": "E don cancel",
-    "active": "Active",
-    "upcoming": "E dey come",
-    "from": "From",
-    "to": "To",
-    "days_left": "{{count}} days remain",
-    "days_left_label": "Days Remain",
-    "amount_label": "Money (XAF)",
-    "rooms_label": "Rooms",
-    "info_title": "Booking Info",
-    "check_in": "Check-in",
-    "check_out": "Check-out",
-    "payment_status_label": "Payment Status",
-    "agreed_to_terms": "I gree for terms",
-    "property_details": "House Details",
-    "actions": "Actions",
-    "rate_property": "Rate this house",
-    "report_issue": "Report problem",
-    "help_title": "You need help?",
-    "call_support": "Call Support",
-    "email_support": "Email Support",
-    "pay_now": "Pay Now",
-    "cancel_booking": "Cancel Booking",
-    "ended": "E don finish",
-    "no_bookings": "No Bookings Yet",
-    "no_bookings_msg": "When you book house, everything go show for here",
-    "explore": "Explore Properties",
-    "offline_mode": "Offline Mode",
-    "offline_msg": "You dey look cached data. Some things fit don change.",
-    "cache_notice": "Showing cached bookings",
-    "renew_grace_subtitle": "Pay di XAF 5,000 Rent Processing Fee make you renew, or confirm say you dey comot now. Auto-termination in {{days}} day(s).",
-    "renew_lease_subtitle": "Your lease dey end soon. Choose to stay longer or plan your move-out.",
-    "why_am_i_paying": "Why I dey pay dis one?",
-    "why_payment_title": "Why dis payment?",
-    "why_payment_caution": "1. Caution Guarantee:",
-    "why_payment_caution_desc": "Your money dey safe inside DHUB escrow. E stand as guarantee and e be 100% refundable.",
-    "why_payment_fee": "2. Processing Fee:",
-    "why_payment_fee_desc": " A non-refundable FCFA 5,000 fee for the service.",
-    "why_payment_unlocks": "3. Unlocks di property:",
-    "why_payment_unlocks_desc": " Once you pay, you go see di exact location to visit and inspect.",
-    "why_payment_refund": "4. Refund Policy:",
-    "why_payment_refund_desc": "If you no like the house and you cancel the booking, your caution money go revert back to you 100%.",
-    "i_understand": "I Understand",
-    "initial_deposit_label": "Initial Deposit (Caution + FCFA 5,000 Rent Processing Fee)",
-    "complete_rent_payment": "Complete Rent Payment",
-    "cancel_booking_refund_caution": "Cancel Booking & Refund Caution",
-    "refund_processing": "Refund Processing",
-    "refund_processing_desc": "For security reasons and to protect our landlord dem, DHUB dey take up to 72 hours to verify and process caution refund. Your money go be sent to your Mobile Money account safely.",
-    "refund_paused": "Refund Paused",
-    "refund_paused_desc": "Your caution refund has been placed on hold by DHUB for manual review. Please contact support at support@dhubcmr.com for assistance.",
-    "i_have_moved_in": "I Don Enter ✓",
-    "location_not_available": "Location no dey",
-    "tap_to_open_maps": "Tap to open maps",
-    "dispute_resolution": "Dispute Resolution",
-    "dispute_resolution_desc": "Di landlord don raise issue about di property. Abeg provide your explanation and upload up to 3 photos as evidence. DHUB go review and make final ruling.",
-    "your_evidence_submitted": "Your Evidence Submitted:",
-    "photos_count": "Photos ({{count}}/3):",
-    "unable_to_load": "No fit load booking",
-    "try_again": "Try again",
-    "extend_stay": "Extend stay",
-    "confirm_checkout": "Confirm comot",
-    "unknown_property": "Unknown Property",
-    "size": "Size",
-    "not_specified": "Dem no specify",
-    "utilities": "Utilities",
-    "included": "E dey inside",
-    "parking": "Parking",
-    "available": "E dey",
-    "duration_label": "Duration:",
-    "time_remaining_label": "Time Remaining:",
-    "status_label": "Status:",
-    "pending_move_in": "Pending Move-In",
-    "location_and_landlord": "Location & Landlord",
-    "unknown": "Unknown",
-    "one_year": "1 Year",
-    "days_count": "{{count}} Days",
-    "daily": "Daily",
-    "monthly": "Monthly",
-    "yearly": "Yearly"
-  },
-  "auth": {
-    "welcome_back": "Welcome Back",
-    "sign_in_subtitle": "Enter your account",
-    "phone": "Phone",
-    "email": "Email",
-    "phone_placeholder": "Phone Number (e.g. 6xxxxxxxx)",
-    "email_placeholder": "Email Address",
-    "password": "Password",
-    "sign_in": "Enter",
-    "signing_in": "We dey enter...",
-    "magic_link": "Send me Magic Link (No password)",
-    "or": "OR",
-    "continue_with_google": "Continue wit Google",
-    "forgot_password": "You forget Password?",
-    "no_account": "You no get account?",
-    "sign_up": "Sign Up",
-    "create_account": "Create Account",
-    "sign_up_subtitle": "Join DHUB make you find house",
-    "i_am_student": "I be Student",
-    "i_am_landlord": "I be Landlord",
-    "full_name": "Full Name",
-    "whatsapp_number": "WhatsApp Number (9 digits)",
-    "mobile_money": "Mobile Money Number (9 digits)",
-    "password_placeholder": "Password (min 6 characters)",
-    "confirm_password": "Confirm Password",
-    "age_placeholder": "Age",
-    "address_placeholder": "Home Address",
-    "agree_tos": "I agree to di Terms of Service",
-    "signing_up": "We dey sign up...",
-    "has_account": "You don get account already?",
-    "sign_in_link": "Sign In",
-    "password_min_length": "Password Min Length (PCM)",
-    "resend_otp": "Resend Otp (PCM)",
-    "passwords_no_match": "Passwords No Match (PCM)",
-    "reset_password_title": "Reset Password Title (PCM)",
-    "back_to_signin": "Back To Signin (PCM)",
-    "forgot_password_title": "Forgot Password Title (PCM)",
-    "update_failed": "Update Failed (PCM)",
-    "secure_account_msg": "Secure Account Msg (PCM)",
-    "send_reset_link": "Send Reset Link (PCM)",
-    "password_reset_success": "Password Reset Success (PCM)",
-    "enter_email_or_phone": "Enter Email Or Phone (PCM)",
-    "enter_otp_error": "Enter Otp Error (PCM)",
-    "invalid_phone_cameroon": "Invalid Phone Cameroon (PCM)",
-    "email_or_phone_placeholder": "Email Or Phone Placeholder (PCM)",
-    "forgot_password_subtitle": "Forgot Password Subtitle (PCM)",
-    "resend_in": "Resend In (PCM)",
-    "reset_failed": "Reset Failed (PCM)",
-    "reset_password_btn": "Reset Password Btn (PCM)",
-    "enter_otp_sent_to": "Enter Otp Sent To (PCM)"
-  },
-  "screens": {
-    "networkerror": {
-      "oops__no_internet": "Oops! No Internet (PCM)",
-      "please_check_your_connect": "Please check your connection and try again.\n        If this error persists you can contact support. (PCM)",
-      "retry": "Retry (PCM)"
-    },
-    "emailverification": {
-      "finalizing_account": "Finalizing Account (PCM)",
-      "back_to_sign_up": "Back to Sign Up (PCM)"
-    },
-    "signin": {
-      "welcome_back": "Welcome Back (PCM)",
-      "sign_in_to_your_account": "Sign in to your account (PCM)",
-      "phone": "Phone (PCM)",
-      "email": "Email (PCM)",
-      "or_send_me_a_magic_link": "Or send me a Magic Link (No password) (PCM)",
-      "continue_with_google": "Continue with Google (PCM)",
-      "forgot_password": "Forgot Password? (PCM)",
-      "don_t_have_an_account": "Don't have an account? (PCM)",
-      "sign_up": "Sign Up (PCM)"
-    },
-    "signup": {
-      "create_account": "Create Account (PCM)",
-      "join_dhub_to_manage_your": "Join Dhub to manage your properties (PCM)",
-      "i_agree_to_the": "I agree to the (PCM)",
-      "terms_of_service": "Terms of Service (PCM)",
-      "privacy_policy": "Privacy Policy (PCM)",
-      "you_must_accept_the_terms": "You must accept the Terms (PCM)",
-      "sign_up_with_google": "Sign Up with Google (PCM)",
-      "already_have_an_account": "Already have an account? (PCM)",
-      "sign_in": "Sign In (PCM)",
-      "creating_your_account": "Creating Your Account (PCM)",
-      "setting_up_your_secure_pr": "Setting up your secure profile... (PCM)",
-      "cancel": "Cancel (PCM)"
-    },
-    "verifyotp": {
-      "verify_whatsapp_otp": "Verify WhatsApp OTP (PCM)"
-    },
-    "chatwrapper": {
-      "loading_user": "Loading user... (PCM)",
-      "chats": "Chats (PCM)",
-      "loading_conversations": "Loading conversations... (PCM)",
-      "no_conversations_yet": "No conversations yet (PCM)",
-      "start_a_new_conversation": "Start a new conversation to chat with others (PCM)"
-    },
-    "downloadapp": {
-      "mobile_app_required": "Mobile App Required (PCM)",
-      "payments_and_full_booking": "Payments and full booking management are only available on the DHUB mobile app.\n          Download now to complete your transaction. (PCM)",
-      "android": "Android (PCM)",
-      "ios": "iOS (PCM)",
-      "go_back": "Go Back (PCM)"
-    },
-    "legal": {
-      "back": "Back (PCM)"
-    },
-    "reportbug": {
-      "report_a_bug": "Report a Bug (PCM)",
-      "found_a_technical_issue": "Found a technical issue, crash, or visual bug? Let our developers know so we can fix it! (PCM)",
-      "subject__optional": "Subject (Optional) (PCM)",
-      "send_email_to_support": "Send Email to Support (PCM)"
-    },
-    "reportuser": {
-      "if_you_have_experienced_i": "If you have experienced inappropriate behavior, scams, or other issues, please provide the details below. Our admin team will review this report. (PCM)",
-      "submit_report": "Submit Report (PCM)"
-    },
-    "support": {
-      "connecting_to_support": "Connecting to support... (PCM)",
-      "dhub_support": "DHUB Support (PCM)",
-      "we_re_online": "We're online (PCM)",
-      "call": "Call (PCM)",
-      "quick_topics": "Quick topics (PCM)",
-      "how_can_we_help": "How can we help? (PCM)",
-      "send_a_message_or_tap_a_q": "Send a message or tap a quick topic above to get started. (PCM)"
-    },
-    "updaterequired": {
-      "update_now": "Update Now (PCM)",
-      "maybe_later": "Maybe Later (PCM)"
-    },
-    "approval": {
-      "review_booking": "Review Booking (PCM)",
-      "listing": "Listing (PCM)",
-      "tenant_information": "Tenant Information (PCM)",
-      "booking_details": "Booking Details (PCM)",
-      "caution_escrow": "Caution Escrow (PCM)",
-      "dispute_caution_escrow": "Dispute Caution Escrow (PCM)",
-      "approve_refund__no_damage": "Approve Refund (No Damages) (PCM)",
-      "dispute_damages": "Dispute Damages (PCM)",
-      "rate_tenant": "Rate Tenant (PCM)",
-      "cancel": "Cancel (PCM)",
-      "submit": "Submit (PCM)",
-      "tenant_reviews": "Tenant Reviews (PCM)",
-      "close": "Close (PCM)",
-      "no_written_feedback": "No written feedback. (PCM)"
-    },
-    "bookings": {
-      "bookings": "Bookings (PCM)",
-      "loading_bookings": "Loading bookings... (PCM)",
-      "no_bookings_yet": "No bookings yet (PCM)",
-      "when_students_book_your_p": "When students book your properties, they'll appear here (PCM)",
-      "tap_to_review_request": "Tap to Review Request (PCM)"
-    },
-    "boost": {
-      "boost_listing": "Boost Listing (PCM)",
-      "choose_a_boost_plan": "Choose a Boost Plan (PCM)",
-      "why_boost": "Why Boost? (PCM)",
-      "boosting_your_listing_mak": "Boosting your listing makes it appear first in search results and highlights it for maximum visibility.\n            More exposure means faster tenant acquisition and better chances of filling your property. In short, the more you boost the more money you make! (PCM)"
-    },
-    "dashboard": {
-      "welcome_back": "Welcome back (PCM)"
-    },
-    "editlisting": {
-      "processing": "Processing... (PCM)",
-      "failed": "Failed (PCM)",
-      "loading_property_details": "Loading property details... (PCM)",
-      "edit_property": "Edit Property (PCM)",
-      "property_photos": "Property Photos (PCM)",
-      "tap_to_preview__drag_to_r": "Tap to preview, drag to reorder (coming soon) (PCM)",
-      "add_media": "Add Media (PCM)",
-      "description": "Description (PCM)",
-      "price__fcfa": "Price (FCFA) (PCM)",
-      "rooms": "Rooms (PCM)",
-      "available_for_rent": "Available for Rent (PCM)",
-      "save_changes": "Save Changes (PCM)",
-      "delete_property": "Delete Property (PCM)",
-      "uploading_media": "Uploading Media... (PCM)",
-      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (PCM)",
-      "cancel_upload": "Cancel Upload (PCM)"
-    },
-    "kycverification": {
-      "upload_document": "Upload Document (PCM)",
-      "kyc_verification": "KYC Verification (PCM)",
-      "verified_successfully": "Verified Successfully (PCM)",
-      "your_kyc_verification_has": "Your KYC verification has been approved. You can now create and manage property listings. (PCM)",
-      "verification_pending": "Verification Pending (PCM)",
-      "processing": "Processing (PCM)",
-      "your_docs_have_been_submi": "Your docs have been submitted and are being processed by the verification system. It usually takes up to 48 hrs for a verification to run. (PCM)",
-      "want_to_resubmit": "Want to resubmit? (PCM)",
-      "personal_information": "Personal Information (PCM)",
-      "identity_verification": "Identity Verification (PCM)",
-      "upload_clear_photos_of_yo": "Upload clear photos of your government-issued ID and a selfie holding the ID. (PCM)",
-      "property_credentials": "Property Credentials (PCM)",
-      "provide_documents_proving": "Provide documents proving you own or manage properties at your address. (PCM)"
-    },
-    "listingdetails": {
-      "loading_property_details": "Loading property details... (PCM)",
-      "unable_to_load_property": "Unable to load property (PCM)",
-      "retry": "Retry (PCM)",
-      "go_back": "Go Back (PCM)",
-      "property_details": "Property Details (PCM)",
-      "share_this_listing": "Share this listing (PCM)",
-      "available_for_rent": "Available for Rent (PCM)",
-      "description": "Description (PCM)",
-      "location": "Location (PCM)",
-      "view_map": "View Map (PCM)",
-      "property_videos": "Property Videos (PCM)",
-      "landlord_information": "Landlord Information (PCM)",
-      "verify": "Verify (PCM)",
-      "why_should_i_verify_my_li": "Why should I verify my listing? (PCM)",
-      "boost": "Boost (PCM)",
-      "delete": "Delete (PCM)",
-      "why_verify_your_listing": "Why verify your listing? (PCM)",
-      "i_understand": "I understand (PCM)",
-      "request_verification": "Request Verification (PCM)",
-      "cancel": "Cancel (PCM)",
-      "video": "Video (PCM)",
-      "view_booking": "View Booking (PCM)"
-    },
-    "managelistings": {
-      "please_log_in_to_manage_l": "Please log in to manage listings. (PCM)",
-      "loading_your_listings": "Loading your listings... (PCM)",
-      "my_properties": "My Properties (PCM)",
-      "no_listings_yet": "No listings yet (PCM)",
-      "start_by_adding_your_firs": "Start by adding your first property (PCM)",
-      "add_property": "Add Property (PCM)",
-      "total_properties": "Total Properties (PCM)",
-      "active": "Active (PCM)",
-      "property_photos": "Property Photos (PCM)",
-      "edit": "Edit (PCM)",
-      "delete": "Delete (PCM)"
-    },
-    "payment": {
-      "dhub_payment_receipt": "DHUB Payment Receipt (PCM)",
-      "transaction_details": "Transaction Details (PCM)",
-      "amount_details": "Amount Details (PCM)",
-      "parties": "Parties (PCM)",
-      "payments": "Payments (PCM)",
-      "payment_history": "Payment History (PCM)",
-      "send_payment": "Send Payment (PCM)",
-      "recent_transactions": "Recent Transactions (PCM)",
-      "loading_history": "Loading history... (PCM)",
-      "retry": "Retry (PCM)",
-      "no_payment_history_yet": "No payment history yet. (PCM)",
-      "receiver": "Receiver (PCM)",
-      "description": "Description (PCM)",
-      "payment_receipt": "Payment Receipt (PCM)",
-      "scan_to_verify_transactio": "Scan to verify transaction (PCM)",
-      "download_pdf": "Download PDF (PCM)",
-      "close": "Close (PCM)",
-      "amount": "Amount (PCM)",
-      "payable_to": "Payable To (PCM)",
-      "this_is_the": "This is the (PCM)",
-      "initial_deposit": "Initial Deposit (PCM)",
-      "this_is_your": "This is your (PCM)",
-      "remaining_rent_balance": "remaining rent balance (PCM)",
-      "after_your_initial_deposi": "after your initial deposit. Payment goes directly to your landlord. Complete this after visiting and confirming the property. (PCM)",
-      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee (PCM)",
-      "your_momo_phone_number": "Your MoMo Phone Number (PCM)",
-      "enter_the_momo_number_tha": "Enter the MoMo number that will receive the payment prompt. (PCM)",
-      "a_payment_prompt_has_been": "A payment prompt has been sent to your MoMo number. Open your MoMo app and approve it to complete the payment. (PCM)",
-      "print_pdf": "Print PDF (PCM)"
-    },
-    "uploadlisting": {
-      "add_new_property": "Add New Property (PCM)",
-      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property (PCM)",
-      "add_media": "Add Media (PCM)",
-      "basic_information": "Basic Information (PCM)",
-      "listing_type": "Listing Type (PCM)",
-      "stay_type": "Stay Type (PCM)",
-      "property_title": "Property Title (PCM)",
-      "description": "Description (PCM)",
-      "number_of_rooms": "Number of Rooms (PCM)",
-      "location": "Location (PCM)",
-      "street_address": "Street Address (PCM)",
-      "city": "City (PCM)",
-      "tap_to_select_location_on": "Tap to select location on map (PCM)",
-      "students_will_review_and": "Students will review and agree to these terms before booking (PCM)",
-      "create_property_listing": "Create Property Listing (PCM)",
-      "uploading_media": "Uploading Media... (PCM)",
-      "please_do_not_close_the_a": "Please do not close the app or turn off your screen. (PCM)",
-      "cancel_upload": "Cancel Upload (PCM)"
-    },
-    "bookingdetails": {
-      "information_locked": "Information Locked (PCM)",
-      "complete_your_booking_to": "Complete your booking to reveal the exact coordinates and landlord contact details. (PCM)",
-      "under_review_by_dhub": "Under Review by DHUB (PCM)",
-      "submit_evidence": "Submit Evidence (PCM)",
-      "confirm_i_have_moved_in": "Confirm I Have Moved In (PCM)",
-      "move_in_confirmed_by_you": "Move-In Confirmed by You (PCM)",
-      "take_entry_picture": "Take Entry Picture (PCM)",
-      "take_exit_picture": "Take Exit Picture (PCM)",
-      "awaiting_landlord_approva": "Awaiting Landlord Approval (PCM)",
-      "the_landlord_must_review": "The landlord must review and accept your booking request before you can proceed to payment. Please check back later. We will notify you when the landlord approves your booking. (PCM)",
-      "cancellation_reason": "Cancellation Reason (PCM)",
-      "back": "Back (PCM)"
-    },
-    "booking": {
-      "unverified_property": "Unverified Property (PCM)",
-      "property_may_not_match_th": "Property may not match the photos (PCM)",
-      "promised_amenities_could": "Promised amenities could be missing (PCM)",
-      "you_may_risk_losing_your": "You may risk losing your caution fee (PCM)",
-      "read_our_safety_guideline": "Read our Safety Guidelines (PCM)",
-      "cancel_booking": "Cancel Booking (PCM)",
-      "proceed_anyway": "Proceed Anyway (PCM)"
-    },
-    "favorites": {
-      "view_details": "View Details (PCM)",
-      "no_favorites_yet": "No Favorites Yet (PCM)",
-      "start_exploring_propertie": "Start exploring properties and tap the heart icon to save your favorites here (PCM)",
-      "explore_properties": "Explore Properties (PCM)",
-      "loading_your_favorites": "Loading your favorites... (PCM)",
-      "my_favorites": "My Favorites (PCM)"
-    },
-    "home": {
-      "can_t_find_what_you_re_lo": "Can't find what you're looking for? (PCM)",
-      "notify_me": "Notify Me (PCM)",
-      "fill_out_the_details_of_t": "Fill out the details of the property you need. We'll search for it and notify you as soon as it's available! (PCM)",
-      "preferred_location": "Preferred Location (PCM)",
-      "budget__fcfa": "Budget (FCFA) (PCM)",
-      "specific_requirements": "Specific Requirements (PCM)",
-      "submit_request": "Submit Request (PCM)"
-    },
-    "listingreview": {
-      "rate_this_listing": "Rate this Listing (PCM)",
-      "tap_stars_to_select_your": "Tap stars to select your rating (PCM)",
-      "optional_comment": "Optional Comment (PCM)",
-      "back_to_booking": "Back to Booking (PCM)"
-    },
-    "profile": {
-      "age": "Age (PCM)"
-    },
-    "viewbookings": {
-      "active": "Active (PCM)",
-      "pending": "Pending (PCM)",
-      "past": "Past (PCM)"
-    }
-  }
-}
-</file>
-
 <file path="src/screens/common/ChatWrapper.tsx">
 // src/screens/common/ChatWrapper.tsx
 import React, { useEffect, useState, useRef } from 'react';
@@ -20592,560 +19102,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 export default KYCVerificationScreen;
 </file>
 
-<file path="src/screens/landlord/PaymentScreen.tsx">
-import { showAlert } from '../../utils/alert';
-// src/screens/landlord/PaymentsScreen.tsx
-import { useRoute } from '@react-navigation/native';
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Payment } from '../../services/paymentService';
-import { useAppDispatch, useAppSelector } from '../../store/hooks';
-import { clearInitiateState, fetchPayments, initiateCollection, initiateVerificationPayment, upsertPayment } from '../../store/paymentsSlice';
-import type { RootState } from '../../store/store';
-import { LandlordTabRouteProp } from '../../types';
-import { supabase } from '../../utils/supabaseClient';
-import { useTranslation } from 'react-i18next';
-
-const RECEIVER_NAME = 'DHUB';
-
-const PaymentsScreen: React.FC = () => {
-  const { t } = useTranslation();
-  const dispatch = useAppDispatch();
-
-  // Redux state
-  const user = useAppSelector((state: RootState) => state.auth.user);
-  const payments = useAppSelector((state: RootState) => state.payments.history);
-  const { initiating, initiateError, initiateData, fetchingHistory, fetchError } = useAppSelector(
-    (state: RootState) => state.payments
-  );
-
-  const route = useRoute<LandlordTabRouteProp<'Payments'>>();
-  const routeParams = route.params;
-  const isVerificationFlow = routeParams && 'reason' in routeParams && routeParams.reason === 'verification';
-  const boostParams = !isVerificationFlow && routeParams && 'planId' in routeParams ? routeParams : undefined;
-  const verificationParams = isVerificationFlow ? routeParams : undefined;
-
-  const [activeTab, setActiveTab] = useState<'history' | 'send'>('history');
-  const [amount, setAmount] = useState('');
-  const [description, setDescription] = useState('');
-  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
-  const [showReceiptModal, setShowReceiptModal] = useState(false);
-  const [pdfLoading, setPdfLoading] = useState(false);
-
-  // Clear stale thunk state on mount
-  useEffect(() => { dispatch(clearInitiateState()); }, []);
-
-  // FETCH HISTORY & REAL-TIME SYNC
-  useEffect(() => {
-    if (!user?.id) return;
-
-    dispatch(fetchPayments(user.id));
-
-    const channel = supabase
-      .channel(`landlord-payments-${user.id}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "payments",
-          filter: `payer_id=eq.${user.id}`,
-        },
-        (payload: any) => {
-          const row = payload.new as any;
-          if (row) {
-            const mapped: Payment = {
-              id: row.id,
-              transactionId: row.transaction_ref || row.id,
-              amount: parseFloat(row.amount),
-              sender: row.payer_id,
-              receiver: row.payee_id,
-              status: row.status as any,
-              date: row.created_at,
-              description: row.currency ? `${row.currency} Payment` : "Payment",
-            };
-            dispatch(upsertPayment(mapped));
-          }
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [user?.id]);
-
-  // Prefill if coming from BoostScreen or ListingDetailsScreen (verification)
-  useEffect(() => {
-    if (routeParams && 'reason' in routeParams) {
-      setActiveTab('send');
-      setAmount(String(routeParams.amount));
-      setDescription(routeParams.description);
-      return;
-    }
-    if (boostParams) {
-      setActiveTab('send');
-      setAmount(boostParams.price.toString());
-      setDescription(`Boost Listing: ${boostParams.listingId}`);
-    }
-  }, [boostParams, routeParams]);
-
-  // Success → reset form, switch to history
-  useEffect(() => {
-    if (!initiateData) return;
-    const numAmount = parseFloat(amount);
-    setAmount('');
-    setDescription('');
-    setActiveTab('history');
-    dispatch(clearInitiateState());
-    showAlert(
-      'Payment Initiated ✅',
-      boostParams
-        ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
-        : `${formatCurrency(numAmount)} payment initiated.\nApprove the MoMo prompt on your phone to complete.`,
-    );
-  }, [initiateData]);
-
-  // Failure → show alert
-  useEffect(() => {
-    if (!initiateError) return;
-    showAlert('Payment Failed', initiateError);
-    dispatch(clearInitiateState());
-  }, [initiateError]);
-
-  // ---------- Payment Handler ----------
-  const handleSendPayment = async () => {
-    if (!amount) {
-      showAlert('Validation Error', 'Please enter an amount');
-      return;
-    }
-    const numAmount = parseFloat(amount);
-    if (isNaN(numAmount) || numAmount <= 0) {
-      showAlert('Validation Error', 'Enter a valid amount');
-      return;
-    }
-
-    if (!user?.id) {
-      showAlert('Error', 'User account details missing. Please sign in again.');
-      return;
-    }
-
-    if (verificationParams) {
-      let payerPhone = user.momo || user.phone;
-      if (!payerPhone) {
-        const { data } = await supabase
-          .from('users')
-          .select('momo, phone')
-          .eq('id', user.id)
-          .maybeSingle();
-        payerPhone = data?.momo || data?.phone || '';
-      }
-
-      if (!payerPhone) {
-        showAlert('Error', 'Add a mobile-money number to your profile before paying.');
-        return;
-      }
-
-      dispatch(initiateVerificationPayment({
-        payerPhone,
-        listingId: verificationParams.listingId,
-        payerId: user.id,
-      }));
-      return;
-    }
-
-    if (!user.phone) {
-      showAlert('Error', 'User account details missing. Please sign in again.');
-      return;
-    }
-
-    const reason = boostParams ? 'boosting' : 'landlord_subscription';
-    const planId = boostParams?.planId;
-    const tierId = reason === 'landlord_subscription' ? 'tier_monthly' : undefined;
-
-    dispatch(initiateCollection({
-      payerPhone: user.phone,
-      amount: String(numAmount),
-      reason,
-      planId,
-      tierId,
-      client: {
-        name: 'Dhub',
-        id: `col-${Date.now()}`,
-        payer_id: user.id,
-        listing_id: boostParams?.listingId ?? '',
-        plan_id: boostParams?.planId ?? null,   // ← needed by webhook to activate boost
-        idempotency_key: `dhub-col-${Date.now()}`,
-      },
-    }));
-  };
-  const handleViewReceipt = (payment: Payment) => {
-    setSelectedPayment(payment);
-    setShowReceiptModal(true);
-  };
-
-  // ---------- Helpers ----------
-  const formatDate = (dateString: string) =>
-    new Date(dateString).toLocaleDateString('en-US', {
-      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-
-  const formatCurrency = (value: number) =>
-    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'XAF' }).format(value);
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed': return '#27AE60';
-      case 'pending': return '#F39C12';
-      case 'failed': return '#E74C3C';
-      default: return '#7F8C8D';
-    }
-  };
-
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'completed': return 'Completed';
-      case 'pending': return 'Pending';
-      case 'failed': return 'Failed';
-      default: return status;
-    }
-  };
-
-  const generateQRData = (payment: Payment) =>
-    JSON.stringify({
-      transactionId: payment.transactionId,
-      amount: payment.amount,
-      sender: payment.sender,
-      receiver: payment.receiver,
-      date: payment.date,
-      status: payment.status,
-      description: payment.description,
-    });
-
-  const generatePDF = async (payment: Payment) => {
-    setPdfLoading(true);
-    try {
-      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
-        <title>Receipt - ${payment.transactionId}</title>
-        <style>
-          body{font-family:Arial,sans-serif;margin:40px;color:#2C3E50}
-          .header{text-align:center;color:#D4AF37;border-bottom:2px solid #D4AF37;padding-bottom:20px;margin-bottom:30px}
-          .section{margin-bottom:25px}
-          .section-title{color:#D4AF37;font-size:18px;font-weight:bold;margin-bottom:15px;border-bottom:1px solid #EAECEF;padding-bottom:5px}
-          .row{display:flex;justify-content:space-between;margin-bottom:8px;padding:5px 0}
-          .label{color:#7F8C8D;font-weight:500}
-          .value{color:#2C3E50;font-weight:600;text-align:right}
-          .total-row{border-top:2px solid #EAECEF;padding-top:10px;margin-top:10px;font-weight:bold}
-          .footer{text-align:center;margin-top:40px;color:#7F8C8D;font-size:12px;border-top:1px solid #EAECEF;padding-top:20px}
-        </style></head><body>
-        <div class="header"><h1>{t('screens.payment.dhub_payment_receipt')}</h1><p>Transaction ID: ${payment.transactionId}</p></div>
-        <div class="section">
-          <div class="section-title">{t('screens.payment.transaction_details')}</div>
-          <div class="row"><span class="label">Transaction ID:</span><span class="value">${payment.transactionId}</span></div>
-          <div class="row"><span class="label">Description:</span><span class="value">${payment.description}</span></div>
-          <div class="row"><span class="label">Date:</span><span class="value">${formatDate(payment.date)}</span></div>
-          <div class="row"><span class="label">Status:</span><span class="value">${getStatusText(payment.status)}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">{t('screens.payment.amount_details')}</div>
-          <div class="row"><span class="label">Amount:</span><span class="value">${formatCurrency(payment.amount)}</span></div>
-          <div class="row"><span class="label">Fee:</span><span class="value">${formatCurrency(payment.fee || 0)}</span></div>
-          <div class="row total-row"><span class="label">Net Amount:</span><span class="value">${formatCurrency(payment.netAmount || 0)}</span></div>
-        </div>
-        <div class="section">
-          <div class="section-title">{t('screens.payment.parties')}</div>
-          <div class="row"><span class="label">From:</span><span class="value">${payment.sender}</span></div>
-          <div class="row"><span class="label">To:</span><span class="value">${RECEIVER_NAME} (${payment.receiver})</span></div>
-        </div>
-        <div class="footer"><p>Generated by DHUB App on ${new Date().toLocaleDateString()}</p></div>
-        </body></html>`;
-      const { uri } = await Print.printToFileAsync({ html });
-      if (await Sharing.isAvailableAsync()) {
-        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Receipt' });
-      } else {
-        showAlert('Saved', `PDF saved to: ${uri}`);
-      }
-    } catch {
-      showAlert('Error', 'Failed to generate PDF');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
-
-  // ---------- Render ----------
-  return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <Text style={styles.headerTitle}>{t('screens.payment.payments')}</Text>
-      </View>
-
-      <View style={styles.tabContainer}>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
-          onPress={() => setActiveTab('history')}
-        >
-          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>{t('screens.payment.payment_history')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.tab, activeTab === 'send' && styles.activeTab]}
-          onPress={() => setActiveTab('send')}
-        >
-          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>{t('screens.payment.send_payment')}</Text>
-        </TouchableOpacity>
-      </View>
-
-      {activeTab === 'history' ? (
-        <ScrollView style={styles.historyContainer}>
-          <View style={styles.historyHeader}>
-            <Text style={styles.sectionTitle}>{t('screens.payment.recent_transactions')}</Text>
-            <TouchableOpacity
-              onPress={() => user?.id && dispatch(fetchPayments(user.id))}
-              disabled={fetchingHistory}
-            >
-              <Text style={[styles.refreshText, fetchingHistory && styles.disabledText]}>
-                {fetchingHistory ? "Refreshing..." : "Refresh"}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {fetchingHistory ? (
-            <View style={styles.loadingContainer}>
-              <ActivityIndicator size="large" color="#D4AF37" />
-              <Text style={styles.loadingText}>{t('screens.payment.loading_history')}</Text>
-            </View>
-          ) : fetchError ? (
-            <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{fetchError}</Text>
-              <TouchableOpacity
-                style={styles.retryButton}
-                onPress={() => user?.id && dispatch(fetchPayments(user.id))}
-              >
-                <Text style={styles.retryButtonText}>{t('screens.payment.retry')}</Text>
-              </TouchableOpacity>
-            </View>
-          ) : payments.length === 0 ? (
-            <Text style={styles.emptyText}>{t('screens.payment.no_payment_history_yet')}</Text>
-          ) : (
-            payments.map((payment: any) => (
-              <TouchableOpacity
-                key={payment.id}
-                style={styles.paymentCard}
-                onPress={() => handleViewReceipt(payment)}
-              >
-                <View style={styles.paymentHeader}>
-                  <Text style={styles.paymentDescription}>{payment.description}</Text>
-                  <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
-                </View>
-                <View style={styles.paymentDetails}>
-                  <Text style={styles.paymentDate}>{formatDate(payment.date)}</Text>
-                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
-                    <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
-                  </View>
-                </View>
-                <View style={styles.paymentFooter}>
-                  <Text style={styles.transactionId}>ID: {payment.transactionId}</Text>
-                </View>
-              </TouchableOpacity>
-            ))
-          )}
-        </ScrollView>
-      ) : (
-        <ScrollView style={styles.sendContainer}>
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Amount (XAF) *</Text>
-            <TextInput
-              style={styles.input}
-              value={amount}
-              onChangeText={setAmount}
-              keyboardType="numeric"
-              editable={!initiating && !verificationParams}
-              placeholder="Enter amount"
-            />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t('screens.payment.receiver')}</Text>
-            <TextInput style={[styles.input, styles.disabledInput]} value={RECEIVER_NAME} editable={false} />
-          </View>
-
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>{t('screens.payment.description')}</Text>
-            <TextInput
-              style={[styles.input, styles.textArea, (boostParams || verificationParams) && styles.disabledInput]}
-              value={boostParams ? 'Boost Listing' : description}
-              onChangeText={setDescription}
-              multiline
-              numberOfLines={3}
-              editable={!boostParams && !verificationParams && !initiating}
-            />
-          </View>
-
-          <TouchableOpacity
-            style={[styles.sendButton, initiating && styles.buttonDisabled]}
-            onPress={handleSendPayment}
-            disabled={initiating}
-          >
-            {initiating
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.sendButtonText}>{t('screens.payment.send_payment')}</Text>
-            }
-          </TouchableOpacity>
-        </ScrollView>
-      )}
-
-      {/* Receipt Modal */}
-      <Modal visible={showReceiptModal} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={styles.modalContainer}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>{t('screens.payment.payment_receipt')}</Text>
-            <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
-              <Text style={styles.closeButtonText}>×</Text>
-            </TouchableOpacity>
-          </View>
-
-          {selectedPayment && (
-            <ScrollView style={styles.receiptContent}>
-              <View style={styles.qrContainer}>
-                <QRCode value={generateQRData(selectedPayment)} size={200} color="#000" backgroundColor="#fff" />
-                <Text style={styles.qrHelpText}>{t('screens.payment.scan_to_verify_transactio')}</Text>
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>{t('screens.payment.transaction_details')}</Text>
-                {[
-                  ['Transaction ID', selectedPayment.transactionId],
-                  ['Description', selectedPayment.description],
-                  ['Date', formatDate(selectedPayment.date)],
-                  ['Status', getStatusText(selectedPayment.status)],
-                ].map(([label, value]) => (
-                  <View key={label} style={styles.receiptRow}>
-                    <Text style={styles.receiptLabel}>{label}:</Text>
-                    <Text style={styles.receiptValue}>{value}</Text>
-                  </View>
-                ))}
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>{t('screens.payment.amount_details')}</Text>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>Amount:</Text>
-                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.amount)}</Text>
-                </View>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>Fee:</Text>
-                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.fee || 0)}</Text>
-                </View>
-                <View style={[styles.receiptRow, styles.totalRow]}>
-                  <Text style={styles.totalLabel}>Net Amount:</Text>
-                  <Text style={styles.totalValue}>{formatCurrency(selectedPayment.netAmount || 0)}</Text>
-                </View>
-              </View>
-
-              <View style={styles.receiptSection}>
-                <Text style={styles.receiptSectionTitle}>{t('screens.payment.parties')}</Text>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>From:</Text>
-                  <Text style={styles.receiptValue}>{selectedPayment.sender}</Text>
-                </View>
-                <View style={styles.receiptRow}>
-                  <Text style={styles.receiptLabel}>To:</Text>
-                  <Text style={styles.receiptValue}>{RECEIVER_NAME}</Text>
-                </View>
-              </View>
-
-              <View style={styles.receiptActions}>
-                <TouchableOpacity
-                  style={[styles.downloadButton, pdfLoading && styles.buttonDisabled]}
-                  onPress={() => generatePDF(selectedPayment)}
-                  disabled={pdfLoading}
-                >
-                  {pdfLoading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={styles.downloadButtonText}>{t('screens.payment.download_pdf')}</Text>
-                  }
-                </TouchableOpacity>
-                <TouchableOpacity style={styles.closeReceiptButton} onPress={() => setShowReceiptModal(false)}>
-                  <Text style={styles.closeReceiptText}>{t('screens.payment.close')}</Text>
-                </TouchableOpacity>
-              </View>
-            </ScrollView>
-          )}
-        </SafeAreaView>
-      </Modal>
-    </SafeAreaView>
-  );
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F8F9FA' },
-  header: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#D4AF37', textAlign: 'center' },
-  tabContainer: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
-  activeTab: { borderBottomWidth: 3, borderBottomColor: '#D4AF37' },
-  tabText: { fontSize: 16, fontWeight: '600', color: '#7F8C8D' },
-  activeTabText: { color: '#D4AF37' },
-  historyContainer: { flex: 1, padding: 20 },
-  sendContainer: { flex: 1, padding: 20 },
-  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 20 },
-  emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 40, fontSize: 16 },
-  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  refreshText: { color: '#D4AF37', fontWeight: '600', fontSize: 14 },
-  disabledText: { color: '#BDC3C7' },
-  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
-  loadingText: { marginTop: 12, fontSize: 16, color: '#7F8C8D' },
-  errorContainer: { backgroundColor: '#FDEDED', padding: 16, borderRadius: 8, marginTop: 20, borderLeftWidth: 4, borderLeftColor: '#E74C3C' },
-  errorText: { color: '#C0392B', fontSize: 14 },
-  retryButton: { marginTop: 16, backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, alignSelf: 'center' },
-  retryButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
-  inputGroup: { marginBottom: 16 },
-  disabledInput: { backgroundColor: '#e0e0e0', color: '#7f7f7f' },
-  label: { fontSize: 16, fontWeight: '600', color: '#2C3E50', marginBottom: 8 },
-  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCDFE4', borderRadius: 8, padding: 12, fontSize: 16, color: '#2C3E50' },
-  textArea: { minHeight: 80, textAlignVertical: 'top' },
-  sendButton: { backgroundColor: '#D4AF37', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
-  buttonDisabled: { opacity: 0.6 },
-  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
-  paymentCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
-  paymentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
-  paymentDescription: { fontSize: 16, fontWeight: '600', color: '#2C3E50', flex: 1, marginRight: 10 },
-  paymentAmount: { fontSize: 18, fontWeight: 'bold', color: '#D4AF37' },
-  paymentDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  paymentDate: { fontSize: 14, color: '#7F8C8D' },
-  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
-  paymentFooter: { borderTopWidth: 1, borderTopColor: '#EAECEF', paddingTop: 8 },
-  transactionId: { fontSize: 12, color: '#95A5A6', fontFamily: 'monospace' },
-  modalContainer: { flex: 1, backgroundColor: '#F8F9FA' },
-  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50' },
-  closeButton: { padding: 4 },
-  closeButtonText: { fontSize: 24, color: '#7F8C8D', fontWeight: 'bold' },
-  receiptContent: { flex: 1, padding: 20 },
-  qrContainer: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 12 },
-  qrHelpText: { marginTop: 10, fontSize: 14, color: '#7F8C8D', textAlign: 'center' },
-  receiptSection: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 16 },
-  receiptSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EAECEF', paddingBottom: 8 },
-  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
-  receiptLabel: { fontSize: 14, color: '#7F8C8D', fontWeight: '500' },
-  receiptValue: { fontSize: 14, color: '#2C3E50', fontWeight: '600', flex: 1, textAlign: 'right' },
-  totalRow: { borderTopWidth: 2, borderTopColor: '#EAECEF', paddingTop: 10, marginTop: 4 },
-  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
-  totalValue: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37' },
-  receiptActions: { flexDirection: 'row', gap: 12, marginBottom: 30 },
-  downloadButton: { flex: 1, backgroundColor: '#D4AF37', padding: 14, borderRadius: 8, alignItems: 'center' },
-  downloadButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
-  closeReceiptButton: { flex: 1, backgroundColor: '#FFFFFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#DCDFE4' },
-  closeReceiptText: { color: '#2C3E50', fontSize: 14, fontWeight: 'bold' },
-});
-
-export default PaymentsScreen;
-</file>
-
 <file path="src/screens/student/ViewBookingsScreen.tsx">
 import { Ionicons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22023,392 +19979,230 @@ export async function fetchFaqs(limit = 10): Promise<FAQ[]> {
 }
 </file>
 
-<file path="src/types.ts">
-// src/types.ts
-import { BottomTabNavigationProp, BottomTabScreenProps } from '@react-navigation/bottom-tabs';
-import { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
-import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
-
-/* ===========================
-   Domain / Model Types 
-=========================== */
-
-export type Role = 'student' | 'landlord' | 'mover' | 'admin';
-
-export interface Listing {
-  id: string;
-  title: string;
-  description?: string | null;
-  price: number;
-  city: string;
-  address?: string | null;
-  latitude?: number | null;
-  longitude?: number | null;
-  terms_marker?: string | null;
-  media: MediaItem[];
-  rooms?: number | null;
-  avg_rating?: number | null;
-  rating_count?: number | null;
-  available?: boolean | null;
-  boost_until?: string | null;
-  created_at: string;
-  updated_at?: string;
-  landlord_id: string;
-  processing_status?: 'processing' | 'ready' | 'failed';
-  is_verified?: boolean | null;
-  verification_expires_at?: string | null;
-  cite_id?: string | null;
-  listing_type?: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel' | null;
-  stay_type?: 'short_term' | 'long_term' | 'both' | null;
-  price_unit?: 'per_month' | 'per_night' | null;
-}
-
-export interface Landlord {
-  id: string;
-  full_name: string;
-  email: string;
-   momo?: string | null;
-  phone?: string | null;
-  profile_pic?: string | null;
-  created_at: string;
-}
-
-export interface Cite {
-  id: string;
-  landlord_id: string;
-  name: string;
-  address?: string | null;
-  city?: string | null;
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface Booking {
-  id: string;
-  listing_id: string;
-  student_id: string;
-  landlord_id: string;
-  status: 'pending' | 'confirmed' | 'cancelled';
-  payment_status: 'pending' | 'completed' | 'failed';
-  amount: number;
-  total_amount?: number | null;
-  start_date: string;
-  end_date: string;
-  created_at: string;
-  updated_at?: string;
-  agreed_to_terms?: boolean;
-  contract_status?: 'draft' | 'signed' | 'enforced' | 'expired' | 'cancelled';
-  agreement_id?: string | null;
-  agreement_hash?: string | null;
-  signature_method?: string | null;
-  signature_text?: string | null;
-  signed_at?: string | null;
-  agreement_device_info?: Record<string, any> | null;
-  terms_version?: string | null;
-  approval_status?: string;
-  duration_type?: string;
-  caution_fee?: number;
-  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed';
-  entry_media?: MediaItem[];
-  exit_media?: MediaItem[];
-}
-
-export interface Review {
-  id: string;
-  score: number;
-  comment?: string | null;
-  created_at: string;
-  reviewer: {
-    id: string;
-    full_name: string;
-    profile_pic?: string | null;
-  };
-}
-
-export type MediaType = 'image' | 'video';
-
-export interface MediaDBItem {
-  key: string;
-  type: MediaType;
-  thumbKey?: string;
-}
-
-export interface MediaItem {
-  url: string;
-  type: MediaType;
-  thumbUrl?: string;
-  processing_status?: 'processing' | 'ready' | 'failed';
-  mimeType?: string;
-  file?: any;
-}
-
-export interface ListingDetails extends Listing {
-  landlord?: Landlord | null;
-  terms_text?: string | null;
-  ratings: Review[];
-}
-
-export interface ListingSummary {
-  id: string;
-  title: string;
-  price: number;
-  city: string;
-  rooms: number | null;
-  landlord_id: string;
-  image_url: string;
-  avg_rating: number | null;
-  rating_count: number | null;
-  available?: boolean | null;
-  boosted?: boolean;
-  created_at: string;
-  listing_type: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel';
-  stay_type: 'short_term' | 'long_term' | 'both';
-  price_unit: 'per_night' | 'per_week' | 'per_month' | 'per_stay';
-  processing_status?: 'processing' | 'ready' | 'failed';
-  is_verified?: boolean | null;
-  description?: string | null;
-}
-
-export interface AppNotification {
-  id: string;
-  recipient_id: string;
-  recipient_role: Role;
-  title: string;
-  body: string;
-  type: NotificationType;
-  listing_id?: string | null;
-  booking_id?: string | null;
-  data?: Record<string, any> | null;
-  is_read: boolean;
-  push_sent: boolean;
-  push_sent_at?: string | null;
-  created_at: string;
-}
-
-export type NotificationType =
-  | 'favorite_available'
-  | 'booking_update'
-  | 'rent_reminder'
-  | 'system_announcement'
-  | 'chat_message';
-
-// Support types (used by SupportScreen & supportService)
-export interface Ticket {
-  id: string;
-  user_id: string;
-  status: 'open' | 'closed' | 'pending';
-  priority: 'low' | 'normal' | 'high';
-  created_at: string;
-  updated_at?: string;
-}
-
-export interface Chat {
-  id: string;
-  ticket_id: string;
-  sender_id: string;
-  receiver_id?: string | null;
-  message: string;
-  read: boolean;
-  sender_type: 'user' | 'bot' | 'agent';
-  chat_type?: string;
-  is_complaint?: boolean;
-  is_faq_candidate?: boolean;
-  created_at: string;
-}
-
-export interface FAQ {
-  id: string;
-  question: string;
-  answer?: string | null;
-  created_at?: string;
-}
-
-export interface ListingFilters {
-  search?: string;
-  city?: string;
-  rooms?: number | '5+';
-  minPrice?: number;
-  maxPrice?: number;
-  availableOnly?: boolean;
-  boostedFirst?: boolean;
-  limit?: number;
-  offset?: number;
-  listing_type?: string;
-  stay_type?: string;
-  lat?: number;
-  lng?: number;
-  radius_m?: number;
-}
-
-export interface ChatMessage {
-  id: string;
-  threadId: string;
-  senderId: string;
-  receiverId: string | null;
-  message: string;
-  read: boolean;
-  created_at: string;
-}
-
-export interface ChatMessageDto {
-  id: string;
-  thread_id: string;
-  sender_id: string;
-  receiver_id?: string | null;
-  body: string;
-  is_read: boolean;
-  created_at: string;
-}
-
-export interface ThreadDto {
-  threadId: string;
-  participants: User[];
-  lastMessage: string | null;
-  lastMessageTime: string | null;
-  unreadCount: number;
-}
+<file path="src/store/authSlice.ts">
+// src/store/authSlice.ts
+import { createAsyncThunk, createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { clearLocalSession, createLocalSession } from '../utils/localSession';
+import { supabase } from '../utils/supabaseClient';
 
 export interface User {
   id: string;
   fullName: string;
   email: string;
-  role: Role;
+  role: 'student' | 'landlord' | 'admin';
   phone?: string;
   momo?: string;
+  token: string | null;
+  refreshToken: string | null;
+  supabaseTokens?: { access_token: string; refresh_token: string };
 }
 
-/* ===========================
-   Navigation Param Lists
-=========================== */
+interface AuthState {
+  user: User | null;
+  token: string | null;
+  refreshToken: string | null;
+  isLoading: boolean;
+  isSyncing: boolean; // New state for post-verification sync
+  isHydrated: boolean;
+  requiresPasswordUpdate: boolean;
+  needsOnboarding: boolean;
+  error: string | null;
+}
 
-export type StudentTabParamList = {
-  Home: undefined;
-  Favorites: undefined;
-  Chat: { threadId?: string } | undefined;
-  Bookings: undefined;
-  Profile: undefined;
+const initialState: AuthState = {
+  user: null,
+  token: null,
+  refreshToken: null,
+  isLoading: false,
+  isSyncing: false,
+  isHydrated: false,
+  requiresPasswordUpdate: false,
+  needsOnboarding: false,
+  error: null,
 };
 
-export type LandlordTabParamList = {
-  Dashboard: undefined;
-  ManageListings: undefined;
-  Chat: { threadId?: string } | undefined;
-  Payments:
-    | {
-        listingId: string;
-        planId: string;
-        durationDays: number;
-        price: number;
-        purpose: string;
-      }
-    | {
-        listingId: string;
-        amount: number;
-        description: string;
-        reason: 'verification';
-      }
-    | undefined;
-  Profile: undefined; 
-};
+// -------------------------
+// EMAIL SIGN IN
+// -------------------------
+export const signIn = createAsyncThunk(
+  'auth/signIn',
+  async ({ email, password }: { email: string; password: string }, { rejectWithValue }) => {
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) throw error;
+      if (!data?.user || !data?.session) throw new Error('Login failed');
 
-export type StudentStackParamList = {
-  StudentTabs: NavigatorScreenParams<StudentTabParamList> | undefined;
-  ListingDetails: { listingId: string };
-  BookingScreen: { listingId: string };
-  Payments: {
-    listingId: string;
-    listingType?: string;
-    amount: number;
-    description: string;
-    receiverPhone: string;
-    receiverName: string;
-    bookingId?: string;
-    landlordId?: string;
-    paymentType?: 'initial' | 'rent_completion' | 'renewal';
-    isRenewal?: boolean;
-    reason?: 'rent' | 'boosting' | 'landlord_subscription';
-  };
-  Support: { currentUserId: string };
-  Legal: undefined;
-  ViewBookingsScreen: { fromProfile?: boolean } | undefined;
-  BookingDetails: { bookingId: string };
-  PendingScreen: { bookingId: string };
-  ListingReview: { listing_id: string };
-  ReportUser: undefined;
-  ReportBug: undefined;
-  Notifications: undefined;
-};
+      const user: User = {
+        id: data.user.id,
+        fullName: data.user.user_metadata?.full_name || data.user.email || 'User',
+        email: data.user.email || '',
+        role: (data.user.user_metadata?.role || 'student') as 'student' | 'landlord' | 'admin',
+        phone: data.user.phone || data.user.user_metadata?.phone || '',
+        momo: data.user.user_metadata?.momo || '',
+        token: data.session.access_token,
+        refreshToken: data.session.refresh_token,
+        supabaseTokens: { access_token: data.session.access_token, refresh_token: data.session.refresh_token },
+      };
 
-export type LandlordStackParamList = {
-  Tabs: NavigatorScreenParams<LandlordTabParamList> | undefined;
-  Bookings: undefined;
-  Notifications: undefined;
-  KYCVerification: undefined;
-  UploadListing: undefined;
-  EditListing: { listingId: string };
-  ListingDetails: { listingId: string };
-  BoostScreen: { listingId: string };
-  ApprovalScreen: { bookingId: string };
-  Legal: undefined;
-  SignIn: undefined;
-  ReportUser: undefined;
-  ReportBug: undefined;
-  Support: { currentUserId: string };
-};
+      await createLocalSession(user, user.supabaseTokens);
+      return { user, token: user.token, refreshToken: user.refreshToken };
+    } catch (err: any) {
+      console.error('[signIn] Failed:', err.message || err);
+      return rejectWithValue(err.message || 'Login failed');
+    }
+  }
+);
 
-export type AuthStackParamList = {
-  SignIn: undefined;
-  SignUp: undefined;
-  VerifyOtp: {
-    whatsappNumber: string;
-    mode: 'signup' | 'login' | 'reset';
-    fullName?: string;
-    password?: string;
-    role?: 'student' | 'landlord';
-    email?: string;
-    mobileMoney?: string;
-    age?: string;
-    address?: string;
-    language?: 'en' | 'fr' | 'pcm';
-  };
-  ForgotPassword: { email?: string; phone?: string };
-  ResetPassword: { phone: string; mode: 'reset' };
-  EmailVerification: { email: string; mode: 'signup' | 'recovery' };
-  AuthCallback: undefined; // new
-};
+// -------------------------
+// PHONE SIGN IN
+// -------------------------
+export const phoneSignIn = createAsyncThunk(
+  'auth/phoneSignIn',
+  async ({ phone, password }: { phone: string; password: string }, { rejectWithValue }) => {
+    try {
+      const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
+      const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ identifier: phone, password }),
+      });
+      const result = await response.json();
 
-export type RootStackParamList = {
-  AuthStack: NavigatorScreenParams<AuthStackParamList> | undefined;
-  StudentStack: NavigatorScreenParams<StudentStackParamList> | undefined;
-  LandlordStack: NavigatorScreenParams<LandlordStackParamList> | undefined;
-  ListingDetails: { listingId: string } | undefined;
-  UpdatePassword: undefined;
-};
+      if (!result.success || !result.user) throw new Error(result.message || 'Phone login failed');
 
-/* ===========================
-   Screen & Navigation Props
-=========================== */
+      const supTokens = result.session
+        ? { access_token: result.session.access_token, refresh_token: result.session.refresh_token }
+        : undefined;
 
-export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;
-export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<AuthStackParamList, T>;
-export type StudentStackScreenProps<T extends keyof StudentStackParamList> = NativeStackScreenProps<StudentStackParamList, T>;
-export type LandlordStackScreenProps<T extends keyof LandlordStackParamList> = NativeStackScreenProps<LandlordStackParamList, T>;
-export type StudentTabScreenProps<T extends keyof StudentTabParamList> = BottomTabScreenProps<StudentTabParamList, T>;
-export type LandlordTabScreenProps<T extends keyof LandlordTabParamList> = BottomTabScreenProps<LandlordTabParamList, T>;
+      const user: User = {
+        id: result.user.id,
+        fullName: result.user.fullName || result.user.full_name || '',
+        email: result.user.email || '',
+        role: (result.user.role || 'student') as 'student' | 'landlord' | 'admin',
+        phone: result.user.phone || phone,
+        momo: result.user.momo || result.user.mobileMoney || '',
+        token: supTokens?.access_token || null,
+        refreshToken: supTokens?.refresh_token || null,
+        supabaseTokens: supTokens,
+      };
 
-export type RootNavigationProp = NativeStackNavigationProp<RootStackParamList>;
-export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
-export type StudentStackNavigationProp = NativeStackNavigationProp<StudentStackParamList>;
-export type LandlordStackNavigationProp = NativeStackNavigationProp<LandlordStackParamList>;
-export type StudentTabNavigationProp = BottomTabNavigationProp<StudentTabParamList>;
-export type LandlordTabNavigationProp = BottomTabNavigationProp<LandlordTabParamList>;
+      // Save local session
+      await createLocalSession(user, supTokens);
 
-export type RootRouteProp<T extends keyof RootStackParamList> = RouteProp<RootStackParamList, T>;
-export type AuthRouteProp<T extends keyof AuthStackParamList> = RouteProp<AuthStackParamList, T>;
-export type StudentStackRouteProp<T extends keyof StudentStackParamList> = RouteProp<StudentStackParamList, T>;
-export type LandlordStackRouteProp<T extends keyof LandlordStackParamList> = RouteProp<LandlordStackParamList, T>;
-export type StudentTabRouteProp<T extends keyof StudentTabParamList> = RouteProp<StudentTabParamList, T>;
-export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RouteProp<LandlordTabParamList, T>;
+      // Sync Supabase session if available
+      if (supTokens) await supabase.auth.setSession(supTokens);
+
+      return { user, token: user.token, refreshToken: user.refreshToken };
+    } catch (err: any) {
+      console.error('[phoneSignIn] Failed:', err.message || err);
+      return rejectWithValue(err.message || 'Phone login failed');
+    }
+  }
+);
+
+// -------------------------
+// SIGN OUT
+// -------------------------
+export const signOut = createAsyncThunk('auth/signOut', async (_, { rejectWithValue }) => {
+  try {
+    await supabase.auth.signOut();
+    await clearLocalSession();
+    return null;
+  } catch (err: any) {
+    console.error('[signOut] Failed:', err.message || err);
+    return rejectWithValue(err.message || 'Logout failed');
+  }
+});
+
+// -------------------------
+// SLICE
+// -------------------------
+const authSlice = createSlice({
+  name: 'auth',
+  initialState,
+  reducers: {
+    setUser(state, action: PayloadAction<User>) {
+      state.user = action.payload;
+      state.token = action.payload.token;
+      state.refreshToken = action.payload.refreshToken;
+      state.isHydrated = true;
+      state.error = null;
+      console.log('ðŸŸ£ [authSlice] setUser called:', {
+        id: action.payload.id,
+        hasToken: !!action.payload.token,
+      });
+    },
+    setHydrated(state) {
+      state.isHydrated = true;
+    },
+    clearUser(state) {
+      state.user = null;
+      state.token = null;
+      state.refreshToken = null;
+      state.error = null;
+      state.isHydrated = true;
+    },
+    clearError(state) {
+      state.error = null;
+    },
+    setError(state, action: PayloadAction<string>) {
+      state.error = action.payload;
+    },
+    setRequiresPasswordUpdate(state, action: PayloadAction<boolean>) {
+      state.requiresPasswordUpdate = action.payload;
+    },
+    setNeedsOnboarding(state, action: PayloadAction<boolean>) {
+      state.needsOnboarding = action.payload;
+    },
+    setSyncing(state, action: PayloadAction<boolean>) {
+      state.isSyncing = action.payload;
+    },
+  },
+  extraReducers: (builder) => {
+    builder
+      // Email sign in
+      .addCase(signIn.pending, (state) => { state.isLoading = true; state.error = null; })
+      .addCase(signIn.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.refreshToken = action.payload.refreshToken;
+        state.isHydrated = true;
+      })
+      .addCase(signIn.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.isHydrated = true;
+      })
+
+      // Phone sign in
+      .addCase(phoneSignIn.pending, (state) => { state.isLoading = true; state.error = null; })
+      .addCase(phoneSignIn.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = action.payload.user;
+        state.token = action.payload.token;
+        state.refreshToken = action.payload.refreshToken;
+        state.isHydrated = true;
+      })
+      .addCase(phoneSignIn.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload as string;
+        state.isHydrated = true;
+      })
+
+      // Sign out
+      .addCase(signOut.fulfilled, (state) => {
+        state.user = null;
+        state.token = null;
+        state.refreshToken = null;
+        state.isHydrated = true;
+        state.error = null;
+      });
+  },
+});
+
+export const { setUser, setHydrated, clearUser, clearError, setError, setRequiresPasswordUpdate, setNeedsOnboarding, setSyncing } = authSlice.actions;
+export default authSlice.reducer;
 </file>
 
 <file path="package.json">
@@ -22538,6 +20332,1349 @@ export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RoutePr
     "typescript": "~5.9.2"
   },
   "private": true
+}
+</file>
+
+<file path="src/components/AuthListener.tsx">
+// src/components/AuthListener.tsx
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Session } from "@supabase/supabase-js";
+import * as Linking from 'expo-linking';
+import React, { useEffect, useRef } from "react";
+import { AppState, AppStateStatus } from "react-native";
+import { useDispatch } from "react-redux";
+import {
+  clearUser,
+  setError,
+  setHydrated,
+  setRequiresPasswordUpdate,
+  setNeedsOnboarding,
+  setSyncing,
+  setUser,
+  User
+} from "../store/authSlice";
+import type { AppDispatch } from "../store/store";
+import { clearLocalSession, createLocalSession } from '../utils/localSession';
+import { authLogger } from "../utils/logger";
+import { createSessionFromUrl, isProcessingRedirect, syncProfileData } from '../utils/login';
+import { supabase } from '../utils/supabaseClient';
+
+const AuthListener: React.FC = () => {
+  const dispatch = useDispatch<AppDispatch>();
+  const appState = useRef(AppState.currentState);
+  const lastProcessedUrl = useRef<string | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    const STEP = 'GATEKEEPER';
+
+    const performLogout = async (message: string) => {
+      authLogger.warn(STEP, `FORCED LOGOUT: ${message}`);
+      await supabase.auth.signOut();
+      await clearLocalSession();
+      await AsyncStorage.multiRemove(['pending_profile', 'supabase.auth.token']);
+      dispatch(clearUser());
+      dispatch(setError(message));
+      dispatch(setHydrated());
+    };
+
+    const handleUserSession = async (session: Session | null) => {
+      if (!isMounted) return;
+
+      if (!session) {
+        if (isProcessingRedirect) {
+          authLogger.log(STEP, 'Deep link in progress. Skipping clearUser.');
+          return;
+        }
+        authLogger.log(STEP, 'No active session. Redirecting to Auth Stack.');
+        dispatch(clearUser());
+        dispatch(setHydrated());
+        return;
+      }
+
+      authLogger.log(STEP, `Session found for ${session.user.id}. Releasing Gatekeeper optimistically...`);
+      
+      const optimisticUser: User = {
+        id: session.user.id,
+        fullName: session.user.user_metadata?.full_name || 'User',
+        email: session.user.email || '',
+        role: (session.user.user_metadata?.role || 'student') as any,
+        phone: session.user.phone || '',
+        momo: session.user.user_metadata?.momo || '',
+        token: session.access_token,
+        refreshToken: session.refresh_token || '',
+        supabaseTokens: {
+          access_token: session.access_token,
+          refresh_token: session.refresh_token || ''
+        }
+      };
+
+      dispatch(setUser(optimisticUser));
+      dispatch(setHydrated());
+      
+      performBackgroundSync(session);
+    };
+
+    const performBackgroundSync = async (session: Session) => {
+      authLogger.log(STEP, 'Starting background verification pipeline...');
+      dispatch(setSyncing(true));
+
+      try {
+        const verifyUser = async () => {
+          const { data: { user }, error: userError } = await supabase.auth.getUser();
+          if (userError || !user) throw new Error('SESSION_EXPIRED');
+          return user;
+        };
+
+        const user = await Promise.race([
+          verifyUser(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('VERIFICATION_TIMEOUT')), 5000))
+        ]) as any;
+
+        const pendingJson = await AsyncStorage.getItem('pending_profile');
+        if (pendingJson) {
+          authLogger.log(STEP, 'Pending profile found. Triggering Master Sync...');
+          const profileData = JSON.parse(pendingJson);
+          await syncProfileData(user.id, profileData);
+          await AsyncStorage.removeItem('pending_profile');
+        }
+
+        const fetchDbUser = async () => {
+          const { data, error } = await supabase.from('users').select('*').eq('id', user.id).maybeSingle();
+          if (error) throw error;
+          return data;
+        };
+
+        const dbUser = await Promise.race([
+          fetchDbUser(),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('DB_FETCH_TIMEOUT')), 5000))
+        ]) as any;
+
+        if (!dbUser && user) {
+           authLogger.warn(STEP, 'Public record missing. Triggering Progressive Onboarding...');
+           dispatch(setNeedsOnboarding(true));
+           // Do not emergency-sync. Hold the user in CompleteProfileScreen until they fill in details.
+        } else {
+           dispatch(setNeedsOnboarding(false));
+        }
+
+        const finalUser: User = {
+          id: user.id,
+          fullName: dbUser?.full_name || user.user_metadata?.full_name || 'User',
+          email: dbUser?.email || user.email || '',
+          role: (dbUser?.role || user.user_metadata?.role || 'student') as any,
+          phone: dbUser?.phone || user.phone || '',
+          momo: dbUser?.momo || user.user_metadata?.momo || '',
+          token: session.access_token,
+          refreshToken: session.refresh_token || '',
+          supabaseTokens: {
+            access_token: session.access_token,
+            refresh_token: session.refresh_token || ''
+          }
+        };
+
+        await createLocalSession(finalUser, finalUser.supabaseTokens);
+        dispatch(setUser(finalUser));
+        authLogger.success(STEP, 'ðŸ Background sync complete. State refined.');
+
+      } catch (err: any) {
+        authLogger.warn(STEP, `Background sync failed/delayed: ${err.message}`);
+        if (err.message === 'SESSION_EXPIRED') {
+          await performLogout('Your session has expired. Please log in again.');
+        }
+      } finally {
+        dispatch(setSyncing(false));
+      }
+    };
+
+    // --- INITIALIZATION ---
+    const init = async () => {
+      authLogger.log(STEP, 'Initializing Gatekeeper...');
+      const { data: { session } } = await supabase.auth.getSession();
+      await handleUserSession(session);
+    };
+    init();
+
+    // --- EVENT LISTENERS ---
+
+    // 1. Supabase Auth State
+    const { data: authListener } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!isMounted) return;
+      authLogger.log(STEP, `Supabase Event: ${event}`);
+
+      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+        await handleUserSession(session);
+      } else if (event === 'SIGNED_OUT') {
+        await clearLocalSession();
+        dispatch(clearUser());
+        dispatch(setHydrated());
+      } else if (event === 'PASSWORD_RECOVERY') {
+        dispatch(setRequiresPasswordUpdate(true));
+      }
+    });
+
+    // 2. App State (Re-verify on resume)
+    const appStateSubscription = AppState.addEventListener("change", (nextAppState: AppStateStatus) => {
+      if (appState.current.match(/inactive|background/) && nextAppState === "active") {
+        authLogger.log(STEP, 'App resumed. Re-verifying session...');
+        init();
+      }
+      appState.current = nextAppState;
+    });
+
+    // 3. Deep Linking (OAuth / Email Links)
+    const handleUrl = async (url: string | null) => {
+      if (!url || !isMounted) return;
+
+      if (lastProcessedUrl.current === url) {
+        return; // Guard against multiple executions for the same URL
+      }
+
+      if (url.includes('auth/callback') || url.includes('#access_token') || url.includes('error=')) {
+        authLogger.log(STEP, 'Auth Deep Link detected. Processing URL...');
+        lastProcessedUrl.current = url;
+        try {
+          await createSessionFromUrl(url);
+        } catch (err: any) {
+          authLogger.error(STEP, `Deep link processing failed: ${err.message}`);
+          dispatch(setError(err.message || 'Login link failed.'));
+        } finally {
+          dispatch(setHydrated());
+        }
+      }
+    };
+
+    const linkSubscription = Linking.addEventListener('url', (event) => handleUrl(event.url));
+    Linking.getInitialURL().then(url => { if (url) handleUrl(url); });
+
+    return () => {
+      isMounted = false;
+      authListener.subscription.unsubscribe();
+      appStateSubscription.remove();
+      linkSubscription.remove();
+    };
+  }, [dispatch]);
+
+  return null;
+};
+
+export default AuthListener;
+</file>
+
+<file path="src/i18n/locales/fr.json">
+{
+  "common": {
+    "welcome": "Bienvenue",
+    "save": "Enregistrer",
+    "logout": "Déconnexion",
+    "language": "Langue",
+    "notifications": "Notifications",
+    "loading": "Chargement...",
+    "cancel": "Annuler",
+    "error": "Erreur",
+    "success": "Succès",
+    "updating": "Mise à jour...",
+    "back": "Retour",
+    "all": "Tous",
+    "new": "Nouveau",
+    "unknown": "Inconnu",
+    "guest": "Invité",
+    "on": "le",
+    "generated_by": "Généré par",
+    "date_locale": "fr-FR",
+    "mins_ago": "il y a {{count}}m",
+    "hours_ago": "il y a {{count}}h",
+    "days_ago": "il y a {{count}}j",
+    "close": "Fermer",
+    "delete": "Supprimer",
+    "home": "Accueil"
+  },
+  "profile": {
+    "title": "Mon Profil",
+    "full_name": "Nom Complet",
+    "email": "E-mail",
+    "phone": "Téléphone",
+    "momo": "Numéro Momo",
+    "change_password": "Modifier le mot de passe",
+    "delete_account": "Supprimer le compte",
+    "view_bookings": "Voir mes réservations",
+    "upload_listing": "Ajouter une annonce",
+    "manage_listings": "Gérer les annonces",
+    "report_tenant": "Signaler un locataire",
+    "report_landlord": "Signaler un propriétaire",
+    "report_bug": "Signaler un bug",
+    "terms": "Conditions & Politique de confidentialité",
+    "new_password": "Nouveau mot de passe",
+    "confirm_password": "Confirmer le mot de passe",
+    "update_password": "Mettre à jour",
+    "enter_new_password": "Entrez le nouveau mot de passe",
+    "reenter_password": "Confirmez le mot de passe",
+    "language_label": "Langue",
+    "saved": "Profil mis à jour avec succès",
+    "verification_required": "Vérification requise",
+    "verification_msg": "Un lien de confirmation a été envoyé à votre nouvelle adresse. Veuillez vérifier avant de vous connecter.",
+    "open_gmail": "Ouvrir Gmail",
+    "delete_confirm_title": "Supprimer le compte",
+    "delete_confirm_msg": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est irréversible.",
+    "delete": "Supprimer",
+    "session_missing": "Session manquante",
+    "session_missing_msg": "Impossible de mettre à jour l'email. Veuillez vous reconnecter.",
+    "theme_label": "Thème",
+    "age": "Âge"
+  },
+  "listing": {
+    "available": "Disponible",
+    "rented": "Loué",
+    "fcfa": "FCFA",
+    "per_month": "/mois",
+    "message": "Message",
+    "call": "Appeler",
+    "saved": "Enregistré",
+    "save": "Enregistrer",
+    "description": "Description",
+    "no_description": "Aucune description fournie.",
+    "key_details": "Détails clés",
+    "city": "Ville",
+    "rooms": "Pièces",
+    "status": "Statut",
+    "location": "Localisation",
+    "landlord": "Propriétaire",
+    "responds_within": "Répond généralement en 1 heure",
+    "reviews": "Avis",
+    "book_now": "Réserver cette propriété",
+    "no_media": "Aucun média disponible",
+    "click_fullscreen": "Cliquez pour plein écran",
+    "location_locked": "Localisation verrouillée",
+    "location_locked_msg": "La carte interactive n'est disponible qu'après la réservation, sauf si cette annonce est boostée.",
+    "no_location": "Pas de localisation",
+    "no_coords_msg": "Le propriétaire n'a pas fourni de coordonnées",
+    "boost_now": "BOOSTER MAINTENANT !",
+    "boosted": "Boosté",
+    "processing_video": "Traitement de la vidéo...",
+    "untitled": "Sans titre",
+    "no_description_card": "Aucune description disponible.",
+    "spacious": "Spacieux",
+    "available_now": "Disponible maintenant",
+    "view_details": "Voir les détails",
+    "video": "Vidéo"
+  },
+  "home": {
+    "title": "DHUB",
+    "subtitle": "Trouvez un meilleur foyer",
+    "search_placeholder": "Rechercher par ville, titre...",
+    "filter_title": "Filtres",
+    "price_range": "Gamme de prix",
+    "listing_type": "Type de propriété",
+    "stay_type": "Type de séjour",
+    "distance": "Distance",
+    "apply_filters": "Appliquer les filtres",
+    "reset": "Réinitialiser",
+    "near_me": "Près de moi",
+    "types": {
+      "room": "Chambre",
+      "studio": "Studio",
+      "apartment": "Appartement",
+      "house": "Maison",
+      "guest_house": "Maison d'hôtes",
+      "hotel": "Hôtel"
+    },
+    "stays": {
+      "short_term": "Court Terme",
+      "long_term": "Long Terme",
+      "both": "Les deux"
+    },
+    "no_listings": "Aucune propriété trouvée correspondant à vos critères",
+    "listings_available": "propriétés trouvées"
+  },
+  "booking": {
+    "title": "Réserver la propriété",
+    "check_in": "Date d'arrivée",
+    "check_out": "Date de départ",
+    "confirm": "Confirmer la demande de réservation",
+    "terms_agree": "J'ai lu et j'accepte les conditions générales",
+    "select_dates": "Sélectionner les dates",
+    "total": "Total",
+    "loading": "Chargement des détails de la propriété...",
+    "not_found": "Annonce non trouvée",
+    "base_price": "Prix de base / mois",
+    "duration_type": "Type de durée",
+    "monthly": "Mensuel",
+    "yearly": "Annuel",
+    "discount_note": "-10%",
+    "yearly_discount_applied": "Remise annuelle de 10% incluse",
+    "move_in": "Date d'entrée",
+    "move_out": "Date de sortie",
+    "landlord_placeholder": "Le propriétaire",
+    "tap_to_change": "Appuyez pour modifier",
+    "estimated_move_in": "Date d'emménagement estimée",
+    "estimated_total": "Total estimé",
+    "terms_title": "Conditions générales",
+    "no_terms": "Aucune condition spécifique n'a été fournie. Les conditions standard s'appliquent.",
+    "download_pdf": "Télécharger le contrat",
+    "save_pdf_sub": "Enregistrer une copie en PDF",
+    "view_agreement": "Voir l'accord complet",
+    "accept_to_continue": "Acceptez les conditions pour continuer",
+    "agreement_required": "Accord requis",
+    "agreement_msg": "Veuillez lire et accepter les conditions générales d'abord.",
+    "select_duration_msg": "Veuillez choisir un type de durée (Mensuel ou Annuel).",
+    "invalid_dates_msg": "La date de fin doit être postérieure à la date de début.",
+    "failed": "Échec de la réservation",
+    "failed_msg": "Un problème est survenu. Veuillez réessayer.",
+    "unverified_property": "Propriété non vérifiée",
+    "property_may_not_match": "La propriété peut ne pas correspondre aux photos",
+    "promised_amenities_could": "Les équipements promis pourraient être manquants",
+    "you_may_risk_losing": "Vous risquez de perdre votre caution",
+    "read_our_safety_guidelines": "Lire nos directives de sécurité",
+    "cancel_booking": "Annuler la réservation",
+    "proceed_anyway": "Continuer quand même",
+    "declined_title": "Réservation déclinée",
+    "declined_msg": "Le propriétaire a décliné votre demande.",
+    "not_approved_title": "Pas encore approuvé",
+    "not_approved_msg": "Le propriétaire n'a pas encore approuvé. Veuillez patienter.",
+    "pending_title": "Demande de réservation",
+    "proceed_to_payment": "Passer au paiement",
+    "wait_notice": "Nous vous informerons dès que le propriétaire répondra.",
+    "success_notice": "Paiement effectué avec succès. Votre réservation est confirmée!",
+    "signature_required_title": "Signature requise",
+    "signature_required_msg": "Veuillez signer l'accord avant de créer la réservation.",
+    "student_booking_agre": "Accord de réservation étudiant",
+    "scan_to_verify": "Scanner pour vérifier",
+    "booking_agreement": "Accord de réservation",
+    "this_agreement_is_is": "Cet accord est émis par DHUB et représente un document de réservation authentifié électroniquement."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clear_all": "Tout effacer",
+    "empty": "Pas encore de notifications",
+    "clear_all_confirm_title": "Tout effacer",
+    "clear_all_confirm_msg": "Marquer toutes les notifications comme lues ?",
+    "view_details": "Voir les détails",
+    "reply_now": "Répondre maintenant",
+    "dismiss": "Ignorer"
+  },
+  "payment": {
+    "title": "Paiements",
+    "history_tab": "Historique",
+    "send_tab": "Envoyer",
+    "recent_transactions": "Transactions récentes",
+    "refresh": "Actualiser",
+    "refreshing": "Actualisation...",
+    "loading_history": "Chargement de l'historique...",
+    "no_history": "Aucun historique de paiement.",
+    "retry": "Réessayer",
+    "momo_number_label": "Votre numéro MTN MoMo *",
+    "momo_placeholder": "6XX XXX XXX",
+    "amount_label": "Montant (XAF) *",
+    "amount_placeholder": "Entrez le montant",
+    "receiver_label": "Destinataire *",
+    "description_label": "Description",
+    "description_placeholder": "Motif du paiement (optionnel)",
+    "send_button": "Envoyer le paiement",
+    "receipt_title": "Reçu de paiement",
+    "qr_verify": "Scanner pour vérifier la transaction",
+    "transaction_details": "Détails de la transaction",
+    "amount_details": "Détails du montant",
+    "parties_title": "Parties",
+    "transaction_id": "ID Transaction",
+    "date": "Date",
+    "status": "Statut",
+    "amount": "Montant",
+    "fee": "Frais",
+    "net_amount": "Montant net",
+    "from": "De",
+    "to": "À",
+    "download_pdf": "Télécharger PDF",
+    "print_pdf": "Imprimer PDF",
+    "close": "Fermer",
+    "payable_to": "Payable à",
+    "initial_deposit": "Dépôt initial",
+    "remaining_rent_balance": "Solde de loyer restant",
+    "your_momo_phone_number": "Votre numéro MoMo",
+    "enter_the_momo_number": "Entrez le numéro MoMo qui recevra la demande de paiement.",
+    "payment_prompt_sent": "Une demande de paiement a été envoyée à votre numéro MoMo. Ouvrez votre application MoMo et approuvez-la.",
+    "statuses": {
+      "completed": "Terminé",
+      "pending": "En attente",
+      "failed": "Échoué"
+    },
+    "initiate_success_title": "Paiement initié 🎉",
+    "initiate_success_msg": "Veuillez valider la demande MoMo sur votre téléphone pour terminer la transaction.",
+    "validation_error": "Erreur de validation",
+    "validation_msg": "Veuillez remplir tous les champs obligatoires",
+    "amount_error": "Veuillez entrer un montant valide",
+    "session_error": "Erreur de session",
+    "session_msg": "Session utilisateur non trouvée. Veuillez vous reconnecter.",
+    "payment_error": "Erreur de paiement",
+    "payment_failed_retry": "Nouvelle tentative de paiement",
+    "xaf_lease_renewal_fee": "Frais de renouvellement de bail XAF 5 000",
+    "after_initial_deposit": "après votre dépôt initial. Le paiement va directement à votre propriétaire. Complétez ceci après avoir visité et confirmé la propriété."
+  },
+  "chat": {
+    "placeholder": "Écrivez un message...",
+    "loading": "Chargement de la conversation...",
+    "online": "En ligne",
+    "unknown_user": "Utilisateur inconnu",
+    "today": "Aujourd'hui",
+    "yesterday": "Hier",
+    "empty_title": "Démarrer la conversation",
+    "empty_subtitle": "Dites bonjour ! Vos messages sont privés entre vous et {{name}}.",
+    "other_user": "l'autre utilisateur"
+  },
+  "bookings": {
+    "title": "Mes Réservations",
+    "details_title": "Détails de la réservation",
+    "total": "Total",
+    "confirmed": "Confirmé",
+    "paid": "Payé",
+    "pending": "En attente",
+    "cancelled": "Annulé",
+    "active": "Actif",
+    "upcoming": "À venir",
+    "past": "Passé",
+    "from": "Du",
+    "to": "Au",
+    "days_left": "{{count}}j restants",
+    "days_left_label": "Jours restants",
+    "amount_label": "Montant (XAF)",
+    "rooms_label": "Pièces",
+    "info_title": "Informations de réservation",
+    "check_in": "Arrivée",
+    "check_out": "Départ",
+    "payment_status_label": "Statut du paiement",
+    "agreed_to_terms": "Conditions acceptées",
+    "property_details": "Détails de la propriété",
+    "actions": "Actions",
+    "rate_property": "Noter cette propriété",
+    "report_issue": "Signaler un problème",
+    "help_title": "Besoin d'aide ?",
+    "call_support": "Appeler le support",
+    "email_support": "Email support",
+    "pay_now": "Procéder au paiement",
+    "cancel_booking": "Annuler la réservation",
+    "ended": "Terminé",
+    "no_bookings": "Aucune réservation",
+    "no_bookings_msg": "Lorsque vous réservez une propriété, vos réservations apparaîtront ici",
+    "explore": "Explorer les propriétés",
+    "i_have_moved_in": "J'ai Emménagé ✓",
+    "location_not_available": "Emplacement non disponible",
+    "tap_to_open_maps": "Appuyez pour ouvrir les cartes",
+    "unable_to_load": "Impossible de charger la réservation",
+    "try_again": "Réessayer",
+    "extend_stay": "Prolonger le séjour",
+    "confirm_checkout": "Confirmer le départ",
+    "unknown_property": "Propriété inconnue",
+    "duration_label": "Durée :",
+    "status_label": "Statut :",
+    "pending_move_in": "En attente d'emménagement",
+    "monthly": "Mensuel",
+    "yearly": "Annuel"
+  },
+  "auth": {
+    "welcome_back": "Bon retour",
+    "sign_in_subtitle": "Connectez-vous à votre compte",
+    "phone": "Téléphone",
+    "email": "Email",
+    "phone_placeholder": "Numéro de téléphone (ex: 6xxxxxxxx)",
+    "email_placeholder": "Adresse email",
+    "password": "Mot de passe",
+    "sign_in": "Se connecter",
+    "signing_in": "Connexion en cours...",
+    "magic_link": "Ou envoyez-moi un Lien Magique (sans mot de passe)",
+    "or": "OU",
+    "continue_with_google": "Continuer avec Google",
+    "forgot_password": "Mot de passe oublié ?",
+    "no_account": "Vous n'avez pas de compte ?",
+    "sign_up": "S'inscrire",
+    "create_account": "Créer un compte",
+    "sign_up_subtitle": "Rejoignez DHUB pour trouver votre prochaine maison",
+    "i_am_student": "Je suis un Étudiant",
+    "i_am_landlord": "Je suis un Propriétaire",
+    "full_name": "Nom complet",
+    "whatsapp_number": "Numéro WhatsApp (9 chiffres)",
+    "mobile_money": "Numéro Mobile Money (9 chiffres)",
+    "password_placeholder": "Mot de passe (min 6 caractères)",
+    "confirm_password": "Confirmer le mot de passe",
+    "age_placeholder": "Âge",
+    "address_placeholder": "Adresse du domicile",
+    "agree_tos": "J'accepte les Conditions d'Utilisation et la Politique de Confidentialité",
+    "signing_up": "Inscription en cours...",
+    "has_account": "Vous avez déjà un compte ?",
+    "sign_in_link": "Se connecter",
+    "invalid_phone_cameroon": "Numéro de téléphone camerounais invalide",
+    "back_to_signin": "Retour à la connexion",
+    "update_failed": "Mise à jour échouée",
+    "secure_account_msg": "Sécurisez votre compte avec un nouveau mot de passe",
+    "reset_failed": "Réinitialisation échouée",
+    "forgot_password_subtitle": "Entrez votre email pour recevoir un lien de réinitialisation",
+    "send_reset_link": "Envoyer le lien de réinitialisation",
+    "password_min_length": "Le mot de passe doit comporter au moins 6 caractères",
+    "password_reset_success": "Réinitialisation réussie",
+    "resend_in": "Renvoyer dans",
+    "enter_otp_sent_to": "Entrez le code OTP envoyé à",
+    "reset_password_title": "Réinitialiser le mot de passe",
+    "passwords_no_match": "Les mots de passe ne correspondent pas",
+    "enter_email_or_phone": "Entrez votre email ou numéro de téléphone",
+    "reset_password_btn": "Réinitialiser le mot de passe",
+    "forgot_password_title": "Mot de passe oublié",
+    "enter_otp_error": "Veuillez entrer le code OTP",
+    "resend_otp": "Renvoyer le code OTP",
+    "complete_profile_title": "Complétez votre profil",
+    "complete_profile_subtitle": "Quelques détails supplémentaires pour commencer",
+    "complete_profile_btn": "Terminer l'inscription"
+  },
+  "landlord": {
+    "welcome_back": "Bon retour,",
+    "default_name": "Propriétaire",
+    "kyc_required_title": "Vérification requise",
+    "kyc_required_msg": "Veuillez compléter votre vérification KYC avant de créer des annonces.",
+    "verify_now": "Vérifier maintenant",
+    "kyc_pending_banner": "Documents KYC en cours d'examen — appuyez pour voir le statut",
+    "kyc_incomplete_banner": "Complétez la vérification KYC pour commencer à publier des annonces"
+  },
+  "screens": {
+    "kyc": {
+      "permission_required": "Permission requise",
+      "media_library_msg": "Nous avons besoin d'accéder à votre galerie pour télécharger des documents. Veuillez autoriser l'accès.",
+      "allow": "Autoriser",
+      "access_blocked_msg": "L'accès à vos photos a été bloqué. Veuillez l'activer dans les paramètres.",
+      "open_settings": "Ouvrir les paramètres",
+      "failed_pick": "Échec de la sélection du document",
+      "incomplete": "Incomplet",
+      "upload_all_docs": "Veuillez télécharger tous les documents requis.",
+      "success": "Succès",
+      "submitted_msg": "Vérification KYC soumise ! Nous examinerons vos documents et mettrons à jour votre statut bientôt.",
+      "failed_submit": "Échec de la soumission de la vérification KYC",
+      "submitting": "Soumission en cours...",
+      "submit_for_verification": "Soumettre pour vérification",
+      "upload_document": "Télécharger le document",
+      "title": "Vérification KYC",
+      "verified_successfully": "Vérifié avec succès",
+      "approved_msg": "Votre vérification KYC a été approuvée. Vous pouvez maintenant créer et gérer des annonces.",
+      "verification_pending": "Vérification en attente",
+      "processing": "Traitement en cours",
+      "pending_msg": "Vos documents ont été soumis et sont en cours de traitement. La vérification prend généralement jusqu'à 48 heures.",
+      "want_to_resubmit": "Voulez-vous soumettre à nouveau ?",
+      "personal_information": "Informations personnelles",
+      "full_address": "Adresse complète *",
+      "full_address_placeholder": "Entrez votre adresse complète",
+      "city": "Ville *",
+      "city_placeholder": "Entrez votre ville",
+      "identity_verification": "Vérification d'identité",
+      "upload_clear_photos_of_yo": "Téléchargez des photos claires de votre pièce d'identité officielle et un selfie tenant la pièce d'identité.",
+      "id_front": "Recto de la pièce d'identité *",
+      "id_back": "Verso de la pièce d'identité *",
+      "id_selfie": "Selfie avec la pièce d'identité *",
+      "property_credentials": "Preuves de propriété",
+      "provide_documents_proving": "Fournissez des documents prouvant que vous possédez ou gérez des propriétés à cette adresse.",
+      "proof_ownership": "Télécharger la preuve de propriété *",
+      "proof_ownership_help": "(Titre foncier, Acte de vente, Attestation traditionnelle ou Mandat de gestion)",
+      "proof_address": "Télécharger la preuve d'adresse *",
+      "proof_address_help": "(Facture ENEO/Camwater, ou Certificat de résidence)"
+    },
+    "listingdetails": {
+      "loading_property_details": "Chargement des détails de la propriété...",
+      "unable_to_load_property": "Impossible de charger la propriété",
+      "retry": "Réessayer",
+      "go_back": "Retour",
+      "property_details": "Détails de la propriété",
+      "share_this_listing": "Partager cette annonce",
+      "available_for_rent": "Disponible à la location",
+      "description": "Description",
+      "location": "Localisation",
+      "view_map": "Voir la carte",
+      "property_videos": "Vidéos de la propriété",
+      "landlord_information": "Informations du propriétaire",
+      "verify": "Vérifier",
+      "why_should_i_verify_my_li": "Pourquoi vérifier mon annonce ?",
+      "boost": "Booster",
+      "delete": "Supprimer",
+      "why_verify_your_listing": "Pourquoi vérifier votre annonce ?",
+      "i_understand": "Je comprends",
+      "request_verification": "Demander une vérification",
+      "cancel": "Annuler",
+      "video": "Vidéo",
+      "view_booking": "Voir la réservation"
+    },
+    "managelistings": {
+      "please_log_in_to_manage_l": "Veuillez vous connecter pour gérer vos annonces.",
+      "loading_your_listings": "Chargement de vos annonces...",
+      "my_properties": "Mes Propriétés",
+      "no_listings_yet": "Aucune annonce pour l'instant",
+      "start_by_adding_your_firs": "Commencez par ajouter votre première propriété",
+      "add_property": "Ajouter une propriété",
+      "total_properties": "Total des propriétés",
+      "active": "Actif",
+      "property_photos": "Photos de la propriété",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "archive_listing": "Archiver l'annonce",
+      "delete_listing": "Supprimer l'annonce",
+      "delete_listing_confirm": "Supprimer définitivement cette annonce ? Cette action est irréversible.",
+      "deleted_title": "Supprimé",
+      "deleted_msg": "L'annonce a été supprimée.",
+      "delete_error": "Impossible de supprimer l'annonce."
+    },
+    "payment": {
+      "dhub_payment_receipt": "Reçu de paiement DHUB",
+      "transaction_details": "Détails de la transaction",
+      "amount_details": "Détails du montant",
+      "parties": "Parties",
+      "payments": "Paiements",
+      "payment_history": "Historique des paiements",
+      "send_payment": "Envoyer un paiement",
+      "recent_transactions": "Transactions récentes",
+      "loading_history": "Chargement de l'historique...",
+      "retry": "Réessayer",
+      "no_payment_history_yet": "Aucun historique de paiement pour l'instant.",
+      "receiver": "Destinataire",
+      "description": "Description",
+      "payment_receipt": "Reçu de paiement",
+      "scan_to_verify_transactio": "Scanner pour vérifier la transaction",
+      "download_pdf": "Télécharger PDF",
+      "close": "Fermer",
+      "amount": "Montant",
+      "payable_to": "Payable à",
+      "initial_deposit": "Dépôt initial",
+      "remaining_rent_balance": "Solde de loyer restant",
+      "your_momo_phone_number": "Votre numéro MoMo",
+      "enter_the_momo_number_tha": "Entrez le numéro MoMo qui recevra la demande de paiement.",
+      "a_payment_prompt_has_been": "Une demande de paiement a été envoyée à votre numéro MoMo. Ouvrez votre application MoMo et approuvez-la.",
+      "print_pdf": "Imprimer PDF",
+      "xaf_5_000_lease_renewal_f": "Frais de renouvellement de bail XAF 5 000",
+      "after_your_initial_deposi": "après votre dépôt initial. Le paiement va directement à votre propriétaire. Complétez ceci après avoir visité et confirmé la propriété.",
+      "your_previous_paymen": "Votre précédente tentative de paiement a échoué ou a été annulée. Veuillez vérifier votre numéro, votre connexion et votre solde MoMo, puis réessayez."
+    },
+    "uploadlisting": {
+      "add_new_property": "Ajouter une nouvelle propriété",
+      "add_up_to_10_photos_or_vi": "Ajoutez jusqu'à 10 photos ou vidéos de votre propriété",
+      "add_media": "Ajouter des médias",
+      "basic_information": "Informations de base",
+      "listing_type": "Type d'annonce",
+      "stay_type": "Type de séjour",
+      "property_title": "Titre de la propriété",
+      "description": "Description",
+      "number_of_rooms": "Nombre de pièces",
+      "location": "Localisation",
+      "street_address": "Adresse de la rue",
+      "city": "Ville",
+      "tap_to_select_location_on": "Appuyez pour sélectionner l'emplacement sur la carte",
+      "students_will_review_and": "Les étudiants examineront et accepteront ces conditions avant de réserver",
+      "create_property_listing": "Créer l'annonce immobilière",
+      "uploading_media": "Téléchargement des médias...",
+      "please_do_not_close_the_a": "Veuillez ne pas fermer l'application ni éteindre votre écran.",
+      "cancel_upload": "Annuler le téléchargement"
+    },
+    "bookingdetails": {
+      "information_locked": "Informations verrouillées",
+      "complete_your_booking_to": "Complétez votre réservation pour révéler les coordonnées exactes et les coordonnées du propriétaire.",
+      "under_review_by_dhub": "En cours d'examen par DHUB",
+      "submit_evidence": "Soumettre les preuves",
+      "confirm_i_have_moved_in": "Confirmer mon emménagement",
+      "move_in_confirmed_by_you": "Emménagement confirmé par vous",
+      "take_entry_picture": "Prendre une photo d'entrée",
+      "take_exit_picture": "Prendre une photo de sortie",
+      "awaiting_landlord_approva": "En attente de l'approbation du propriétaire",
+      "the_landlord_must_review": "Le propriétaire doit examiner et accepter votre demande avant que vous puissiez procéder au paiement. Nous vous informerons lorsque le propriétaire approuvera votre réservation.",
+      "cancellation_reason": "Motif d'annulation",
+      "back": "Retour"
+    },
+    "booking": {
+      "unverified_property": "Propriété non vérifiée",
+      "property_may_not_match_th": "La propriété peut ne pas correspondre aux photos",
+      "promised_amenities_could": "Les équipements promis pourraient être manquants",
+      "you_may_risk_losing_your": "Vous risquez de perdre votre caution",
+      "read_our_safety_guideline": "Lire nos directives de sécurité",
+      "cancel_booking": "Annuler la réservation",
+      "proceed_anyway": "Continuer quand même",
+      "student_booking_agre": "Accord de réservation étudiant",
+      "scan_to_verify": "Scanner pour vérifier",
+      "booking_agreement": "Accord de réservation",
+      "this_agreement_is_is": "Cet accord est émis par DHUB et représente un document de réservation authentifié électroniquement."
+    },
+    "favorites": {
+      "view_details": "Voir les détails",
+      "no_favorites_yet": "Aucun favori pour l'instant",
+      "start_exploring_propertie": "Commencez à explorer les propriétés et appuyez sur l'icône cœur pour enregistrer vos favoris ici",
+      "explore_properties": "Explorer les propriétés",
+      "loading_your_favorites": "Chargement de vos favoris...",
+      "my_favorites": "Mes Favoris"
+    },
+    "home": {
+      "can_t_find_what_you_re_lo": "Vous ne trouvez pas ce que vous cherchez ?",
+      "notify_me": "Me notifier",
+      "fill_out_the_details_of_t": "Remplissez les détails de la propriété souhaitée. Nous la rechercherons et vous notifierons dès qu'elle sera disponible !",
+      "preferred_location": "Emplacement préféré",
+      "budget__fcfa": "Budget (FCFA)",
+      "specific_requirements": "Exigences spécifiques",
+      "submit_request": "Soumettre la demande"
+    },
+    "listingreview": {
+      "rate_this_listing": "Noter cette annonce",
+      "tap_stars_to_select_your": "Appuyez sur les étoiles pour sélectionner votre note",
+      "optional_comment": "Commentaire optionnel",
+      "back_to_booking": "Retour à la réservation"
+    },
+    "profile": {
+      "age": "Âge"
+    },
+    "viewbookings": {
+      "active": "Actif",
+      "pending": "En attente",
+      "past": "Passé"
+    }
+  }
+}
+</file>
+
+<file path="src/i18n/locales/pcm.json">
+{
+  "common": {
+    "welcome": "Welcome",
+    "save": "Save am",
+    "logout": "Log out",
+    "language": "Language",
+    "notifications": "Notifications",
+    "loading": "E dey load...",
+    "cancel": "Cancel",
+    "error": "Error",
+    "success": "E don work",
+    "updating": "E dey update...",
+    "back": "Go back",
+    "all": "All",
+    "new": "New",
+    "unknown": "We no know",
+    "guest": "Guest",
+    "on": "on",
+    "generated_by": "Generated by",
+    "date_locale": "en-GB",
+    "mins_ago": "{{count}}min ago",
+    "hours_ago": "{{count}}hr ago",
+    "days_ago": "{{count}}day ago",
+    "close": "Close am",
+    "delete": "Delete am",
+    "home": "House"
+  },
+  "profile": {
+    "title": "My Profile",
+    "full_name": "Full Name",
+    "email": "Email",
+    "phone": "Phone Number",
+    "momo": "MoMo Number",
+    "change_password": "Change password",
+    "delete_account": "Delete account",
+    "view_bookings": "See my bookings",
+    "upload_listing": "Add property",
+    "manage_listings": "Manage properties",
+    "report_tenant": "Report tenant",
+    "report_landlord": "Report landlord",
+    "report_bug": "Report bug",
+    "terms": "Terms & Privacy Policy",
+    "new_password": "New password",
+    "confirm_password": "Confirm password",
+    "update_password": "Update am",
+    "enter_new_password": "Enter new password",
+    "reenter_password": "Enter password again",
+    "language_label": "Language",
+    "saved": "Profile don update",
+    "verification_required": "Verification needed",
+    "verification_msg": "We don send link go your new email. Check am before you login.",
+    "open_gmail": "Open Gmail",
+    "delete_confirm_title": "Delete account",
+    "delete_confirm_msg": "You sure say you want delete your account? We no fit undo am.",
+    "delete": "Delete am",
+    "session_missing": "Session don expire",
+    "session_missing_msg": "We no fit update email. Login again abeg.",
+    "theme_label": "Theme",
+    "age": "Age"
+  },
+  "listing": {
+    "available": "E dey available",
+    "rented": "E don rent",
+    "fcfa": "FCFA",
+    "per_month": "/month",
+    "message": "Send message",
+    "call": "Call am",
+    "saved": "E don save",
+    "save": "Save am",
+    "description": "Description",
+    "no_description": "No description dey.",
+    "key_details": "Key details",
+    "city": "City",
+    "rooms": "Rooms",
+    "status": "Status",
+    "location": "Location",
+    "landlord": "Landlord",
+    "responds_within": "E dey usually reply within 1 hour",
+    "reviews": "Reviews",
+    "book_now": "Book this property",
+    "no_media": "No media dey",
+    "click_fullscreen": "Click for fullscreen",
+    "location_locked": "Location don lock",
+    "location_locked_msg": "Map no go show until after you book, unless this listing don boost.",
+    "no_location": "No location",
+    "no_coords_msg": "Landlord never add coordinates",
+    "boost_now": "BOOST NOW!",
+    "boosted": "Don boost",
+    "processing_video": "Video dey process...",
+    "untitled": "No title",
+    "no_description_card": "No description dey.",
+    "spacious": "E big well well",
+    "available_now": "E dey available now",
+    "view_details": "See details",
+    "video": "Video"
+  },
+  "home": {
+    "title": "DHUB",
+    "subtitle": "Find better place stay",
+    "search_placeholder": "Search by city, title...",
+    "filter_title": "Filters",
+    "price_range": "Price range",
+    "listing_type": "Property type",
+    "stay_type": "Stay type",
+    "distance": "Distance",
+    "apply_filters": "Apply filters",
+    "reset": "Reset am",
+    "near_me": "Near me",
+    "types": {
+      "room": "Room",
+      "studio": "Studio",
+      "apartment": "Apartment",
+      "house": "House",
+      "guest_house": "Guest House",
+      "hotel": "Hotel"
+    },
+    "stays": {
+      "short_term": "Short Term",
+      "long_term": "Long Term",
+      "both": "Both"
+    },
+    "no_listings": "No property match your search",
+    "listings_available": "properties found"
+  },
+  "booking": {
+    "title": "Book property",
+    "check_in": "Check-in date",
+    "check_out": "Check-out date",
+    "confirm": "Confirm booking request",
+    "terms_agree": "I don read and agree to the terms",
+    "select_dates": "Select dates",
+    "total": "Total",
+    "loading": "Property details dey load...",
+    "not_found": "Listing no dey",
+    "base_price": "Base price / month",
+    "duration_type": "Duration type",
+    "monthly": "Monthly",
+    "yearly": "Yearly",
+    "discount_note": "-10%",
+    "yearly_discount_applied": "10% yearly discount don apply",
+    "move_in": "Move-in date",
+    "move_out": "Move-out date",
+    "landlord_placeholder": "The landlord",
+    "tap_to_change": "Tap to change",
+    "estimated_move_in": "Estimated move-in date",
+    "estimated_total": "Estimated total",
+    "terms_title": "Terms and conditions",
+    "no_terms": "No specific terms for this listing. Standard rental terms apply.",
+    "download_pdf": "Download contract",
+    "save_pdf_sub": "Save PDF copy",
+    "view_agreement": "See full agreement",
+    "accept_to_continue": "Accept terms to continue",
+    "agreement_required": "Agreement needed",
+    "agreement_msg": "Read and accept the terms first abeg.",
+    "select_duration_msg": "Choose duration type (Monthly or Yearly).",
+    "invalid_dates_msg": "End date must come after start date.",
+    "failed": "Booking fail",
+    "failed_msg": "Something go wrong. Try again abeg.",
+    "unverified_property": "Property never verify",
+    "property_may_not_match": "Property fit no match the photos",
+    "promised_amenities_could": "Some amenities fit no dey there",
+    "you_may_risk_losing": "You fit lose your caution fee",
+    "read_our_safety_guidelines": "Read our Safety Guidelines",
+    "cancel_booking": "Cancel booking",
+    "proceed_anyway": "Continue anyway",
+    "declined_title": "Booking don reject",
+    "declined_msg": "Landlord don reject your booking.",
+    "not_approved_title": "Never approve yet",
+    "not_approved_msg": "Landlord never approve yet. Wait small.",
+    "pending_title": "Booking request",
+    "proceed_to_payment": "Go to payment",
+    "wait_notice": "We go tell you when landlord reply.",
+    "success_notice": "Payment don work. Your booking don confirm!",
+    "student_booking_agre": "Student Booking Agreement",
+    "scan_to_verify": "Scan to verify",
+    "booking_agreement": "Booking Agreement",
+    "this_agreement_is_is": "This agreement na from DHUB and e represent electronically authenticated booking document."
+  },
+  "notifications": {
+    "title": "Notifications",
+    "clear_all": "Clear all",
+    "empty": "No notification yet",
+    "clear_all_confirm_title": "Clear all",
+    "clear_all_confirm_msg": "Mark all notifications as read?",
+    "view_details": "See details",
+    "reply_now": "Reply now",
+    "dismiss": "Dismiss"
+  },
+  "payment": {
+    "title": "Payments",
+    "history_tab": "History",
+    "send_tab": "Send",
+    "recent_transactions": "Recent transactions",
+    "refresh": "Refresh",
+    "refreshing": "Refreshing...",
+    "loading_history": "History dey load...",
+    "no_history": "No payment history.",
+    "retry": "Try again",
+    "momo_number_label": "Your MTN MoMo number *",
+    "momo_placeholder": "6XX XXX XXX",
+    "amount_label": "Amount (XAF) *",
+    "amount_placeholder": "Enter amount",
+    "receiver_label": "Receiver *",
+    "description_label": "Description",
+    "description_placeholder": "Reason for payment (optional)",
+    "send_button": "Send payment",
+    "receipt_title": "Payment receipt",
+    "qr_verify": "Scan to verify transaction",
+    "transaction_details": "Transaction details",
+    "amount_details": "Amount details",
+    "parties_title": "Parties",
+    "transaction_id": "Transaction ID",
+    "date": "Date",
+    "status": "Status",
+    "amount": "Amount",
+    "fee": "Fee",
+    "net_amount": "Net amount",
+    "from": "From",
+    "to": "To",
+    "download_pdf": "Download PDF",
+    "print_pdf": "Print PDF",
+    "close": "Close am",
+    "payable_to": "Payable to",
+    "initial_deposit": "Initial deposit",
+    "remaining_rent_balance": "Remaining rent balance",
+    "your_momo_phone_number": "Your MoMo number",
+    "enter_the_momo_number": "Enter the MoMo number wey go receive the payment prompt.",
+    "payment_prompt_sent": "Payment prompt don send to your MoMo number. Open your MoMo app and approve am.",
+    "statuses": {
+      "completed": "Done",
+      "pending": "Pending",
+      "failed": "Fail"
+    },
+    "initiate_success_title": "Payment don start 🎉",
+    "initiate_success_msg": "Approve the MoMo request on your phone to finish the transaction.",
+    "validation_error": "Validation error",
+    "validation_msg": "Fill all required fields abeg",
+    "amount_error": "Enter valid amount abeg",
+    "session_error": "Session error",
+    "session_msg": "User session no dey. Login again abeg.",
+    "payment_error": "Payment error",
+    "payment_failed_retry": "Retry payment",
+    "xaf_lease_renewal_fee": "XAF 5,000 lease renewal fee",
+    "after_initial_deposit": "after your initial deposit. Payment go direct to your landlord."
+  },
+  "chat": {
+    "placeholder": "Write message...",
+    "loading": "Conversation dey load...",
+    "online": "Online",
+    "unknown_user": "Unknown user",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "empty_title": "Start conversation",
+    "empty_subtitle": "Say hello! Your messages na private between you and {{name}}.",
+    "other_user": "the other person"
+  },
+  "bookings": {
+    "title": "My Bookings",
+    "details_title": "Booking details",
+    "total": "Total",
+    "confirmed": "Confirmed",
+    "paid": "Don pay",
+    "pending": "Pending",
+    "cancelled": "Cancelled",
+    "active": "Active",
+    "upcoming": "Coming soon",
+    "past": "Past",
+    "from": "From",
+    "to": "To",
+    "days_left": "{{count}} days remain",
+    "days_left_label": "Days remaining",
+    "amount_label": "Amount (XAF)",
+    "rooms_label": "Rooms",
+    "info_title": "Booking info",
+    "check_in": "Check-in",
+    "check_out": "Check-out",
+    "payment_status_label": "Payment status",
+    "agreed_to_terms": "Terms don accept",
+    "property_details": "Property details",
+    "actions": "Actions",
+    "rate_property": "Rate this property",
+    "report_issue": "Report problem",
+    "help_title": "You need help?",
+    "call_support": "Call support",
+    "email_support": "Email support",
+    "pay_now": "Go to payment",
+    "cancel_booking": "Cancel booking",
+    "ended": "Don end",
+    "no_bookings": "No booking",
+    "no_bookings_msg": "When you book property, e go show here",
+    "explore": "Explore properties",
+    "i_have_moved_in": "I Don Move In ✓",
+    "location_not_available": "Location no dey",
+    "tap_to_open_maps": "Tap to open maps",
+    "unable_to_load": "We no fit load booking",
+    "try_again": "Try again",
+    "extend_stay": "Extend stay",
+    "confirm_checkout": "Confirm checkout",
+    "unknown_property": "Unknown property",
+    "duration_label": "Duration:",
+    "status_label": "Status:",
+    "pending_move_in": "Waiting for move-in",
+    "monthly": "Monthly",
+    "yearly": "Yearly"
+  },
+  "auth": {
+    "welcome_back": "Welcome back",
+    "sign_in_subtitle": "Login your account",
+    "phone": "Phone",
+    "email": "Email",
+    "phone_placeholder": "Phone number (e.g. 6xxxxxxxx)",
+    "email_placeholder": "Email address",
+    "password": "Password",
+    "sign_in": "Login",
+    "signing_in": "E dey login...",
+    "magic_link": "Or send me Magic Link (no password needed)",
+    "or": "OR",
+    "continue_with_google": "Continue with Google",
+    "forgot_password": "You forget your password?",
+    "no_account": "You never register?",
+    "sign_up": "Register",
+    "create_account": "Create account",
+    "sign_up_subtitle": "Join DHUB to find your next place",
+    "i_am_student": "I be Student",
+    "i_am_landlord": "I be Landlord",
+    "full_name": "Full name",
+    "whatsapp_number": "WhatsApp number (9 digits)",
+    "mobile_money": "Mobile Money number (9 digits)",
+    "password_placeholder": "Password (min 6 characters)",
+    "confirm_password": "Confirm password",
+    "age_placeholder": "Age",
+    "address_placeholder": "Home address",
+    "agree_tos": "I agree to Terms of Use and Privacy Policy",
+    "signing_up": "E dey register...",
+    "has_account": "You don get account already?",
+    "sign_in_link": "Login",
+    "invalid_phone_cameroon": "Invalid Cameroonian phone number",
+    "back_to_signin": "Back to login",
+    "update_failed": "Update fail",
+    "secure_account_msg": "Secure your account with new password",
+    "reset_failed": "Reset fail",
+    "forgot_password_subtitle": "Enter your email to receive reset link",
+    "send_reset_link": "Send reset link",
+    "password_min_length": "Password must be at least 6 characters",
+    "password_reset_success": "Reset don work",
+    "resend_in": "Resend in",
+    "enter_otp_sent_to": "Enter OTP wey we send go",
+    "reset_password_title": "Reset password",
+    "passwords_no_match": "Passwords no match",
+    "enter_email_or_phone": "Enter your email or phone number",
+    "reset_password_btn": "Reset password",
+    "forgot_password_title": "Forget password",
+    "enter_otp_error": "Enter OTP abeg",
+    "resend_otp": "Resend OTP",
+    "complete_profile_title": "Complete your profile",
+    "complete_profile_subtitle": "Small more details to start",
+    "complete_profile_btn": "Finish registration"
+  },
+  "landlord": {
+    "welcome_back": "Welcome back,",
+    "default_name": "Landlord",
+    "kyc_required_title": "Verification needed",
+    "kyc_required_msg": "Complete your KYC verification before you create listings.",
+    "verify_now": "Verify now",
+    "kyc_pending_banner": "KYC documents dey review — tap to see status",
+    "kyc_incomplete_banner": "Complete KYC verification to start posting listings"
+  },
+  "screens": {
+    "kyc": {
+      "permission_required": "Permission needed",
+      "media_library_msg": "We need access to your gallery to upload documents. Allow am abeg.",
+      "allow": "Allow",
+      "access_blocked_msg": "Access to your photos don block. Enable am for settings.",
+      "open_settings": "Open settings",
+      "failed_pick": "Document selection fail",
+      "incomplete": "Incomplete",
+      "upload_all_docs": "Upload all required documents abeg.",
+      "success": "E work!",
+      "submitted_msg": "KYC verification don submit! We go review your documents and update your status soon.",
+      "failed_submit": "KYC verification submission fail",
+      "submitting": "E dey submit...",
+      "submit_for_verification": "Submit for verification",
+      "upload_document": "Upload document",
+      "title": "KYC Verification",
+      "verified_successfully": "Verified successfully",
+      "approved_msg": "Your KYC verification don approve. You fit create and manage property listings now.",
+      "verification_pending": "Verification pending",
+      "processing": "E dey process",
+      "pending_msg": "Your documents don submit and dey process. Verification usually take up to 48 hours.",
+      "want_to_resubmit": "You want resubmit?",
+      "personal_information": "Personal Information",
+      "upload_clear_photos_of_yo": "Upload clear photos of your government ID and selfie wey you dey hold the ID.",
+      "property_credentials": "Property Credentials",
+      "provide_documents_proving": "Provide documents wey prove say you own or manage properties for your address.",
+      "identity_verification": "Identity Verification"
+    },
+    "listingdetails": {
+      "loading_property_details": "Property details dey load...",
+      "unable_to_load_property": "We no fit load property",
+      "retry": "Try again",
+      "go_back": "Go back",
+      "property_details": "Property Details",
+      "share_this_listing": "Share this listing",
+      "available_for_rent": "Available for rent",
+      "description": "Description",
+      "location": "Location",
+      "view_map": "View map",
+      "property_videos": "Property Videos",
+      "landlord_information": "Landlord Information",
+      "verify": "Verify",
+      "why_should_i_verify_my_li": "Why I go verify my listing?",
+      "boost": "Boost",
+      "delete": "Delete",
+      "why_verify_your_listing": "Why verify your listing?",
+      "i_understand": "I understand",
+      "request_verification": "Request Verification",
+      "cancel": "Cancel",
+      "video": "Video",
+      "view_booking": "View Booking"
+    },
+    "managelistings": {
+      "please_log_in_to_manage_l": "Login to manage your listings.",
+      "loading_your_listings": "Your listings dey load...",
+      "my_properties": "My Properties",
+      "no_listings_yet": "No listing yet",
+      "start_by_adding_your_firs": "Start by adding your first property",
+      "add_property": "Add Property",
+      "total_properties": "Total Properties",
+      "active": "Active",
+      "property_photos": "Property Photos",
+      "edit": "Edit",
+      "delete": "Delete",
+      "archive_listing": "Archive listing",
+      "delete_listing": "Delete listing",
+      "delete_listing_confirm": "You sure you want delete this listing forever? We no fit undo am.",
+      "deleted_title": "Deleted",
+      "deleted_msg": "Listing don delete.",
+      "delete_error": "We no fit delete listing."
+    },
+    "payment": {
+      "dhub_payment_receipt": "DHUB Payment Receipt",
+      "transaction_details": "Transaction Details",
+      "amount_details": "Amount Details",
+      "parties": "Parties",
+      "payments": "Payments",
+      "payment_history": "Payment History",
+      "send_payment": "Send Payment",
+      "recent_transactions": "Recent Transactions",
+      "loading_history": "History dey load...",
+      "retry": "Try again",
+      "no_payment_history_yet": "No payment history yet.",
+      "receiver": "Receiver",
+      "description": "Description",
+      "payment_receipt": "Payment Receipt",
+      "scan_to_verify_transactio": "Scan to verify transaction",
+      "download_pdf": "Download PDF",
+      "close": "Close am",
+      "amount": "Amount",
+      "payable_to": "Payable To",
+      "initial_deposit": "Initial Deposit",
+      "remaining_rent_balance": "Remaining rent balance",
+      "your_momo_phone_number": "Your MoMo Number",
+      "enter_the_momo_number_tha": "Enter the MoMo number wey go receive the payment prompt.",
+      "a_payment_prompt_has_been": "Payment prompt don send to your MoMo number. Open your MoMo app and approve am.",
+      "print_pdf": "Print PDF",
+      "xaf_5_000_lease_renewal_f": "XAF 5,000 lease renewal fee",
+      "after_your_initial_deposi": "after your initial deposit. Payment go direct to your landlord.",
+      "your_previous_paymen": "Your previous payment attempt fail or cancel. Check your number, connection and MoMo balance, then try again."
+    },
+    "uploadlisting": {
+      "add_new_property": "Add New Property",
+      "add_up_to_10_photos_or_vi": "Add up to 10 photos or videos of your property",
+      "add_media": "Add Media",
+      "basic_information": "Basic Information",
+      "listing_type": "Listing Type",
+      "stay_type": "Stay Type",
+      "property_title": "Property Title",
+      "description": "Description",
+      "number_of_rooms": "Number of Rooms",
+      "location": "Location",
+      "street_address": "Street Address",
+      "city": "City",
+      "tap_to_select_location_on": "Tap to select location for map",
+      "students_will_review_and": "Students go review and agree to these terms before booking",
+      "create_property_listing": "Create Property Listing",
+      "uploading_media": "Media dey upload...",
+      "please_do_not_close_the_a": "No close the app or turn off your screen.",
+      "cancel_upload": "Cancel Upload"
+    },
+    "bookingdetails": {
+      "information_locked": "Information don lock",
+      "complete_your_booking_to": "Complete your booking to see the exact location and landlord contact.",
+      "under_review_by_dhub": "DHUB dey review am",
+      "submit_evidence": "Submit Evidence",
+      "confirm_i_have_moved_in": "Confirm say I Don Move In",
+      "move_in_confirmed_by_you": "Move-In Don Confirm by You",
+      "take_entry_picture": "Take Entry Picture",
+      "take_exit_picture": "Take Exit Picture",
+      "awaiting_landlord_approva": "Waiting for Landlord Approval",
+      "the_landlord_must_review": "Landlord must review and accept your booking before you fit proceed to payment. We go notify you when landlord approve.",
+      "cancellation_reason": "Cancellation Reason",
+      "back": "Go back"
+    },
+    "booking": {
+      "unverified_property": "Property never verify",
+      "property_may_not_match_th": "Property fit no match the photos",
+      "promised_amenities_could": "Some amenities fit no dey there",
+      "you_may_risk_losing_your": "You fit lose your caution fee",
+      "read_our_safety_guideline": "Read our Safety Guidelines",
+      "cancel_booking": "Cancel booking",
+      "proceed_anyway": "Continue anyway",
+      "student_booking_agre": "Student Booking Agreement",
+      "scan_to_verify": "Scan to verify",
+      "booking_agreement": "Booking Agreement",
+      "this_agreement_is_is": "This agreement na from DHUB and e represent electronically authenticated booking document."
+    },
+    "favorites": {
+      "view_details": "See details",
+      "no_favorites_yet": "No favorite yet",
+      "start_exploring_propertie": "Explore properties and tap heart icon to save your favorites here",
+      "explore_properties": "Explore Properties",
+      "loading_your_favorites": "Your favorites dey load...",
+      "my_favorites": "My Favorites"
+    },
+    "home": {
+      "can_t_find_what_you_re_lo": "You no find wetin you dey look for?",
+      "notify_me": "Notify me",
+      "fill_out_the_details_of_t": "Fill the details of the property you need. We go search am and notify you when e available!",
+      "preferred_location": "Preferred Location",
+      "budget__fcfa": "Budget (FCFA)",
+      "specific_requirements": "Specific Requirements",
+      "submit_request": "Submit Request"
+    },
+    "listingreview": {
+      "rate_this_listing": "Rate this Listing",
+      "tap_stars_to_select_your": "Tap stars to select your rating",
+      "optional_comment": "Optional Comment",
+      "back_to_booking": "Back to Booking"
+    },
+    "profile": {
+      "age": "Age"
+    },
+    "viewbookings": {
+      "active": "Active",
+      "pending": "Pending",
+      "past": "Past"
+    }
+  }
 }
 </file>
 
@@ -23844,1551 +22981,6 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 });
 
 export default ApprovalScreen;
-</file>
-
-<file path="src/screens/student/BookingScreen.tsx">
-import { showAlert } from '../../utils/alert';
-import { Ionicons } from '@expo/vector-icons';
-import { useNavigation, useRoute } from '@react-navigation/native';
-import * as Device from 'expo-device'; // ✅ Added missing import
-import * as Print from 'expo-print';
-import * as Sharing from 'expo-sharing';
-import { sha256 } from 'js-sha256';
-import React, { useEffect, useMemo, useState } from 'react';
-import { useTranslation } from 'react-i18next';
-import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
-import QRCode from 'react-native-qrcode-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import uuid from 'react-native-uuid';
-import DateTimePicker from '../../components/DateTimePicker';
-import { useTheme } from '../../context/ThemeContext';
-import { useAuth } from '../../hooks/useAuth';
-import { triggerPushNotifications } from '../../hooks/usePushNotifications';
-import { ListingDetails, StudentStackNavigationProp, StudentStackRouteProp } from '../../types';
-import { generateBookingPDFHTML } from '../../utils/generateBookingPDF';
-import { supabase } from '../../utils/supabaseClient';
-
-const BookingScreen: React.FC = () => {
-  const { t } = useTranslation();
-  const navigation = useNavigation<StudentStackNavigationProp>();
-  const route = useRoute<StudentStackRouteProp<'BookingScreen'>>();
-  const { user } = useAuth();
-  const { colors: themeColors, isDark } = useTheme();
-  const { listingId } = route.params;
-
-  const COLORS = useMemo(() => ({
-    gold: themeColors.primary,
-    goldLight: isDark ? '#2D2510' : '#F5E7C8',
-    goldDark: themeColors.primary,
-    white: themeColors.card,
-    offWhite: isDark ? '#1A1A1A' : '#F8F9FA',
-    greyDark: themeColors.text,
-    greyMedium: themeColors.textSecondary,
-    greyLight: isDark ? '#2A2A2A' : '#ECF0F1',
-    border: themeColors.border,
-    shadow: '#000000',
-    success: themeColors.success,
-    danger: themeColors.error,
-    yearly: '#8E44AD',
-    yearlyLight: isDark ? '#2f1f4a' : '#F5EEF8',
-  }), [themeColors, isDark]);
-
-  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
-
-  const [listing, setListing] = useState<ListingDetails | null>(null);
-  const [terms, setTerms] = useState('');
-  const [signatureAccepted, setSignatureAccepted] = useState(false);
-  const [signatureText, setSignatureText] = useState('');
-  const [agreementId, setAgreementId] = useState<string | null>(null);
-  const [agreementHash, setAgreementHash] = useState<string | null>(null);
-  const [signedAt, setSignedAt] = useState<string | null>(null);
-  const [signatureError, setSignatureError] = useState<string | null>(null);
-  const [deviceInfo, setDeviceInfo] = useState<Record<string, string | number> | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [showFeeModal, setShowFeeModal] = useState(false);
-  const [showSignatureModal, setShowSignatureModal] = useState(false);
-  const [showContractModal, setShowContractModal] = useState(false);
-  const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
-
-  const [startDate, setStartDate] = useState<Date>(new Date());
-  const [endDate, setEndDate] = useState<Date>(new Date());
-  const [showStartPicker, setShowStartPicker] = useState(false);
-  const [showEndPicker, setShowEndPicker] = useState(false);
-
-  // ── Fetch listing ────────────────────────────────────────────────────────────
-  useEffect(() => {
-    const fetchListing = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('listings')
-          .select(`
-            *,
-            landlord:users(id, full_name, phone, email)
-          `)
-          .eq('id', listingId)
-          .single();
-
-        if (error || !data) throw error;
-
-        setListing(data as ListingDetails);
-        setTerms(data.terms_text || '');
-      } catch (err) {
-        console.error('[BookingScreen] fetchListing error:', err);
-        showAlert(t('common.error'), t('booking.not_found'));
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchListing();
-  }, [listingId]);
-
-  useEffect(() => {
-    setDeviceInfo({
-      platform: Device.osName || Platform.OS,
-      osVersion: Device.osVersion || '',
-      modelName: Device.modelName || '',
-      manufacturer: Device.manufacturer || '',
-      brand: (Device as any).brand || '',
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!signatureAccepted) return;
-    setSignatureAccepted(false);
-    setAgreementId(null);
-    setAgreementHash(null);
-    setSignedAt(null);
-    setSignatureText('');
-    setSignatureError(null);
-  }, [startDate, endDate, listing?.price, listing?.terms_marker, terms]);
-
-  const computeTermsVersion = () => {
-    if (!listing) return '';
-    return listing.terms_marker || sha256(listing.terms_text || 'standard_terms');
-  };
-
-  const getContractText = () => {
-    if (!listing) return '';
-    const landlordName = listing.landlord?.full_name || t('booking.landlord_placeholder');
-    const studentName = user?.fullName || t('booking.student_placeholder');
-    const start = startDate.toLocaleDateString(t('common.date_locale'), {
-      day: '2-digit', month: 'long', year: 'numeric',
-    });
-    const end = endDate.toLocaleDateString(t('common.date_locale'), {
-      day: '2-digit', month: 'long', year: 'numeric',
-    });
-    const termsVersion = computeTermsVersion() || 'N/A';
-    const listingTerms = listing.terms_text?.trim()
-      ? `${t('booking.terms_title')}\n\n${listing.terms_text.trim()}`
-      : `${t('booking.terms_title')}\n\n${t('booking.default_terms_template')}`;
-
-    const rentAmountText = totals
-      ? `${t('listing.fcfa')} ${totals.rentAmount.toLocaleString()}`
-      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'} per month`;
-    const cautionFeeText = totals
-      ? `${t('listing.fcfa')} ${totals.cautionFee.toLocaleString()}`
-      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'}`;
-    const totalText = totals
-      ? `${t('listing.fcfa')} ${totals.total.toLocaleString()}`
-      : t('booking.no_terms');
-
-    return [
-      listingTerms,
-      `${t('booking.contract_title')}`,
-      `${t('booking.contract_intro', { studentName, landlordName, listingTitle: listing.title })}`,
-      `${t('booking.contract_amount', { rentAmount: rentAmountText, cautionFee: cautionFeeText, total: totalText })}`,
-      t('booking.contract_escrow'),
-      t('booking.contract_enforceability'),
-      t('booking.contract_terms_version', { version: termsVersion }),
-      t('booking.contract_expiration', { start, end }),
-      t('booking.contract_signature_clause'),
-    ].join('\n\n');
-  };
-
-  const renderContractText = () => {
-    if (!listing) return null;
-
-    const landlordName = listing.landlord?.full_name || t('booking.landlord_placeholder');
-    const studentName = user?.fullName || t('booking.student_placeholder');
-    const rentAmountText = totals
-      ? `${t('listing.fcfa')} ${totals.rentAmount.toLocaleString()}`
-      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'} per month`;
-    const cautionFeeText = totals
-      ? `${t('listing.fcfa')} ${totals.cautionFee.toLocaleString()}`
-      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'}`;
-    const totalText = totals
-      ? `${t('listing.fcfa')} ${totals.total.toLocaleString()}`
-      : t('booking.no_terms');
-    const listingTerms = listing.terms_text?.trim()
-      ? `${t('booking.terms_title')}
-
-${listing.terms_text.trim()}`
-      : `${t('booking.terms_title')}
-
-${t('booking.default_terms_template')}`;
-
-    return (
-      <View>
-        <Text style={[styles.contractModalTextBold, { fontSize: 18 }]}>{t('booking.contract_title')}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_intro', {
-          studentName,
-          landlordName,
-          listingTitle: listing.title,
-        })}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_amount', {
-          rentAmount: rentAmountText,
-          cautionFee: cautionFeeText,
-          total: totalText,
-        })}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_escrow')}</Text>
-        <Text style={[styles.contractModalText, styles.contractModalTextBold, { marginTop: 16 }]}>
-          {t('booking.contract_enforceability')}
-        </Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_terms_version', {
-          version: computeTermsVersion() || 'N/A',
-        })}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_expiration', {
-          start: startDate.toLocaleDateString(t('common.date_locale'), {
-            day: '2-digit', month: 'long', year: 'numeric',
-          }),
-          end: endDate.toLocaleDateString(t('common.date_locale'), {
-            day: '2-digit', month: 'long', year: 'numeric',
-          }),
-        })}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_signature_clause')}</Text>
-        <Text style={[styles.contractModalText, { marginTop: 20 }]}>{listingTerms}</Text>
-      </View>
-    );
-  };
-
-  const handleSignAgreement = () => {
-    Keyboard.dismiss();
-
-    const trimmedSignature = signatureText.trim();
-
-    if (!trimmedSignature) {
-      setSignatureError(t('booking.signature_error'));
-      return;
-    }
-    if (endDate.getTime() <= startDate.getTime()) {
-      setSignatureError(t('booking.invalid_dates_msg'));
-      return;
-    }
-    if (!listing || !user?.id || !totals) {
-      setSignatureError(t('booking.signature_required_msg'));
-      return;
-    }
-
-    const now = new Date().toISOString();
-    const agreementIdValue = (uuid.v4() as string).toUpperCase();
-    const payload = {
-      agreementId: agreementIdValue,
-      studentId: user.id,
-      landlordId: listing.landlord?.id || '',
-      listingId: listing.id,
-      totalAmount: totals.total,
-      rentAmount: totals.rentAmount,
-      cautionFee: totals.cautionFee,
-      startDate: startDate.toISOString(),
-      endDate: endDate.toISOString(),
-      termsVersion: computeTermsVersion(),
-      signedAt: now,
-      signatureText: trimmedSignature,
-      deviceInfo,
-    };
-
-    setAgreementId(agreementIdValue);
-    setAgreementHash(sha256(JSON.stringify(payload)));
-    setSignedAt(now);
-    setSignatureText(trimmedSignature);
-    setSignatureAccepted(true);
-    setSignatureError(null);
-    setShowSignatureModal(false);
-  };
-
-  // ── Compute total amount ─────────────────────────────────────────────────────
-  const computeTotal = () => {
-    if (!listing) return null;
-    const msDiff = endDate.getTime() - startDate.getTime();
-    if (msDiff <= 0) return null;
-
-    const priceUnit = (listing as any).price_unit ?? 'per_month';
-
-    if (priceUnit === 'per_night') {
-      // Daily billing: calculate number of nights
-      const nights = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24)));
-      const rentAmount = listing.price * nights;
-      // Caution fee = 10% of total rent for short/daily stays
-      const cautionFee = Math.round(rentAmount * 0.1);
-      return { rentAmount, cautionFee, total: rentAmount + cautionFee, durationType: 'daily', nights };
-    } else {
-      // Monthly billing
-      const monthsDiff = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24 * 30)));
-      const calculatedDurationType = monthsDiff >= 12 ? 'yearly' : 'monthly';
-
-      let rentAmount = listing.price * monthsDiff;
-      if (calculatedDurationType === 'yearly') rentAmount = Math.round(rentAmount * 0.9);
-
-      // Caution fee = 1 month of rent (escrow), which is ~10% for yearly
-      const cautionFee = listing.price;
-      return { rentAmount, cautionFee, total: rentAmount + cautionFee, durationType: calculatedDurationType };
-    }
-  };
-
-  const totals = computeTotal();
-
-  // ── PDF download – NEW VERSION using helper ──────────────────────────────
-const handleDownloadPDF = async () => {
-  if (!listing || !totals) return;
-  setPdfLoading(true);
-
-  try {
-    const html = await generateBookingPDFHTML({
-      listing,
-      user,
-      startDate,
-      endDate,
-      totals,
-      agreementId,
-      agreementHash,
-      signedAt,
-      signatureText,
-    });
-
-    if (Platform.OS === 'web') {
-      // Use setTimeout to avoid blocking the parent tab
-      setTimeout(() => {
-        const win = window.open('', '_blank');
-        if (win) {
-          win.document.write(html);
-          win.document.close();
-          win.focus();
-          win.print();
-        } else {
-          showAlert('Error', 'Unable to open print dialog. Please allow popups.');
-        }
-        setPdfLoading(false);
-      }, 100);
-      return;
-    }
-
-    // Native
-    const { uri } = await Print.printToFileAsync({ html });
-    if (await Sharing.isAvailableAsync()) {
-      await Sharing.shareAsync(uri, {
-        mimeType: 'application/pdf',
-        dialogTitle: t('booking.download_pdf'),
-      });
-    } else {
-      showAlert(t('common.success'), `${t('common.success')}: ${uri}`);
-    }
-  } catch (err) {
-    console.error('[BookingScreen] PDF error:', err);
-    showAlert(t('common.error'), t('booking.failed'));
-  } finally {
-    setPdfLoading(false);
-  }
-};
-
-  // ── Create booking ───────────────────────────────────────────────────────────
-  const performBooking = async () => {
-    setSubmitting(true);
-    try {
-      const { total, rentAmount, cautionFee, durationType: currentDurationType } = totals!;
-      const termsVersion = computeTermsVersion();
-
-      const bookingPayload = {
-        listing_id: listing!.id,
-        student_id: user!.id,
-        landlord_id: listing!.landlord!.id,
-        amount: rentAmount,
-        total_amount: total,
-        start_date: startDate.toISOString().split('T')[0],
-        end_date: endDate.toISOString().split('T')[0],
-        status: 'pending',
-        approval_status: 'pending',
-        payment_status: 'pending',
-        contract_status: 'signed',
-        duration_type: currentDurationType,
-        caution_fee: cautionFee,
-        caution_status: 'held',
-        agreement_id: agreementId,
-        agreement_hash: agreementHash,
-        signature_method: 'typed_name',
-        signature_text: signatureText.trim(),
-        signed_at: signedAt,
-        agreement_device_info: deviceInfo || {},
-        terms_version: termsVersion,
-        agreed_to_terms: true,
-      };
-
-      console.log('[BookingScreen] Inserting booking payload:', JSON.stringify(bookingPayload, null, 2));
-
-      const { data: booking, error } = await supabase
-        .from('bookings')
-        .insert(bookingPayload)
-        .select()
-        .single();
-
-      if (error) {
-        console.error('[BookingScreen] Insert error:', JSON.stringify(error, null, 2));
-        const errorText = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
-        const isMissingCautionColumn = error.code === 'PGRST204' ||
-          (/column|schema cache|could not find/i.test(errorText) && /caution_fee|caution_status/i.test(errorText));
-        if (isMissingCautionColumn) {
-          console.warn('[BookingScreen] Retrying without caution columns (migration pending)');
-          const fallbackPayload = { ...bookingPayload };
-          delete (fallbackPayload as any).caution_fee;
-          delete (fallbackPayload as any).caution_status;
-          const { data: bookingFallback, error: fallbackError } = await supabase
-            .from('bookings')
-            .insert(fallbackPayload)
-            .select()
-            .single();
-          if (fallbackError) {
-            console.error('[BookingScreen] Fallback insert error:', fallbackError);
-            throw fallbackError;
-          }
-          if (!bookingFallback) throw new Error('Booking was not returned after insert (fallback)');
-          console.log('[BookingScreen] Fallback booking created:', bookingFallback.id);
-          triggerPushNotifications();
-          navigation.navigate('PendingScreen', { bookingId: bookingFallback.id });
-          return;
-        }
-        throw error;
-      }
-
-      if (!booking) throw new Error('Booking was not returned after insert.');
-      console.log('[BookingScreen] Booking created successfully:', booking.id);
-      triggerPushNotifications();
-      navigation.navigate('PendingScreen', { bookingId: booking.id });
-    } catch (err: any) {
-      console.error('[BookingScreen] createBooking error:', err);
-      if (err?.code === '23505') {
-        const { data: existing } = await supabase
-          .from('bookings')
-          .select('id')
-          .eq('listing_id', listing!.id)
-          .eq('student_id', user!.id)
-          .in('status', ['pending', 'confirmed'])
-          .maybeSingle();
-        if (existing) {
-          console.log('[BookingScreen] Existing booking found, navigating:', existing.id);
-          navigation.replace('PendingScreen', { bookingId: existing.id });
-          return;
-        }
-      }
-      const details = err?.message ? `\n\n${err.message}` : '';
-      showAlert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCreateBooking = async () => {
-    console.log('[BookingScreen] handleCreateBooking called');
-    if (!signatureAccepted || !agreementId || !agreementHash) {
-      console.warn('[BookingScreen] Missing signature or agreement');
-      showAlert(t('booking.signature_required_title'), t('booking.signature_required_msg'));
-      return;
-    }
-    if (!listing || !user?.id) {
-      console.warn('[BookingScreen] Missing listing or user');
-      showAlert(t('common.error'), t('booking.not_found'));
-      return;
-    }
-    if (!listing.landlord) {
-      console.warn('[BookingScreen] Missing landlord');
-      showAlert(t('common.error'), t('booking.not_found'));
-      return;
-    }
-    if (!totals) {
-      console.warn('[BookingScreen] Missing totals');
-      showAlert(t('common.error'), t('booking.invalid_dates_msg'));
-      return;
-    }
-
-    if (!listing.is_verified) {
-      console.log('[BookingScreen] Unverified listing, showing modal');
-      setShowUnverifiedModal(true);
-      return;
-    }
-
-    console.log('[BookingScreen] Verified listing, proceeding to create booking');
-    await performBooking();
-  };
-
-  // ── Loading state ─────────────────────────────────────────────────────────────
-  if (loading) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={COLORS.gold} />
-          <Text style={styles.loadingText}>{t('booking.loading')}</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!listing) {
-    return (
-      <SafeAreaView style={styles.safeArea}>
-        <View style={styles.centered}>
-          <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
-          <Text style={styles.errorTitle}>{t('booking.not_found')}</Text>
-          <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.goBack()}>
-            <Ionicons name="arrow-back" size={18} color={COLORS.gold} />
-            <Text style={styles.outlineButtonText}>{t('common.back')}</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  return (
-    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
-
-      {/* ── Header ── */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('booking.title')}</Text>
-        <View style={styles.headerBtn} />
-      </View>
-
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* ── Property summary card ── */}
-        <View style={styles.propertyCard}>
-          <View style={styles.propertyCardTop}>
-            <View style={styles.propertyIcon}>
-              <Ionicons name="home" size={28} color={COLORS.gold} />
-            </View>
-            <View style={styles.propertyInfo}>
-              <Text style={styles.propertyTitle} numberOfLines={2}>{listing.title}</Text>
-              {listing.city && (
-                <View style={styles.propertyMeta}>
-                  <Ionicons name="location-outline" size={13} color={COLORS.greyMedium} />
-                  <Text style={styles.propertyMetaText}>{listing.city}</Text>
-                </View>
-              )}
-            </View>
-          </View>
-          <View style={styles.propertyDivider} />
-          <View style={styles.propertyFooter}>
-            <View>
-              <Text style={styles.priceLabel}>{t('booking.base_price')}</Text>
-              <Text style={styles.priceValue}>{t('listing.fcfa')} {listing.price.toLocaleString()}</Text>
-            </View>
-            {listing.landlord?.full_name && (
-              <View style={styles.landlordPill}>
-                <Ionicons name="person-outline" size={13} color={COLORS.goldDark} />
-                <Text style={styles.landlordPillText}>{listing.landlord.full_name}</Text>
-              </View>
-            )}
-          </View>
-        </View>
-
-
-        {/* ── Date selectors ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.gold} />
-            <Text style={styles.cardTitle}>{t('booking.select_dates')}</Text>
-          </View>
-
-          <View style={styles.dateRow}>
-            {/* Start Date block */}
-            <TouchableOpacity
-              style={styles.dateBlock}
-              onPress={() => setShowStartPicker(true)}
-              activeOpacity={0.75}
-            >
-              <View style={styles.dateBlockIconWrap}>
-                <Ionicons name="log-in-outline" size={22} color={COLORS.gold} />
-              </View>
-              <Text style={styles.dateBlockLabel}>{t('booking.move_in')}</Text>
-              <Text style={styles.dateBlockDay}>
-                {startDate.toLocaleDateString(t('common.date_locale'), { day: '2-digit', month: 'short' })}
-              </Text>
-              <Text style={styles.dateBlockYear}>{startDate.getFullYear()}</Text>
-              <View style={styles.dateBlockTapHint}>
-                <Ionicons name="pencil-outline" size={12} color={COLORS.greyMedium} />
-                <Text style={styles.dateBlockTapHintText}>{t('booking.tap_to_change')}</Text>
-              </View>
-            </TouchableOpacity>
-
-            {/* Arrow */}
-            <View style={styles.dateArrow}>
-              <Ionicons name="arrow-forward" size={20} color={COLORS.greyLight} />
-            </View>
-
-            {/* End Date block */}
-            <TouchableOpacity
-              style={styles.dateBlock}
-              onPress={() => setShowEndPicker(true)}
-              activeOpacity={0.75}
-            >
-              <View style={styles.dateBlockIconWrap}>
-                <Ionicons name="log-out-outline" size={22} color={COLORS.gold} />
-              </View>
-              <Text style={styles.dateBlockLabel}>{t('booking.move_out')}</Text>
-              <Text style={styles.dateBlockDay}>
-                {endDate.toLocaleDateString(t('common.date_locale'), { day: '2-digit', month: 'short' })}
-              </Text>
-              <Text style={styles.dateBlockYear}>{endDate.getFullYear()}</Text>
-              <View style={styles.dateBlockTapHint}>
-                <Ionicons name="pencil-outline" size={12} color={COLORS.greyMedium} />
-                <Text style={styles.dateBlockTapHintText}>{t('booking.tap_to_change')}</Text>
-              </View>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Date pickers (native) */}
-        {showStartPicker && (
-          <DateTimePicker
-            value={startDate}
-            mode="date"
-            display="default"
-            minimumDate={new Date()}
-            onChange={(_, date) => {
-              setShowStartPicker(false);
-              if (date) setStartDate(date);
-            }}
-          />
-        )}
-        {showEndPicker && (
-          <DateTimePicker
-            value={endDate}
-            mode="date"
-            display="default"
-            minimumDate={startDate}
-            onChange={(_, date) => {
-              setShowEndPicker(false);
-              if (date) setEndDate(date);
-            }}
-          />
-        )}
-
-        {/* ── Estimated total ── */}
-        {totals !== null && (
-          <>
-            <View style={styles.totalCard}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.totalLabel}>{t('booking.estimated_total')}</Text>
-                {totals.durationType === 'yearly' && (
-                  <Text style={styles.discountNote}>{t('booking.yearly_discount_applied')}</Text>
-                )}
-                <Text style={{ fontSize: 13, color: COLORS.goldDark, marginTop: 4 }}>
-                  Rent: {totals.rentAmount.toLocaleString()} + Escrow: {totals.cautionFee.toLocaleString()}
-                </Text>
-              </View>
-              <Text style={styles.totalAmount}>{t('listing.fcfa')} {totals.total.toLocaleString()}</Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.feeInfoButton}
-              onPress={() => setShowFeeModal(true)}
-              activeOpacity={0.78}
-            >
-              <View>
-                <Text style={styles.feeInfoQuestion}>
-                  {t('booking.fee_info_button', {
-                    amount: `${t('listing.fcfa')} ${totals.total.toLocaleString()}`,
-                  })}
-                </Text>
-              </View>
-              <Ionicons name="information-circle-outline" size={20} color={COLORS.goldDark} />
-            </TouchableOpacity>
-          </>
-        )}
-
-        {/* ── Terms & Conditions ── */}
-        <View style={styles.card}>
-          <View style={styles.cardHeader}>
-            <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
-            <Text style={styles.cardTitle}>{t('booking.terms_title')}</Text>
-          </View>
-
-          <ScrollView
-            style={styles.termsBox}
-            nestedScrollEnabled
-            showsVerticalScrollIndicator={false}
-          >
-            <Text style={styles.termsText}>
-              {terms || t('booking.no_terms')}
-            </Text>
-          </ScrollView>
-
-          <TouchableOpacity
-            style={styles.viewContractButton}
-            onPress={() => setShowContractModal(true)}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.viewContractButtonText}>{t('booking.view_agreement')}</Text>
-          </TouchableOpacity>
-
-          {/* ── Download PDF button ── */}
-          <TouchableOpacity
-            style={[styles.pdfButton, pdfLoading && styles.pdfButtonLoading]}
-            onPress={handleDownloadPDF}
-            disabled={pdfLoading}
-            activeOpacity={0.8}
-          >
-            {pdfLoading ? (
-              <ActivityIndicator color={COLORS.gold} />
-            ) : (
-              <>
-                <View style={styles.pdfIconCircle}>
-                  <Ionicons name="download-outline" size={22} color={COLORS.white} />
-                </View>
-                <View style={styles.pdfButtonContent}>
-                  <Text style={styles.pdfButtonTitle}>{t('booking.download_pdf')}</Text>
-                  <Text style={styles.pdfButtonSub}>{t('booking.save_pdf_sub')}</Text>
-                </View>
-                <Ionicons name="chevron-forward" size={20} color={COLORS.gold} />
-              </>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.signatureCard}
-            onPress={() => setShowSignatureModal(true)}
-            activeOpacity={0.85}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.signatureCardTitle}>
-                {signatureAccepted ? t('booking.signature_summary_title') : t('booking.sign_agreement')}
-              </Text>
-              <Text style={styles.signatureCardText}>
-                {signatureAccepted
-                  ? t('booking.signature_summary_sub', { date: signedAt ? new Date(signedAt).toLocaleString() : '' })
-                  : t('booking.signature_prompt')}
-              </Text>
-            </View>
-            <Ionicons
-              name={signatureAccepted ? 'checkmark-circle' : 'pencil-outline'}
-              size={22}
-              color={signatureAccepted ? COLORS.success : COLORS.goldDark}
-            />
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
-
-      {/* ─── Modals ────────────────────────────────────────────────────────── */}
-      {/* Contract Modal */}
-      <Modal
-        visible={showContractModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowContractModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowContractModal(false)} />
-          <View style={styles.contractModalContentWrapper}>
-            <View style={styles.contractModalContent}>
-              <View style={styles.contractModalHeader}>
-                <Text style={styles.contractModalTitle} numberOfLines={2}>
-                  {t('booking.contract_view_title')}
-                </Text>
-                <TouchableOpacity
-                  style={styles.modalCloseIcon}
-                  onPress={() => setShowContractModal(false)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close" size={20} color={COLORS.greyDark} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                style={styles.contractModalScroll}
-                contentContainerStyle={styles.contractModalScrollContent}
-                showsVerticalScrollIndicator
-              >
-                {renderContractText()}
-              </ScrollView>
-              <View style={styles.contractModalFooter}>
-                <TouchableOpacity
-                  style={[styles.modalCloseButton, styles.modalFooterButton]}
-                  onPress={() => setShowContractModal(false)}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Fee Info Modal */}
-      <Modal
-        visible={showFeeModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowFeeModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowFeeModal(false)} />
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {t('booking.fee_info_title', {
-                amount: `${t('listing.fcfa')} ${totals?.total.toLocaleString()}`,
-              })}
-            </Text>
-            <Text style={styles.modalDescription}>
-              {t('booking.fee_info_description', {
-                landlordName: listing.landlord?.full_name || t('booking.landlord_placeholder'),
-                rentAmount: `${t('listing.fcfa')} ${totals?.rentAmount.toLocaleString()}`,
-                cautionFee: `${t('listing.fcfa')} ${totals?.cautionFee.toLocaleString()}`,
-              })}
-            </Text>
-            <View style={styles.modalActions}>
-              <TouchableOpacity
-                style={styles.learnMoreButton}
-                onPress={() => {
-                  setShowFeeModal(false);
-                  navigation.navigate('Legal');
-                }}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.learnMoreButtonText}>{t('booking.learn_more')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.modalCloseButton}
-                onPress={() => setShowFeeModal(false)}
-                activeOpacity={0.8}
-              >
-                <Text style={styles.modalCloseButtonText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* Signature Modal */}
-      <Modal
-        visible={showSignatureModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowSignatureModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowSignatureModal(false)} />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 50}
-            style={styles.modalContentWrapper}
-          >
-            <View style={[styles.modalContent, styles.signatureModalContent]}>
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, styles.modalHeaderTitle]} numberOfLines={2}>
-                  {signatureAccepted ? t('booking.signature_review_title') : t('booking.signature_prompt_title')}
-                </Text>
-                <TouchableOpacity
-                  style={styles.modalCloseIcon}
-                  onPress={() => setShowSignatureModal(false)}
-                  activeOpacity={0.7}
-                >
-                  <Ionicons name="close" size={20} color={COLORS.greyDark} />
-                </TouchableOpacity>
-              </View>
-              <ScrollView
-                style={styles.signatureModalScroll}
-                contentContainerStyle={styles.signatureModalBody}
-                keyboardShouldPersistTaps="handled"
-                keyboardDismissMode="on-drag"
-                showsVerticalScrollIndicator={false}
-              >
-                <Text style={styles.modalDescription}>
-                  {signatureAccepted
-                    ? t('booking.signature_review_description')
-                    : t('booking.signature_description')}
-                </Text>
-
-                {!signatureAccepted ? (
-                  <>
-                    <TextInput
-                      style={styles.signatureInput}
-                      multiline
-                      numberOfLines={3}
-                      placeholder={t('booking.signature_placeholder')}
-                      value={signatureText}
-                      onChangeText={(value) => {
-                        setSignatureText(value);
-                        if (signatureError) setSignatureError(null);
-                      }}
-                      placeholderTextColor={COLORS.greyMedium}
-                      textAlignVertical="top"
-                      returnKeyType="done"
-                      blurOnSubmit
-                    />
-                    {signatureError ? <Text style={styles.signatureError}>{signatureError}</Text> : null}
-                  </>
-                ) : (
-                  <View style={styles.signatureSummary}>
-                    <View style={styles.signatureDetailRow}>
-                      <Text style={styles.signatureDetailLabel}>{t('booking.agreement_id_label')}</Text>
-                      <Text selectable style={styles.signatureDetailValue}>{agreementId}</Text>
-                    </View>
-                    <View style={styles.signatureDetailRow}>
-                      <Text style={styles.signatureDetailLabel}>{t('booking.signed_at_label')}</Text>
-                      <Text style={styles.signatureDetailValue}>{signedAt ? new Date(signedAt).toLocaleString() : ''}</Text>
-                    </View>
-                    <View style={styles.signatureDetailRow}>
-                      <Text style={styles.signatureDetailLabel}>{t('booking.signature_method_label')}</Text>
-                      <Text style={styles.signatureDetailValue}>{t('booking.signature_method_typed')}</Text>
-                    </View>
-                    {agreementId ? (
-                      <View style={styles.qrContainer}>
-                        <QRCode value={`DHUB-AGREEMENT:${agreementId}`} size={112} />
-                        <Text style={styles.qrLabel}>{t('booking.qr_code_label')}</Text>
-                      </View>
-                    ) : null}
-                  </View>
-                )}
-              </ScrollView>
-              <View style={styles.signatureModalFooter}>
-                {!signatureAccepted ? (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.learnMoreButton, styles.signaturePrimaryButton]}
-                      onPress={handleSignAgreement}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.learnMoreButtonText}>{t('booking.sign_now')}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalCloseButton, styles.signatureSecondaryButton]}
-                      onPress={() => setShowSignatureModal(false)}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <TouchableOpacity
-                    style={[styles.modalCloseButton, styles.modalFooterButton]}
-                    onPress={() => setShowSignatureModal(false)}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
-                  </TouchableOpacity>
-                )}
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
-
-      {/* ── Polished Unverified Listing Modal ── */}
-      <Modal
-        visible={showUnverifiedModal}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUnverifiedModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.unverifiedModalContent}>
-            <View style={styles.unverifiedIconContainer}>
-              <Ionicons name="shield-half-outline" size={32} color={COLORS.danger} />
-            </View>
-            
-            <Text style={styles.unverifiedModalTitle}>{t('screens.booking.unverified_property')}</Text>
-            <Text style={styles.unverifiedModalDesc}>
-              This listing has not been physically verified by DHUB. Booking unverified properties carries risks:
-            </Text>
-
-            <View style={styles.unverifiedRiskList}>
-              <View style={styles.riskItem}>
-                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>{t('screens.booking.property_may_not_match_th')}</Text>
-              </View>
-              <View style={styles.riskItem}>
-                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>{t('screens.booking.promised_amenities_could')}</Text>
-              </View>
-              <View style={styles.riskItem}>
-                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
-                <Text style={styles.riskText}>{t('screens.booking.you_may_risk_losing_your')}</Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={styles.unverifiedLearnMore}
-              onPress={() => {
-                setShowUnverifiedModal(false);
-                navigation.navigate('Legal');
-              }}
-            >
-              <Text style={styles.unverifiedLearnMoreText}>{t('screens.booking.read_our_safety_guideline')}</Text>
-              <Ionicons name="arrow-forward" size={14} color={COLORS.gold} />
-            </TouchableOpacity>
-
-            <View style={styles.unverifiedActions}>
-              <TouchableOpacity
-                style={styles.unverifiedCancelBtn}
-                onPress={() => setShowUnverifiedModal(false)}
-              >
-                <Text style={styles.unverifiedCancelBtnText}>{t('screens.booking.cancel_booking')}</Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={styles.unverifiedProceedBtn}
-                onPress={() => {
-                  setShowUnverifiedModal(false);
-                  performBooking();
-                }}
-              >
-                <Text style={styles.unverifiedProceedBtnText}>{t('screens.booking.proceed_anyway')}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-      </Modal>
-
-      {/* ── Sticky footer CTA ── */}
-      <View style={styles.footer}>
-        {totals !== null && (
-          <View style={styles.footerAmountRow}>
-            <Text style={styles.footerAmountLabel}>{t('booking.total')}</Text>
-            <Text style={styles.footerAmountValue}>{t('listing.fcfa')} {totals.total.toLocaleString()}</Text>
-          </View>
-        )}
-        <TouchableOpacity
-          style={[styles.bookButton, (!signatureAccepted || submitting) && styles.bookButtonDisabled]}
-          onPress={handleCreateBooking}
-          disabled={!signatureAccepted || submitting}
-          activeOpacity={0.85}
-        >
-          {submitting ? (
-            <ActivityIndicator color={COLORS.white} />
-          ) : (
-            <>
-              <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.white} />
-              <Text style={styles.bookButtonText}>{t('booking.confirm')}</Text>
-            </>
-          )}
-        </TouchableOpacity>
-        {!signatureAccepted && (
-          <Text style={styles.footerHint}>{t('booking.signature_required_hint')}</Text>
-        )}
-      </View>
-    </SafeAreaView>
-  );
-};
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
-const getStyles = (COLORS: any) => StyleSheet.create({
-  safeArea: { flex: 1, backgroundColor: COLORS.background },
-  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  loadingText: { marginTop: 14, fontSize: 16, color: COLORS.greyMedium },
-  errorTitle: {
-    fontSize: 20, fontWeight: '600', color: COLORS.greyDark,
-    marginTop: 16, marginBottom: 24,
-  },
-  outlineButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    paddingHorizontal: 24, paddingVertical: 12,
-    borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.gold,
-  },
-  outlineButtonText: { color: COLORS.gold, fontSize: 15, fontWeight: '600' },
-
-  // Header
-  header: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 16, paddingVertical: 12,
-    backgroundColor: COLORS.white,
-    borderBottomWidth: 1, borderBottomColor: COLORS.border,
-  },
-  headerTitle: { fontSize: 18, fontWeight: '600', color: COLORS.greyDark },
-  headerBtn: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.offWhite, justifyContent: 'center', alignItems: 'center',
-  },
-
-  // Scroll
-  scrollContent: { padding: 16, paddingBottom: 24 },
-
-  // Property card
-  propertyCard: {
-    backgroundColor: COLORS.white, borderRadius: 20, marginBottom: 16,
-    borderWidth: 1, borderColor: COLORS.border,
-    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
-    overflow: 'hidden',
-  },
-  propertyCardTop: {
-    flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: 20,
-  },
-  propertyIcon: {
-    width: 52, height: 52, borderRadius: 16,
-    backgroundColor: COLORS.goldLight,
-    justifyContent: 'center', alignItems: 'center',
-  },
-  propertyInfo: { flex: 1, paddingTop: 2 },
-  propertyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 6 },
-  propertyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
-  propertyMetaText: { fontSize: 13, color: COLORS.greyMedium },
-  propertyDivider: { height: 1, backgroundColor: COLORS.border, marginHorizontal: 20 },
-  propertyFooter: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    padding: 20, paddingTop: 14,
-  },
-  priceLabel: { fontSize: 12, color: COLORS.greyMedium, marginBottom: 2 },
-  priceValue: { fontSize: 20, fontWeight: '700', color: COLORS.gold },
-  landlordPill: {
-    flexDirection: 'row', alignItems: 'center', gap: 5,
-    paddingHorizontal: 12, paddingVertical: 6,
-    backgroundColor: COLORS.goldLight, borderRadius: 20,
-  },
-  landlordPillText: { fontSize: 12, fontWeight: '600', color: COLORS.goldDark },
-
-  // Generic card
-  card: {
-    backgroundColor: COLORS.white, borderRadius: 20, padding: 20, marginBottom: 16,
-    borderWidth: 1, borderColor: COLORS.border,
-    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16,
-  },
-  cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: COLORS.greyDark },
-
-  // Duration pills
-  durationRow: { flexDirection: 'row', gap: 12 },
-  durationPill: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 8, paddingVertical: 14, borderRadius: 14,
-    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.offWhite,
-  },
-  durationPillActive: {
-    backgroundColor: COLORS.gold, borderColor: COLORS.goldDark,
-  },
-  durationPillYearly: { backgroundColor: COLORS.yearly, borderColor: COLORS.yearly },
-  durationPillText: { fontSize: 15, fontWeight: '600', color: COLORS.greyMedium },
-  durationPillTextActive: { color: COLORS.white },
-  durationDiscount: { fontSize: 11, color: COLORS.greyMedium, textAlign: 'center' },
-  durationDiscountActive: { color: 'rgba(255,255,255,0.85)' },
-
-  // Date picker — card blocks
-  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  dateBlock: {
-    flex: 1, alignItems: 'center', paddingVertical: 18, paddingHorizontal: 10,
-    backgroundColor: COLORS.offWhite, borderRadius: 16,
-    borderWidth: 1.5, borderColor: COLORS.border,
-  },
-  dateBlockIconWrap: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: COLORS.goldLight,
-    justifyContent: 'center', alignItems: 'center',
-    marginBottom: 10,
-  },
-  dateBlockLabel: {
-    fontSize: 11, fontWeight: '600', color: COLORS.greyMedium,
-    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
-  },
-  dateBlockDay: {
-    fontSize: 22, fontWeight: '800', color: COLORS.greyDark, lineHeight: 26,
-  },
-  dateBlockYear: {
-    fontSize: 13, color: COLORS.greyMedium, marginTop: 2, marginBottom: 10,
-  },
-  dateBlockTapHint: {
-    flexDirection: 'row', alignItems: 'center', gap: 3,
-  },
-  dateBlockTapHintText: { fontSize: 11, color: COLORS.greyMedium },
-  dateArrow: { alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
-
-  // Estimated total banner
-  totalCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    backgroundColor: COLORS.goldLight, borderRadius: 16, padding: 18,
-    marginBottom: 16, borderWidth: 1, borderColor: '#E8D57E',
-  },
-  totalLabel: { fontSize: 14, color: COLORS.goldDark, fontWeight: '600', marginBottom: 2 },
-  discountNote: { fontSize: 12, color: COLORS.goldDark },
-  totalAmount: { fontSize: 22, fontWeight: '800', color: COLORS.goldDark },
-  feeInfoButton: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: 18, paddingVertical: 14, borderRadius: 16,
-    backgroundColor: COLORS.offWhite, borderWidth: 1, borderColor: COLORS.border,
-    marginBottom: 16,
-  },
-  feeInfoQuestion: {
-    flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.greyDark,
-    marginRight: 10,
-  },
-
-  // Terms box
-  termsBox: {
-    maxHeight: 200, backgroundColor: COLORS.offWhite,
-    padding: 14, borderRadius: 12,
-    borderWidth: 1, borderColor: COLORS.border, marginBottom: 16,
-  },
-  termsText: { fontSize: 14, lineHeight: 22, color: COLORS.greyMedium },
-  viewContractButton: {
-    marginTop: 16,
-    borderRadius: 14,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: COLORS.goldLight,
-    borderWidth: 1,
-    borderColor: COLORS.gold,
-  },
-  viewContractButtonText: {
-    color: COLORS.goldDark,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  // PDF button — full width prominent
-  pdfButton: {
-    flexDirection: 'row', alignItems: 'center', gap: 14,
-    paddingVertical: 16, paddingHorizontal: 16,
-    borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.gold,
-    backgroundColor: COLORS.goldLight, marginBottom: 16,
-  },
-  pdfButtonLoading: { justifyContent: 'center' },
-  pdfIconCircle: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: COLORS.gold,
-    justifyContent: 'center', alignItems: 'center',
-    flexShrink: 0,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.35)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 16,
-  },
-  modalDismissArea: StyleSheet.absoluteFillObject,
-  contractModalContentWrapper: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  contractModalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: 20,
-    maxHeight: '88%',
-    width: '100%',
-    maxWidth: 520,
-    overflow: 'hidden',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 20,
-  },
-  contractModalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  contractModalTitle: {
-    flex: 1,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: '800',
-    color: COLORS.greyDark,
-    marginRight: 12,
-  },
-  contractModalScroll: { flexShrink: 1 },
-  contractModalScrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 24,
-  },
-  contractModalText: {
-    fontSize: 14,
-    lineHeight: 22,
-    color: COLORS.greyDark,
-  },
-  contractModalTextBold: {
-    fontWeight: '700',
-    color: COLORS.greyDark,
-  },
-  contractModalFooter: {
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.white,
-  },
-  modalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: 22,
-    padding: 24,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 20,
-    width: '100%',
-    maxWidth: 400,
-    alignSelf: 'center',
-  },
-  signatureModalContent: {
-    alignSelf: 'center',
-    maxHeight: '88%',
-    minHeight: 0,
-    justifyContent: 'flex-start',
-    overflow: 'hidden',
-    padding: 0,
-  },
-  modalTitle: { fontSize: 17, fontWeight: '700', color: COLORS.greyDark, marginBottom: 12 },
-  modalHeaderTitle: { flex: 1, marginRight: 12, marginBottom: 0 },
-  modalDescription: { fontSize: 14, color: COLORS.greyMedium, lineHeight: 22, marginBottom: 16 },
-  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' },
-  learnMoreButton: {
-    backgroundColor: COLORS.gold,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  learnMoreButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
-  modalCloseButton: {
-    backgroundColor: COLORS.offWhite,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  modalCloseButtonText: { color: COLORS.greyDark, fontSize: 14, fontWeight: '600' },
-  exitButton: { marginTop: 10 },
-  modalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  modalCloseIcon: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.offWhite,
-  },
-  modalContentWrapper: {
-    flex: 1,
-    width: '100%',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-  },
-  modalScrollContent: { flexGrow: 1, justifyContent: 'flex-start', paddingVertical: 18, paddingBottom: 40 },
-  signatureModalScroll: { flexShrink: 1 },
-  signatureModalBody: {
-    paddingHorizontal: 20,
-    paddingTop: 18,
-    paddingBottom: 12,
-  },
-  signatureModalFooter: {
-    flexDirection: 'row',
-    gap: 10,
-    flexWrap: 'wrap',
-    padding: 16,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    backgroundColor: COLORS.white,
-  },
-  signaturePrimaryButton: { flex: 1, minWidth: 150 },
-  signatureSecondaryButton: { flex: 1, minWidth: 120 },
-  modalFooterButton: { width: '100%' },
-  pdfButtonContent: { flex: 1 },
-  pdfButtonTitle: { fontSize: 15, fontWeight: '700', color: COLORS.goldDark },
-  pdfButtonSub: { fontSize: 12, color: COLORS.goldDark, marginTop: 2 },
-  signatureCard: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    borderRadius: 18, borderWidth: 1, borderColor: COLORS.border,
-    backgroundColor: COLORS.offWhite, padding: 16,
-  },
-  signatureCardTitle: { fontSize: 15, fontWeight: '700', color: COLORS.greyDark, marginBottom: 4 },
-  signatureCardText: { fontSize: 13, color: COLORS.greyMedium, lineHeight: 20 },
-  signatureInput: {
-    minHeight: 110, backgroundColor: COLORS.offWhite,
-    borderRadius: 16, borderWidth: 1, borderColor: COLORS.border,
-    padding: 16, color: COLORS.greyDark,
-    marginBottom: 10,
-    fontSize: 15,
-    lineHeight: 22,
-  },
-  signatureError: { color: COLORS.danger, marginBottom: 10, fontSize: 13 },
-  signatureSummary: { marginTop: 0 },
-  signatureDetailRow: { marginBottom: 10 },
-  signatureDetailLabel: { fontSize: 12, color: COLORS.greyMedium, marginBottom: 4 },
-  signatureDetailValue: { fontSize: 13, lineHeight: 19, color: COLORS.greyDark, fontWeight: '600' },
-  qrContainer: {
-    alignItems: 'center', justifyContent: 'center', marginTop: 12,
-    padding: 14, borderRadius: 18, backgroundColor: COLORS.white,
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  qrLabel: { marginTop: 10, fontSize: 12, color: COLORS.greyMedium, textAlign: 'center' },
-
-  // bullet list for unverified modal
-  bulletList: { marginVertical: 12, paddingLeft: 8 },
-  bulletItem: { fontSize: 14, color: COLORS.greyDark, marginBottom: 4, lineHeight: 20 },
-
-  // Footer
-  footer: {
-    backgroundColor: COLORS.white, paddingHorizontal: 20, paddingVertical: 16,
-    borderTopWidth: 1, borderTopColor: COLORS.border,
-    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.06, shadowRadius: 10, elevation: 12,
-  },
-  footerAmountRow: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    marginBottom: 10,
-  },
-  footerAmountLabel: { fontSize: 14, color: COLORS.greyMedium },
-  footerAmountValue: { fontSize: 18, fontWeight: '700', color: COLORS.gold },
-  bookButton: {
-    backgroundColor: COLORS.gold, borderRadius: 16, paddingVertical: 16,
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
-    shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35, shadowRadius: 8, elevation: 6,
-  },
-  bookButtonDisabled: { opacity: 0.55, shadowOpacity: 0 },
-  bookButtonText: { color: COLORS.white, fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
-  footerHint: { textAlign: 'center', marginTop: 8, fontSize: 13, color: COLORS.greyMedium },
-
-  bottomSpacer: { height: 8 },
-
-  // Unverified Modal Styles
-  unverifiedModalContent: {
-    backgroundColor: COLORS.white,
-    borderRadius: 24,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    alignItems: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 20,
-    elevation: 24,
-  },
-  unverifiedIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: '#FEE2E2', // Light red background
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  unverifiedModalTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: COLORS.greyDark,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  unverifiedModalDesc: {
-    fontSize: 14,
-    color: COLORS.greyMedium,
-    textAlign: 'center',
-    lineHeight: 22,
-    marginBottom: 20,
-  },
-  unverifiedRiskList: {
-    width: '100%',
-    backgroundColor: COLORS.offWhite,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    gap: 12,
-  },
-  riskItem: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  riskIcon: {
-    marginRight: 10,
-    marginTop: 2,
-  },
-  riskText: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.greyDark,
-    fontWeight: '500',
-    lineHeight: 20,
-  },
-  unverifiedLearnMore: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    gap: 6,
-  },
-  unverifiedLearnMoreText: {
-    fontSize: 14,
-    color: COLORS.gold,
-    fontWeight: '700',
-  },
-  unverifiedActions: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
-  },
-  unverifiedCancelBtn: {
-    flex: 1,
-    backgroundColor: COLORS.white,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unverifiedCancelBtnText: {
-    color: COLORS.greyDark,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-  unverifiedProceedBtn: {
-    flex: 1,
-    backgroundColor: COLORS.danger,
-    paddingVertical: 14,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  unverifiedProceedBtnText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '700',
-  },
-});
-
-export default BookingScreen;
 </file>
 
 <file path="src/screens/student/FavoritesScreen.tsx">
@@ -27057,6 +24649,395 @@ export default {
   loginWithGoogle,
   logout,
 };
+</file>
+
+<file path="src/types.ts">
+// src/types.ts
+import { BottomTabNavigationProp, BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import { NavigatorScreenParams, RouteProp } from '@react-navigation/native';
+import { NativeStackNavigationProp, NativeStackScreenProps } from '@react-navigation/native-stack';
+
+/* ===========================
+   Domain / Model Types 
+=========================== */
+
+export type Role = 'student' | 'landlord' | 'mover' | 'admin';
+
+export interface Listing {
+  id: string;
+  title: string;
+  description?: string | null;
+  price: number;
+  city: string;
+  address?: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
+  terms_marker?: string | null;
+  media: MediaItem[];
+  rooms?: number | null;
+  avg_rating?: number | null;
+  rating_count?: number | null;
+  available?: boolean | null;
+  boost_until?: string | null;
+  created_at: string;
+  updated_at?: string;
+  landlord_id: string;
+  processing_status?: 'processing' | 'ready' | 'failed';
+  is_verified?: boolean | null;
+  verification_expires_at?: string | null;
+  cite_id?: string | null;
+  listing_type?: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel' | null;
+  stay_type?: 'short_term' | 'long_term' | 'both' | null;
+  price_unit?: 'per_month' | 'per_night' | null;
+}
+
+export interface Landlord {
+  id: string;
+  full_name: string;
+  email: string;
+   momo?: string | null;
+  phone?: string | null;
+  profile_pic?: string | null;
+  created_at: string;
+}
+
+export interface Cite {
+  id: string;
+  landlord_id: string;
+  name: string;
+  address?: string | null;
+  city?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Booking {
+  id: string;
+  listing_id: string;
+  student_id: string;
+  landlord_id: string;
+  status: 'pending' | 'confirmed' | 'cancelled';
+  payment_status: 'pending' | 'completed' | 'failed';
+  amount: number;
+  total_amount?: number | null;
+  start_date: string;
+  end_date: string;
+  created_at: string;
+  updated_at?: string;
+  agreed_to_terms?: boolean;
+  contract_status?: 'draft' | 'signed' | 'enforced' | 'expired' | 'cancelled';
+  agreement_id?: string | null;
+  agreement_hash?: string | null;
+  signature_method?: string | null;
+  signature_text?: string | null;
+  signed_at?: string | null;
+  agreement_device_info?: Record<string, any> | null;
+  terms_version?: string | null;
+  approval_status?: string;
+  duration_type?: string;
+  caution_fee?: number;
+  caution_status?: 'held' | 'refunded' | 'disputed' | 'claimed';
+  entry_media?: MediaItem[];
+  exit_media?: MediaItem[];
+}
+
+export interface Review {
+  id: string;
+  score: number;
+  comment?: string | null;
+  created_at: string;
+  reviewer: {
+    id: string;
+    full_name: string;
+    profile_pic?: string | null;
+  };
+}
+
+export type MediaType = 'image' | 'video';
+
+export interface MediaDBItem {
+  key: string;
+  type: MediaType;
+  thumbKey?: string;
+}
+
+export interface MediaItem {
+  url: string;
+  type: MediaType;
+  thumbUrl?: string;
+  processing_status?: 'processing' | 'ready' | 'failed';
+  mimeType?: string;
+  file?: any;
+}
+
+export interface ListingDetails extends Listing {
+  landlord?: Landlord | null;
+  terms_text?: string | null;
+  ratings: Review[];
+}
+
+export interface ListingSummary {
+  id: string;
+  title: string;
+  price: number;
+  city: string;
+  rooms: number | null;
+  landlord_id: string;
+  image_url: string;
+  avg_rating: number | null;
+  rating_count: number | null;
+  available?: boolean | null;
+  boosted?: boolean;
+  created_at: string;
+  listing_type: 'room' | 'studio' | 'apartment' | 'house' | 'guest_house' | 'hotel';
+  stay_type: 'short_term' | 'long_term' | 'both';
+  price_unit: 'per_night' | 'per_week' | 'per_month' | 'per_stay';
+  processing_status?: 'processing' | 'ready' | 'failed';
+  is_verified?: boolean | null;
+  description?: string | null;
+}
+
+export interface AppNotification {
+  id: string;
+  recipient_id: string;
+  recipient_role: Role;
+  title: string;
+  body: string;
+  type: NotificationType;
+  listing_id?: string | null;
+  booking_id?: string | null;
+  data?: Record<string, any> | null;
+  is_read: boolean;
+  push_sent: boolean;
+  push_sent_at?: string | null;
+  created_at: string;
+}
+
+export type NotificationType =
+  | 'favorite_available'
+  | 'booking_update'
+  | 'rent_reminder'
+  | 'system_announcement'
+  | 'chat_message';
+
+// Support types (used by SupportScreen & supportService)
+export interface Ticket {
+  id: string;
+  user_id: string;
+  status: 'open' | 'closed' | 'pending';
+  priority: 'low' | 'normal' | 'high';
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface Chat {
+  id: string;
+  ticket_id: string;
+  sender_id: string;
+  receiver_id?: string | null;
+  message: string;
+  read: boolean;
+  sender_type: 'user' | 'bot' | 'agent';
+  chat_type?: string;
+  is_complaint?: boolean;
+  is_faq_candidate?: boolean;
+  created_at: string;
+}
+
+export interface FAQ {
+  id: string;
+  question: string;
+  answer?: string | null;
+  created_at?: string;
+}
+
+export interface ListingFilters {
+  search?: string;
+  city?: string;
+  rooms?: number | '5+';
+  minPrice?: number;
+  maxPrice?: number;
+  availableOnly?: boolean;
+  boostedFirst?: boolean;
+  limit?: number;
+  offset?: number;
+  listing_type?: string;
+  stay_type?: string;
+  lat?: number;
+  lng?: number;
+  radius_m?: number;
+}
+
+export interface ChatMessage {
+  id: string;
+  threadId: string;
+  senderId: string;
+  receiverId: string | null;
+  message: string;
+  read: boolean;
+  created_at: string;
+}
+
+export interface ChatMessageDto {
+  id: string;
+  thread_id: string;
+  sender_id: string;
+  receiver_id?: string | null;
+  body: string;
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface ThreadDto {
+  threadId: string;
+  participants: User[];
+  lastMessage: string | null;
+  lastMessageTime: string | null;
+  unreadCount: number;
+}
+
+export interface User {
+  id: string;
+  fullName: string;
+  email: string;
+  role: Role;
+  phone?: string;
+  momo?: string;
+}
+
+/* ===========================
+   Navigation Param Lists
+=========================== */
+
+export type StudentTabParamList = {
+  Home: undefined;
+  Favorites: undefined;
+  Chat: { threadId?: string } | undefined;
+  Bookings: undefined;
+  Profile: undefined;
+};
+
+export type LandlordTabParamList = {
+  Dashboard: undefined;
+  ManageListings: undefined;
+  Chat: { threadId?: string } | undefined;
+  Payments:
+    | {
+        listingId: string;
+        planId: string;
+        durationDays: number;
+        price: number;
+        purpose: string;
+      }
+    | {
+        listingId: string;
+        amount: number;
+        description: string;
+        reason: 'verification';
+      }
+    | undefined;
+  Profile: undefined; 
+};
+
+export type StudentStackParamList = {
+  StudentTabs: NavigatorScreenParams<StudentTabParamList> | undefined;
+  ListingDetails: { listingId: string };
+  BookingScreen: { listingId: string };
+  Payments: {
+    listingId: string;
+    listingType?: string;
+    amount: number;
+    description: string;
+    receiverPhone: string;
+    receiverName: string;
+    bookingId?: string;
+    landlordId?: string;
+    paymentType?: 'initial' | 'rent_completion' | 'renewal';
+    isRenewal?: boolean;
+    reason?: 'rent' | 'boosting' | 'landlord_subscription';
+  };
+  Support: { currentUserId: string };
+  Legal: undefined;
+  ViewBookingsScreen: { fromProfile?: boolean } | undefined;
+  BookingDetails: { bookingId: string };
+  PendingScreen: { bookingId: string };
+  ListingReview: { listing_id: string };
+  ReportUser: undefined;
+  ReportBug: undefined;
+  Notifications: undefined;
+};
+
+export type LandlordStackParamList = {
+  Tabs: NavigatorScreenParams<LandlordTabParamList> | undefined;
+  Bookings: undefined;
+  Notifications: undefined;
+  KYCVerification: undefined;
+  UploadListing: undefined;
+  EditListing: { listingId: string };
+  ListingDetails: { listingId: string };
+  BoostScreen: { listingId: string };
+  ApprovalScreen: { bookingId: string };
+  Legal: undefined;
+  SignIn: undefined;
+  ReportUser: undefined;
+  ReportBug: undefined;
+  Support: { currentUserId: string };
+};
+
+export type AuthStackParamList = {
+  SignIn: undefined;
+  SignUp: undefined;
+  VerifyOtp: {
+    whatsappNumber: string;
+    mode: 'signup' | 'login' | 'reset';
+    fullName?: string;
+    password?: string;
+    role?: 'student' | 'landlord';
+    email?: string;
+    mobileMoney?: string;
+    age?: string;
+    address?: string;
+    language?: 'en' | 'fr' | 'pcm';
+  };
+  ForgotPassword: { email?: string; phone?: string };
+  ResetPassword: { phone: string; mode: 'reset' };
+  EmailVerification: { email: string; mode: 'signup' | 'recovery' };
+  AuthCallback: undefined; // new
+};
+
+export type RootStackParamList = {
+  AuthStack: NavigatorScreenParams<AuthStackParamList> | undefined;
+  StudentStack: NavigatorScreenParams<StudentStackParamList> | undefined;
+  LandlordStack: NavigatorScreenParams<LandlordStackParamList> | undefined;
+  ListingDetails: { listingId: string } | undefined;
+  UpdatePassword: undefined;
+  CompleteProfile: undefined;
+};
+
+/* ===========================
+   Screen & Navigation Props
+=========================== */
+
+export type RootStackScreenProps<T extends keyof RootStackParamList> = NativeStackScreenProps<RootStackParamList, T>;
+export type AuthStackScreenProps<T extends keyof AuthStackParamList> = NativeStackScreenProps<AuthStackParamList, T>;
+export type StudentStackScreenProps<T extends keyof StudentStackParamList> = NativeStackScreenProps<StudentStackParamList, T>;
+export type LandlordStackScreenProps<T extends keyof LandlordStackParamList> = NativeStackScreenProps<LandlordStackParamList, T>;
+export type StudentTabScreenProps<T extends keyof StudentTabParamList> = BottomTabScreenProps<StudentTabParamList, T>;
+export type LandlordTabScreenProps<T extends keyof LandlordTabParamList> = BottomTabScreenProps<LandlordTabParamList, T>;
+
+export type RootNavigationProp = NativeStackNavigationProp<RootStackParamList>;
+export type AuthNavigationProp = NativeStackNavigationProp<AuthStackParamList>;
+export type StudentStackNavigationProp = NativeStackNavigationProp<StudentStackParamList>;
+export type LandlordStackNavigationProp = NativeStackNavigationProp<LandlordStackParamList>;
+export type StudentTabNavigationProp = BottomTabNavigationProp<StudentTabParamList>;
+export type LandlordTabNavigationProp = BottomTabNavigationProp<LandlordTabParamList>;
+
+export type RootRouteProp<T extends keyof RootStackParamList> = RouteProp<RootStackParamList, T>;
+export type AuthRouteProp<T extends keyof AuthStackParamList> = RouteProp<AuthStackParamList, T>;
+export type StudentStackRouteProp<T extends keyof StudentStackParamList> = RouteProp<StudentStackParamList, T>;
+export type LandlordStackRouteProp<T extends keyof LandlordStackParamList> = RouteProp<LandlordStackParamList, T>;
+export type StudentTabRouteProp<T extends keyof StudentTabParamList> = RouteProp<StudentTabParamList, T>;
+export type LandlordTabRouteProp<T extends keyof LandlordTabParamList> = RouteProp<LandlordTabParamList, T>;
 </file>
 
 <file path="src/screens/auth/SignInScreen.tsx">
@@ -29353,6 +27334,2135 @@ const getStyles = (colors: any, isDark: boolean) => StyleSheet.create({
 });
 
 export default ManageListings;
+</file>
+
+<file path="src/screens/landlord/PaymentScreen.tsx">
+import { showAlert } from '../../utils/alert';
+// src/screens/landlord/PaymentsScreen.tsx
+import { useRoute } from '@react-navigation/native';
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import React, { useEffect, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Payment } from '../../services/paymentService';
+import { useAppDispatch, useAppSelector } from '../../store/hooks';
+import { clearInitiateState, fetchPayments, initiateCollection, initiateVerificationPayment, upsertPayment } from '../../store/paymentsSlice';
+import type { RootState } from '../../store/store';
+import { LandlordTabRouteProp } from '../../types';
+import { supabase } from '../../utils/supabaseClient';
+
+const RECEIVER_NAME = 'DHUB';
+
+const PaymentsScreen: React.FC = () => {
+  const { t } = useTranslation();
+  const dispatch = useAppDispatch();
+
+  // Redux state
+  const user = useAppSelector((state: RootState) => state.auth.user);
+  const payments = useAppSelector((state: RootState) => state.payments.history);
+  const { initiating, initiateError, initiateData, fetchingHistory, fetchError } = useAppSelector(
+    (state: RootState) => state.payments
+  );
+
+  const route = useRoute<LandlordTabRouteProp<'Payments'>>();
+  const routeParams = route.params;
+  const isVerificationFlow = routeParams && 'reason' in routeParams && routeParams.reason === 'verification';
+  const boostParams = !isVerificationFlow && routeParams && 'planId' in routeParams ? routeParams : undefined;
+  const verificationParams = isVerificationFlow ? routeParams : undefined;
+
+  const [activeTab, setActiveTab] = useState<'history' | 'send'>('history');
+  const [amount, setAmount] = useState('');
+  const [description, setDescription] = useState('');
+  const [selectedPayment, setSelectedPayment] = useState<Payment | null>(null);
+  const [showReceiptModal, setShowReceiptModal] = useState(false);
+  const [pdfLoading, setPdfLoading] = useState(false);
+
+  // Clear stale thunk state on mount
+  useEffect(() => { dispatch(clearInitiateState()); }, []);
+
+  // FETCH HISTORY & REAL-TIME SYNC
+  useEffect(() => {
+    if (!user?.id) return;
+
+    dispatch(fetchPayments(user.id));
+
+    const channel = supabase
+      .channel(`landlord-payments-${user.id}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "payments",
+          filter: `payer_id=eq.${user.id}`,
+        },
+        (payload: any) => {
+          const row = payload.new as any;
+          if (row) {
+            const mapped: Payment = {
+              id: row.id,
+              transactionId: row.transaction_ref || row.id,
+              amount: parseFloat(row.amount),
+              sender: row.payer_id,
+              receiver: row.payee_id,
+              status: row.status as any,
+              date: row.created_at,
+              description: row.currency ? `${row.currency} Payment` : "Payment",
+            };
+            dispatch(upsertPayment(mapped));
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user?.id]);
+
+  // Prefill if coming from BoostScreen or ListingDetailsScreen (verification)
+  useEffect(() => {
+    if (routeParams && 'reason' in routeParams) {
+      setActiveTab('send');
+      setAmount(String(routeParams.amount));
+      setDescription(routeParams.description);
+      return;
+    }
+    if (boostParams) {
+      setActiveTab('send');
+      setAmount(boostParams.price.toString());
+      setDescription(`Boost Listing: ${boostParams.listingId}`);
+    }
+  }, [boostParams, routeParams]);
+
+  // Success â†’ reset form, switch to history
+  useEffect(() => {
+    if (!initiateData) return;
+    const numAmount = parseFloat(amount);
+    setAmount('');
+    setDescription('');
+    setActiveTab('history');
+    dispatch(clearInitiateState());
+    showAlert(
+      'Payment Initiated âœ…',
+      boostParams
+        ? `Approve the MoMo prompt on your phone to complete the boost.\nYou'll receive a notification once your listing is boosted.`
+        : `${formatCurrency(numAmount)} payment initiated.\nApprove the MoMo prompt on your phone to complete.`,
+    );
+  }, [initiateData]);
+
+  // Failure â†’ show alert
+  useEffect(() => {
+    if (!initiateError) return;
+    showAlert('Payment Failed', initiateError);
+    dispatch(clearInitiateState());
+  }, [initiateError]);
+
+  // ---------- Payment Handler ----------
+  const handleSendPayment = async () => {
+    if (!amount) {
+      showAlert('Validation Error', 'Please enter an amount');
+      return;
+    }
+    const numAmount = parseFloat(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      showAlert('Validation Error', 'Enter a valid amount');
+      return;
+    }
+
+    if (!user?.id) {
+      showAlert('Error', 'User account details missing. Please sign in again.');
+      return;
+    }
+
+    if (verificationParams) {
+      let payerPhone = user.momo || user.phone;
+      if (!payerPhone) {
+        const { data } = await supabase
+          .from('users')
+          .select('momo, phone')
+          .eq('id', user.id)
+          .maybeSingle();
+        payerPhone = data?.momo || data?.phone || '';
+      }
+
+      if (!payerPhone) {
+        showAlert('Error', 'Add a mobile-money number to your profile before paying.');
+        return;
+      }
+
+      dispatch(initiateVerificationPayment({
+        payerPhone,
+        listingId: verificationParams.listingId,
+        payerId: user.id,
+      }));
+      return;
+    }
+
+    if (!user.phone) {
+      showAlert('Error', 'User account details missing. Please sign in again.');
+      return;
+    }
+
+    const reason = boostParams ? 'boosting' : 'landlord_subscription';
+    const planId = boostParams?.planId;
+    const tierId = reason === 'landlord_subscription' ? 'tier_monthly' : undefined;
+
+    dispatch(initiateCollection({
+      payerPhone: user.momo || user.phone,
+      amount: String(numAmount),
+      reason,
+      planId,
+      tierId,
+      client: {
+        name: 'Dhub',
+        id: `col-${Date.now()}`,
+        payer_id: user.id,
+        listing_id: boostParams?.listingId ?? '',
+        plan_id: boostParams?.planId ?? null,   // â† needed by webhook to activate boost
+        idempotency_key: `dhub-col-${Date.now()}`,
+      },
+    }));
+  };
+  const handleViewReceipt = (payment: Payment) => {
+    setSelectedPayment(payment);
+    setShowReceiptModal(true);
+  };
+
+  // ---------- Helpers ----------
+  const formatDate = (dateString: string) =>
+    new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+
+  const formatCurrency = (value: number) =>
+    new Intl.NumberFormat('en-US', { style: 'currency', currency: 'XAF' }).format(value);
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'completed': return '#27AE60';
+      case 'pending': return '#F39C12';
+      case 'failed': return '#E74C3C';
+      default: return '#7F8C8D';
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'completed': return 'Completed';
+      case 'pending': return 'Pending';
+      case 'failed': return 'Failed';
+      default: return status;
+    }
+  };
+
+  const generateQRData = (payment: Payment) =>
+    JSON.stringify({
+      transactionId: payment.transactionId,
+      amount: payment.amount,
+      sender: payment.sender,
+      receiver: payment.receiver,
+      date: payment.date,
+      status: payment.status,
+      description: payment.description,
+    });
+
+  const generatePDF = async (payment: Payment) => {
+    setPdfLoading(true);
+    try {
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+        <title>Receipt - ${payment.transactionId}</title>
+        <style>
+          body{font-family:Arial,sans-serif;margin:40px;color:#2C3E50}
+          .header{text-align:center;color:#D4AF37;border-bottom:2px solid #D4AF37;padding-bottom:20px;margin-bottom:30px}
+          .section{margin-bottom:25px}
+          .section-title{color:#D4AF37;font-size:18px;font-weight:bold;margin-bottom:15px;border-bottom:1px solid #EAECEF;padding-bottom:5px}
+          .row{display:flex;justify-content:space-between;margin-bottom:8px;padding:5px 0}
+          .label{color:#7F8C8D;font-weight:500}
+          .value{color:#2C3E50;font-weight:600;text-align:right}
+          .total-row{border-top:2px solid #EAECEF;padding-top:10px;margin-top:10px;font-weight:bold}
+          .footer{text-align:center;margin-top:40px;color:#7F8C8D;font-size:12px;border-top:1px solid #EAECEF;padding-top:20px}
+        </style></head><body>
+        <div class="header"><h1>{t('screens.payment.dhub_payment_receipt')}</h1><p>Transaction ID: ${payment.transactionId}</p></div>
+        <div class="section">
+          <div class="section-title">{t('screens.payment.transaction_details')}</div>
+          <div class="row"><span class="label">Transaction ID:</span><span class="value">${payment.transactionId}</span></div>
+          <div class="row"><span class="label">Description:</span><span class="value">${payment.description}</span></div>
+          <div class="row"><span class="label">Date:</span><span class="value">${formatDate(payment.date)}</span></div>
+          <div class="row"><span class="label">Status:</span><span class="value">${getStatusText(payment.status)}</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title">{t('screens.payment.amount_details')}</div>
+          <div class="row"><span class="label">Amount:</span><span class="value">${formatCurrency(payment.amount)}</span></div>
+          <div class="row"><span class="label">Fee:</span><span class="value">${formatCurrency(payment.fee || 0)}</span></div>
+          <div class="row total-row"><span class="label">Net Amount:</span><span class="value">${formatCurrency(payment.netAmount || 0)}</span></div>
+        </div>
+        <div class="section">
+          <div class="section-title">{t('screens.payment.parties')}</div>
+          <div class="row"><span class="label">From:</span><span class="value">${payment.sender}</span></div>
+          <div class="row"><span class="label">To:</span><span class="value">${RECEIVER_NAME} (${payment.receiver})</span></div>
+        </div>
+        <div class="footer"><p>Generated by DHUB App on ${new Date().toLocaleDateString()}</p></div>
+        </body></html>`;
+      const { uri } = await Print.printToFileAsync({ html });
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(uri, { mimeType: 'application/pdf', dialogTitle: 'Save Receipt' });
+      } else {
+        showAlert('Saved', `PDF saved to: ${uri}`);
+      }
+    } catch {
+      showAlert('Error', 'Failed to generate PDF');
+    } finally {
+      setPdfLoading(false);
+    }
+  };
+
+  // ---------- Render ----------
+  return (
+    <SafeAreaView style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.headerTitle}>{t('screens.payment.payments')}</Text>
+      </View>
+
+      <View style={styles.tabContainer}>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
+          onPress={() => setActiveTab('history')}
+        >
+          <Text style={[styles.tabText, activeTab === 'history' && styles.activeTabText]}>{t('screens.payment.payment_history')}</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.tab, activeTab === 'send' && styles.activeTab]}
+          onPress={() => setActiveTab('send')}
+        >
+          <Text style={[styles.tabText, activeTab === 'send' && styles.activeTabText]}>{t('screens.payment.send_payment')}</Text>
+        </TouchableOpacity>
+      </View>
+
+      {activeTab === 'history' ? (
+        <ScrollView style={styles.historyContainer}>
+          <View style={styles.historyHeader}>
+            <Text style={styles.sectionTitle}>{t('screens.payment.recent_transactions')}</Text>
+            <TouchableOpacity
+              onPress={() => user?.id && dispatch(fetchPayments(user.id))}
+              disabled={fetchingHistory}
+            >
+              <Text style={[styles.refreshText, fetchingHistory && styles.disabledText]}>
+                {fetchingHistory ? "Refreshing..." : "Refresh"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {fetchingHistory ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color="#D4AF37" />
+              <Text style={styles.loadingText}>{t('screens.payment.loading_history')}</Text>
+            </View>
+          ) : fetchError ? (
+            <View style={styles.errorContainer}>
+              <Text style={styles.errorText}>{fetchError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => user?.id && dispatch(fetchPayments(user.id))}
+              >
+                <Text style={styles.retryButtonText}>{t('screens.payment.retry')}</Text>
+              </TouchableOpacity>
+            </View>
+          ) : payments.length === 0 ? (
+            <Text style={styles.emptyText}>{t('screens.payment.no_payment_history_yet')}</Text>
+          ) : (
+            payments.map((payment: any) => (
+              <TouchableOpacity
+                key={payment.id}
+                style={styles.paymentCard}
+                onPress={() => handleViewReceipt(payment)}
+              >
+                <View style={styles.paymentHeader}>
+                  <Text style={styles.paymentDescription}>{payment.description}</Text>
+                  <Text style={styles.paymentAmount}>{formatCurrency(payment.amount)}</Text>
+                </View>
+                <View style={styles.paymentDetails}>
+                  <Text style={styles.paymentDate}>{formatDate(payment.date)}</Text>
+                  <View style={[styles.statusBadge, { backgroundColor: getStatusColor(payment.status) }]}>
+                    <Text style={styles.statusText}>{getStatusText(payment.status)}</Text>
+                  </View>
+                </View>
+                <View style={styles.paymentFooter}>
+                  <Text style={styles.transactionId}>ID: {payment.transactionId}</Text>
+                </View>
+              </TouchableOpacity>
+            ))
+          )}
+        </ScrollView>
+      ) : (
+        <ScrollView style={styles.sendContainer}>
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Amount (XAF) *</Text>
+            <TextInput
+              style={styles.input}
+              value={amount}
+              onChangeText={setAmount}
+              keyboardType="numeric"
+              editable={!initiating && !verificationParams}
+              placeholder="Enter amount"
+            />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>{t('screens.payment.receiver')}</Text>
+            <TextInput style={[styles.input, styles.disabledInput]} value={RECEIVER_NAME} editable={false} />
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>{t('screens.payment.description')}</Text>
+            <TextInput
+              style={[styles.input, styles.textArea, (boostParams || verificationParams) && styles.disabledInput]}
+              value={boostParams ? 'Boost Listing' : description}
+              onChangeText={setDescription}
+              multiline
+              numberOfLines={3}
+              editable={!boostParams && !verificationParams && !initiating}
+            />
+          </View>
+
+          <TouchableOpacity
+            style={[styles.sendButton, initiating && styles.buttonDisabled]}
+            onPress={handleSendPayment}
+            disabled={initiating}
+          >
+            {initiating
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.sendButtonText}>{t('screens.payment.send_payment')}</Text>
+            }
+          </TouchableOpacity>
+        </ScrollView>
+      )}
+
+      {/* Receipt Modal */}
+      <Modal visible={showReceiptModal} animationType="slide" presentationStyle="pageSheet">
+        <SafeAreaView style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>{t('screens.payment.payment_receipt')}</Text>
+            <TouchableOpacity style={styles.closeButton} onPress={() => setShowReceiptModal(false)}>
+              <Text style={styles.closeButtonText}>Ã—</Text>
+            </TouchableOpacity>
+          </View>
+
+          {selectedPayment && (
+            <ScrollView style={styles.receiptContent}>
+              <View style={styles.qrContainer}>
+                <QRCode value={generateQRData(selectedPayment)} size={200} color="#000" backgroundColor="#fff" />
+                <Text style={styles.qrHelpText}>{t('screens.payment.scan_to_verify_transactio')}</Text>
+              </View>
+
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.transaction_details')}</Text>
+                {[
+                  ['Transaction ID', selectedPayment.transactionId],
+                  ['Description', selectedPayment.description],
+                  ['Date', formatDate(selectedPayment.date)],
+                  ['Status', getStatusText(selectedPayment.status)],
+                ].map(([label, value]) => (
+                  <View key={label} style={styles.receiptRow}>
+                    <Text style={styles.receiptLabel}>{label}:</Text>
+                    <Text style={styles.receiptValue}>{value}</Text>
+                  </View>
+                ))}
+              </View>
+
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.amount_details')}</Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Amount:</Text>
+                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.amount)}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>Fee:</Text>
+                  <Text style={styles.receiptValue}>{formatCurrency(selectedPayment.fee || 0)}</Text>
+                </View>
+                <View style={[styles.receiptRow, styles.totalRow]}>
+                  <Text style={styles.totalLabel}>Net Amount:</Text>
+                  <Text style={styles.totalValue}>{formatCurrency(selectedPayment.netAmount || 0)}</Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptSection}>
+                <Text style={styles.receiptSectionTitle}>{t('screens.payment.parties')}</Text>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>From:</Text>
+                  <Text style={styles.receiptValue}>{selectedPayment.sender}</Text>
+                </View>
+                <View style={styles.receiptRow}>
+                  <Text style={styles.receiptLabel}>To:</Text>
+                  <Text style={styles.receiptValue}>{RECEIVER_NAME}</Text>
+                </View>
+              </View>
+
+              <View style={styles.receiptActions}>
+                <TouchableOpacity
+                  style={[styles.downloadButton, pdfLoading && styles.buttonDisabled]}
+                  onPress={() => generatePDF(selectedPayment)}
+                  disabled={pdfLoading}
+                >
+                  {pdfLoading
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={styles.downloadButtonText}>{t('screens.payment.download_pdf')}</Text>
+                  }
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.closeReceiptButton} onPress={() => setShowReceiptModal(false)}>
+                  <Text style={styles.closeReceiptText}>{t('screens.payment.close')}</Text>
+                </TouchableOpacity>
+              </View>
+            </ScrollView>
+          )}
+        </SafeAreaView>
+      </Modal>
+    </SafeAreaView>
+  );
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#F8F9FA' },
+  header: { backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  headerTitle: { fontSize: 24, fontWeight: 'bold', color: '#D4AF37', textAlign: 'center' },
+  tabContainer: { flexDirection: 'row', backgroundColor: '#FFFFFF', borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  tab: { flex: 1, paddingVertical: 12, alignItems: 'center' },
+  activeTab: { borderBottomWidth: 3, borderBottomColor: '#D4AF37' },
+  tabText: { fontSize: 16, fontWeight: '600', color: '#7F8C8D' },
+  activeTabText: { color: '#D4AF37' },
+  historyContainer: { flex: 1, padding: 20 },
+  sendContainer: { flex: 1, padding: 20 },
+  sectionTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50', marginBottom: 20 },
+  emptyText: { textAlign: 'center', color: '#7F8C8D', marginTop: 40, fontSize: 16 },
+  historyHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  refreshText: { color: '#D4AF37', fontWeight: '600', fontSize: 14 },
+  disabledText: { color: '#BDC3C7' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingVertical: 40 },
+  loadingText: { marginTop: 12, fontSize: 16, color: '#7F8C8D' },
+  errorContainer: { backgroundColor: '#FDEDED', padding: 16, borderRadius: 8, marginTop: 20, borderLeftWidth: 4, borderLeftColor: '#E74C3C' },
+  errorText: { color: '#C0392B', fontSize: 14 },
+  retryButton: { marginTop: 16, backgroundColor: '#D4AF37', paddingHorizontal: 20, paddingVertical: 10, borderRadius: 8, alignSelf: 'center' },
+  retryButtonText: { color: '#FFFFFF', fontWeight: 'bold' },
+  inputGroup: { marginBottom: 16 },
+  disabledInput: { backgroundColor: '#e0e0e0', color: '#7f7f7f' },
+  label: { fontSize: 16, fontWeight: '600', color: '#2C3E50', marginBottom: 8 },
+  input: { backgroundColor: '#fff', borderWidth: 1, borderColor: '#DCDFE4', borderRadius: 8, padding: 12, fontSize: 16, color: '#2C3E50' },
+  textArea: { minHeight: 80, textAlignVertical: 'top' },
+  sendButton: { backgroundColor: '#D4AF37', padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 10 },
+  buttonDisabled: { opacity: 0.6 },
+  sendButtonText: { color: '#fff', fontSize: 16, fontWeight: 'bold' },
+  paymentCard: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 12, shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 3 },
+  paymentHeader: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 },
+  paymentDescription: { fontSize: 16, fontWeight: '600', color: '#2C3E50', flex: 1, marginRight: 10 },
+  paymentAmount: { fontSize: 18, fontWeight: 'bold', color: '#D4AF37' },
+  paymentDetails: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  paymentDate: { fontSize: 14, color: '#7F8C8D' },
+  statusBadge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
+  statusText: { fontSize: 12, fontWeight: '600', color: '#fff' },
+  paymentFooter: { borderTopWidth: 1, borderTopColor: '#EAECEF', paddingTop: 8 },
+  transactionId: { fontSize: 12, color: '#95A5A6', fontFamily: 'monospace' },
+  modalContainer: { flex: 1, backgroundColor: '#F8F9FA' },
+  modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: '#FFFFFF', paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: '#EAECEF' },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#2C3E50' },
+  closeButton: { padding: 4 },
+  closeButtonText: { fontSize: 24, color: '#7F8C8D', fontWeight: 'bold' },
+  receiptContent: { flex: 1, padding: 20 },
+  qrContainer: { alignItems: 'center', marginBottom: 20, backgroundColor: '#FFFFFF', padding: 20, borderRadius: 12 },
+  qrHelpText: { marginTop: 10, fontSize: 14, color: '#7F8C8D', textAlign: 'center' },
+  receiptSection: { backgroundColor: '#FFFFFF', borderRadius: 12, padding: 16, marginBottom: 16 },
+  receiptSectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37', marginBottom: 12, borderBottomWidth: 1, borderBottomColor: '#EAECEF', paddingBottom: 8 },
+  receiptRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 5 },
+  receiptLabel: { fontSize: 14, color: '#7F8C8D', fontWeight: '500' },
+  receiptValue: { fontSize: 14, color: '#2C3E50', fontWeight: '600', flex: 1, textAlign: 'right' },
+  totalRow: { borderTopWidth: 2, borderTopColor: '#EAECEF', paddingTop: 10, marginTop: 4 },
+  totalLabel: { fontSize: 16, fontWeight: 'bold', color: '#2C3E50' },
+  totalValue: { fontSize: 16, fontWeight: 'bold', color: '#D4AF37' },
+  receiptActions: { flexDirection: 'row', gap: 12, marginBottom: 30 },
+  downloadButton: { flex: 1, backgroundColor: '#D4AF37', padding: 14, borderRadius: 8, alignItems: 'center' },
+  downloadButtonText: { color: '#fff', fontSize: 14, fontWeight: 'bold' },
+  closeReceiptButton: { flex: 1, backgroundColor: '#FFFFFF', padding: 14, borderRadius: 8, alignItems: 'center', borderWidth: 1, borderColor: '#DCDFE4' },
+  closeReceiptText: { color: '#2C3E50', fontSize: 14, fontWeight: 'bold' },
+});
+
+export default PaymentsScreen;
+</file>
+
+<file path="src/screens/student/BookingScreen.tsx">
+import { showAlert } from '../../utils/alert';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, useRoute } from '@react-navigation/native';
+import * as Device from 'expo-device'; // ✅ Added missing import
+import * as Print from 'expo-print';
+import * as Sharing from 'expo-sharing';
+import { sha256 } from 'js-sha256';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { ActivityIndicator, Keyboard, KeyboardAvoidingView, Modal, Platform, ScrollView, StatusBar, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import QRCode from 'react-native-qrcode-svg';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import uuid from 'react-native-uuid';
+import DateTimePicker from '../../components/DateTimePicker';
+import { useTheme } from '../../context/ThemeContext';
+import { useAuth } from '../../hooks/useAuth';
+import { triggerPushNotifications } from '../../hooks/usePushNotifications';
+import { ListingDetails, StudentStackNavigationProp, StudentStackRouteProp } from '../../types';
+import { generateBookingPDFHTML } from '../../utils/generateBookingPDF';
+import { supabase } from '../../utils/supabaseClient';
+
+const BookingScreen: React.FC = () => {
+  const { t } = useTranslation();
+  const navigation = useNavigation<StudentStackNavigationProp>();
+  const route = useRoute<StudentStackRouteProp<'BookingScreen'>>();
+  const { user } = useAuth();
+  const { colors: themeColors, isDark } = useTheme();
+  const { listingId } = route.params;
+
+  const COLORS = useMemo(() => ({
+    gold: themeColors.primary,
+    goldLight: isDark ? '#2D2510' : '#F5E7C8',
+    goldDark: themeColors.primary,
+    white: themeColors.card,
+    offWhite: isDark ? '#1A1A1A' : '#F8F9FA',
+    greyDark: themeColors.text,
+    greyMedium: themeColors.textSecondary,
+    greyLight: isDark ? '#2A2A2A' : '#ECF0F1',
+    border: themeColors.border,
+    shadow: '#000000',
+    success: themeColors.success,
+    danger: themeColors.error,
+    yearly: '#8E44AD',
+    yearlyLight: isDark ? '#2f1f4a' : '#F5EEF8',
+  }), [themeColors, isDark]);
+
+  const styles = useMemo(() => getStyles(COLORS), [COLORS]);
+
+  const [listing, setListing] = useState<ListingDetails | null>(null);
+  const [terms, setTerms] = useState('');
+  const [signatureAccepted, setSignatureAccepted] = useState(false);
+  const [signatureText, setSignatureText] = useState('');
+  const [agreementId, setAgreementId] = useState<string | null>(null);
+  const [agreementHash, setAgreementHash] = useState<string | null>(null);
+  const [signedAt, setSignedAt] = useState<string | null>(null);
+  const [signatureError, setSignatureError] = useState<string | null>(null);
+  const [deviceInfo, setDeviceInfo] = useState<Record<string, string | number> | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [showFeeModal, setShowFeeModal] = useState(false);
+  const [showSignatureModal, setShowSignatureModal] = useState(false);
+  const [showContractModal, setShowContractModal] = useState(false);
+  const [showUnverifiedModal, setShowUnverifiedModal] = useState(false);
+
+  const [startDate, setStartDate] = useState<Date>(new Date());
+  const [endDate, setEndDate] = useState<Date>(new Date());
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [showEndPicker, setShowEndPicker] = useState(false);
+
+  // ── Fetch listing ────────────────────────────────────────────────────────────
+  useEffect(() => {
+    const fetchListing = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('listings')
+          .select(`
+            *,
+            landlord:users(id, full_name, phone, email)
+          `)
+          .eq('id', listingId)
+          .single();
+
+        if (error || !data) throw error;
+
+        setListing(data as ListingDetails);
+        setTerms(data.terms_text || '');
+      } catch (err) {
+        console.error('[BookingScreen] fetchListing error:', err);
+        showAlert(t('common.error'), t('booking.not_found'));
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchListing();
+  }, [listingId]);
+
+  useEffect(() => {
+    setDeviceInfo({
+      platform: Device.osName || Platform.OS,
+      osVersion: Device.osVersion || '',
+      modelName: Device.modelName || '',
+      manufacturer: Device.manufacturer || '',
+      brand: (Device as any).brand || '',
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!signatureAccepted) return;
+    setSignatureAccepted(false);
+    setAgreementId(null);
+    setAgreementHash(null);
+    setSignedAt(null);
+    setSignatureText('');
+    setSignatureError(null);
+  }, [startDate, endDate, listing?.price, listing?.terms_marker, terms]);
+
+  const computeTermsVersion = () => {
+    if (!listing) return '';
+    return listing.terms_marker || sha256(listing.terms_text || 'standard_terms');
+  };
+
+  const getContractText = () => {
+    if (!listing) return '';
+    const landlordName = listing.landlord?.full_name || t('booking.landlord_placeholder');
+    const studentName = user?.fullName || t('booking.student_placeholder');
+    const start = startDate.toLocaleDateString(t('common.date_locale'), {
+      day: '2-digit', month: 'long', year: 'numeric',
+    });
+    const end = endDate.toLocaleDateString(t('common.date_locale'), {
+      day: '2-digit', month: 'long', year: 'numeric',
+    });
+    const termsVersion = computeTermsVersion() || 'N/A';
+    const listingTerms = listing.terms_text?.trim()
+      ? `${t('booking.terms_title')}\n\n${listing.terms_text.trim()}`
+      : `${t('booking.terms_title')}\n\n${t('booking.default_terms_template')}`;
+
+    const rentAmountText = totals
+      ? `${t('listing.fcfa')} ${totals.rentAmount.toLocaleString()}`
+      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'} per month`;
+    const cautionFeeText = totals
+      ? `${t('listing.fcfa')} ${totals.cautionFee.toLocaleString()}`
+      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'}`;
+    const totalText = totals
+      ? `${t('listing.fcfa')} ${totals.total.toLocaleString()}`
+      : t('booking.no_terms');
+
+    return [
+      listingTerms,
+      `${t('booking.contract_title')}`,
+      `${t('booking.contract_intro', { studentName, landlordName, listingTitle: listing.title })}`,
+      `${t('booking.contract_amount', { rentAmount: rentAmountText, cautionFee: cautionFeeText, total: totalText })}`,
+      t('booking.contract_escrow'),
+      t('booking.contract_enforceability'),
+      t('booking.contract_terms_version', { version: termsVersion }),
+      t('booking.contract_expiration', { start, end }),
+      t('booking.contract_signature_clause'),
+    ].join('\n\n');
+  };
+
+  const renderContractText = () => {
+    if (!listing) return null;
+
+    const landlordName = listing.landlord?.full_name || t('booking.landlord_placeholder');
+    const studentName = user?.fullName || t('booking.student_placeholder');
+    const rentAmountText = totals
+      ? `${t('listing.fcfa')} ${totals.rentAmount.toLocaleString()}`
+      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'} per month`;
+    const cautionFeeText = totals
+      ? `${t('listing.fcfa')} ${totals.cautionFee.toLocaleString()}`
+      : `${t('listing.fcfa')} ${listing.price?.toLocaleString() || 'TBD'}`;
+    const totalText = totals
+      ? `${t('listing.fcfa')} ${totals.total.toLocaleString()}`
+      : t('booking.no_terms');
+    const listingTerms = listing.terms_text?.trim()
+      ? `${t('booking.terms_title')}
+
+${listing.terms_text.trim()}`
+      : `${t('booking.terms_title')}
+
+${t('booking.default_terms_template')}`;
+
+    return (
+      <View>
+        <Text style={[styles.contractModalTextBold, { fontSize: 18 }]}>{t('booking.contract_title')}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_intro', {
+          studentName,
+          landlordName,
+          listingTitle: listing.title,
+        })}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_amount', {
+          rentAmount: rentAmountText,
+          cautionFee: cautionFeeText,
+          total: totalText,
+        })}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_escrow')}</Text>
+        <Text style={[styles.contractModalText, styles.contractModalTextBold, { marginTop: 16 }]}>
+          {t('booking.contract_enforceability')}
+        </Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_terms_version', {
+          version: computeTermsVersion() || 'N/A',
+        })}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_expiration', {
+          start: startDate.toLocaleDateString(t('common.date_locale'), {
+            day: '2-digit', month: 'long', year: 'numeric',
+          }),
+          end: endDate.toLocaleDateString(t('common.date_locale'), {
+            day: '2-digit', month: 'long', year: 'numeric',
+          }),
+        })}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 16 }]}>{t('booking.contract_signature_clause')}</Text>
+        <Text style={[styles.contractModalText, { marginTop: 20 }]}>{listingTerms}</Text>
+      </View>
+    );
+  };
+
+  const handleSignAgreement = () => {
+    Keyboard.dismiss();
+
+    const trimmedSignature = signatureText.trim();
+
+    if (!trimmedSignature) {
+      setSignatureError(t('booking.signature_error'));
+      return;
+    }
+    if (endDate.getTime() <= startDate.getTime()) {
+      setSignatureError(t('booking.invalid_dates_msg'));
+      return;
+    }
+    if (!listing || !user?.id || !totals) {
+      setSignatureError(t('booking.signature_required_msg'));
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const agreementIdValue = (uuid.v4() as string).toUpperCase();
+    const payload = {
+      agreementId: agreementIdValue,
+      studentId: user.id,
+      landlordId: listing.landlord?.id || '',
+      listingId: listing.id,
+      totalAmount: totals.total,
+      rentAmount: totals.rentAmount,
+      cautionFee: totals.cautionFee,
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      termsVersion: computeTermsVersion(),
+      signedAt: now,
+      signatureText: trimmedSignature,
+      deviceInfo,
+    };
+
+    setAgreementId(agreementIdValue);
+    setAgreementHash(sha256(JSON.stringify(payload)));
+    setSignedAt(now);
+    setSignatureText(trimmedSignature);
+    setSignatureAccepted(true);
+    setSignatureError(null);
+    setShowSignatureModal(false);
+  };
+
+  // ── Compute total amount ─────────────────────────────────────────────────────
+  const computeTotal = () => {
+    if (!listing) return null;
+    const msDiff = endDate.getTime() - startDate.getTime();
+    if (msDiff <= 0) return null;
+
+    const priceUnit = (listing as any).price_unit ?? 'per_month';
+
+    if (priceUnit === 'per_night') {
+      // Daily billing: calculate number of nights
+      const nights = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24)));
+      const rentAmount = listing.price * nights;
+      // Caution fee = 10% of total rent for short/daily stays
+      const cautionFee = Math.round(rentAmount * 0.1);
+      return { rentAmount, cautionFee, total: rentAmount + cautionFee, durationType: 'daily', nights };
+    } else {
+      // Monthly billing
+      const monthsDiff = Math.max(1, Math.ceil(msDiff / (1000 * 60 * 60 * 24 * 30)));
+      const calculatedDurationType = monthsDiff >= 12 ? 'yearly' : 'monthly';
+
+      let rentAmount = listing.price * monthsDiff;
+      if (calculatedDurationType === 'yearly') rentAmount = Math.round(rentAmount * 0.9);
+
+      // Caution fee = 1 month of rent (escrow), which is ~10% for yearly
+      const cautionFee = listing.price;
+      return { rentAmount, cautionFee, total: rentAmount + cautionFee, durationType: calculatedDurationType };
+    }
+  };
+
+  const totals = computeTotal();
+
+  // ── PDF download – NEW VERSION using helper ──────────────────────────────
+const handleDownloadPDF = async () => {
+  if (!listing || !totals) return;
+  setPdfLoading(true);
+
+  try {
+    const html = await generateBookingPDFHTML({
+      listing,
+      user,
+      startDate,
+      endDate,
+      totals,
+      agreementId,
+      agreementHash,
+      signedAt,
+      signatureText,
+    });
+
+    if (Platform.OS === 'web') {
+      // Use setTimeout to avoid blocking the parent tab
+      setTimeout(() => {
+        const win = window.open('', '_blank');
+        if (win) {
+          win.document.write(html);
+          win.document.close();
+          win.focus();
+          win.print();
+        } else {
+          showAlert('Error', 'Unable to open print dialog. Please allow popups.');
+        }
+        setPdfLoading(false);
+      }, 100);
+      return;
+    }
+
+    // Native
+    const { uri } = await Print.printToFileAsync({ html });
+    if (await Sharing.isAvailableAsync()) {
+      await Sharing.shareAsync(uri, {
+        mimeType: 'application/pdf',
+        dialogTitle: t('booking.download_pdf'),
+      });
+    } else {
+      showAlert(t('common.success'), `${t('common.success')}: ${uri}`);
+    }
+  } catch (err) {
+    console.error('[BookingScreen] PDF error:', err);
+    showAlert(t('common.error'), t('booking.failed'));
+  } finally {
+    setPdfLoading(false);
+  }
+};
+
+  // ── Create booking ───────────────────────────────────────────────────────────
+  const performBooking = async () => {
+    setSubmitting(true);
+    try {
+      const { total, rentAmount, cautionFee, durationType: currentDurationType } = totals!;
+      const termsVersion = computeTermsVersion();
+
+      const bookingPayload = {
+        listing_id: listing!.id,
+        student_id: user!.id,
+        landlord_id: listing!.landlord!.id,
+        amount: rentAmount,
+        total_amount: total,
+        start_date: startDate.toISOString().split('T')[0],
+        end_date: endDate.toISOString().split('T')[0],
+        status: 'pending',
+        approval_status: 'pending',
+        payment_status: 'pending',
+        contract_status: 'signed',
+        duration_type: currentDurationType,
+        caution_fee: cautionFee,
+        caution_status: 'held',
+        agreement_id: agreementId,
+        agreement_hash: agreementHash,
+        signature_method: 'typed_name',
+        signature_text: signatureText.trim(),
+        signed_at: signedAt,
+        agreement_device_info: deviceInfo || {},
+        terms_version: termsVersion,
+        agreed_to_terms: true,
+      };
+
+      console.log('[BookingScreen] Inserting booking payload:', JSON.stringify(bookingPayload, null, 2));
+
+
+      // -- Guard 1: Confirmed booking block --
+      const { data: confirmedCheck } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('listing_id', listing!.id)
+        .eq('status', 'confirmed')
+        .maybeSingle();
+      if (confirmedCheck) {
+        showAlert('Already Booked', 'This property has already been booked.');
+        setSubmitting(false);
+        return;
+      }
+
+      // -- Guard 2: 15-minute escrow lock --
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data: pendingCheck } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('listing_id', listing!.id)
+        .eq('status', 'pending')
+        .neq('student_id', user!.id)
+        .gte('created_at', fifteenMinutesAgo)
+        .maybeSingle();
+      if (pendingCheck) {
+        showAlert('Booking In Progress', 'Someone else is currently booking this property. Please try again in 15 minutes.');
+        setSubmitting(false);
+        return;
+      }
+
+      const { data: booking, error } = await supabase
+        .from('bookings')
+        .insert(bookingPayload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('[BookingScreen] Insert error:', JSON.stringify(error, null, 2));
+        const errorText = `${error.message || ''} ${error.details || ''} ${error.hint || ''}`;
+        const isMissingCautionColumn = error.code === 'PGRST204' ||
+          (/column|schema cache|could not find/i.test(errorText) && /caution_fee|caution_status/i.test(errorText));
+        if (isMissingCautionColumn) {
+          console.warn('[BookingScreen] Retrying without caution columns (migration pending)');
+          const fallbackPayload = { ...bookingPayload };
+          delete (fallbackPayload as any).caution_fee;
+          delete (fallbackPayload as any).caution_status;
+          const { data: bookingFallback, error: fallbackError } = await supabase
+            .from('bookings')
+            .insert(fallbackPayload)
+            .select()
+            .single();
+          if (fallbackError) {
+            console.error('[BookingScreen] Fallback insert error:', fallbackError);
+            throw fallbackError;
+          }
+          if (!bookingFallback) throw new Error('Booking was not returned after insert (fallback)');
+          console.log('[BookingScreen] Fallback booking created:', bookingFallback.id);
+          triggerPushNotifications();
+          navigation.navigate('PendingScreen', { bookingId: bookingFallback.id });
+          return;
+        }
+        throw error;
+      }
+
+      if (!booking) throw new Error('Booking was not returned after insert.');
+      console.log('[BookingScreen] Booking created successfully:', booking.id);
+      triggerPushNotifications();
+      navigation.navigate('PendingScreen', { bookingId: booking.id });
+    } catch (err: any) {
+      console.error('[BookingScreen] createBooking error:', err);
+      if (err?.code === '23505') {
+        const { data: existing } = await supabase
+          .from('bookings')
+          .select('id')
+          .eq('listing_id', listing!.id)
+          .eq('student_id', user!.id)
+          .in('status', ['pending', 'confirmed'])
+          .maybeSingle();
+        if (existing) {
+          console.log('[BookingScreen] Existing booking found, navigating:', existing.id);
+          navigation.replace('PendingScreen', { bookingId: existing.id });
+          return;
+        }
+      }
+      const details = err?.message ? `\n\n${err.message}` : '';
+      showAlert(t('booking.failed'), `${t('booking.failed_msg')}${details}`);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleCreateBooking = async () => {
+    console.log('[BookingScreen] handleCreateBooking called');
+    if (!signatureAccepted || !agreementId || !agreementHash) {
+      console.warn('[BookingScreen] Missing signature or agreement');
+      showAlert(t('booking.signature_required_title'), t('booking.signature_required_msg'));
+      return;
+    }
+    if (!listing || !user?.id) {
+      console.warn('[BookingScreen] Missing listing or user');
+      showAlert(t('common.error'), t('booking.not_found'));
+      return;
+    }
+    if (!listing.landlord) {
+      console.warn('[BookingScreen] Missing landlord');
+      showAlert(t('common.error'), t('booking.not_found'));
+      return;
+    }
+    if (!totals) {
+      console.warn('[BookingScreen] Missing totals');
+      showAlert(t('common.error'), t('booking.invalid_dates_msg'));
+      return;
+    }
+
+    if (!listing.is_verified) {
+      console.log('[BookingScreen] Unverified listing, showing modal');
+      setShowUnverifiedModal(true);
+      return;
+    }
+
+    console.log('[BookingScreen] Verified listing, proceeding to create booking');
+    await performBooking();
+  };
+
+  // ── Loading state ─────────────────────────────────────────────────────────────
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={COLORS.gold} />
+          <Text style={styles.loadingText}>{t('booking.loading')}</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (!listing) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.centered}>
+          <Ionicons name="alert-circle-outline" size={64} color={COLORS.greyMedium} />
+          <Text style={styles.errorTitle}>{t('booking.not_found')}</Text>
+          <TouchableOpacity style={styles.outlineButton} onPress={() => navigation.goBack()}>
+            <Ionicons name="arrow-back" size={18} color={COLORS.gold} />
+            <Text style={styles.outlineButtonText}>{t('common.back')}</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  return (
+    <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={COLORS.white} />
+
+      {/* ── Header ── */}
+      <View style={styles.header}>
+        <TouchableOpacity style={styles.headerBtn} onPress={() => navigation.goBack()}>
+          <Ionicons name="arrow-back" size={24} color={COLORS.greyDark} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('booking.title')}</Text>
+        <View style={styles.headerBtn} />
+      </View>
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* ── Property summary card ── */}
+        <View style={styles.propertyCard}>
+          <View style={styles.propertyCardTop}>
+            <View style={styles.propertyIcon}>
+              <Ionicons name="home" size={28} color={COLORS.gold} />
+            </View>
+            <View style={styles.propertyInfo}>
+              <Text style={styles.propertyTitle} numberOfLines={2}>{listing.title}</Text>
+              {listing.city && (
+                <View style={styles.propertyMeta}>
+                  <Ionicons name="location-outline" size={13} color={COLORS.greyMedium} />
+                  <Text style={styles.propertyMetaText}>{listing.city}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+          <View style={styles.propertyDivider} />
+          <View style={styles.propertyFooter}>
+            <View>
+              <Text style={styles.priceLabel}>{t('booking.base_price')}</Text>
+              <Text style={styles.priceValue}>{t('listing.fcfa')} {listing.price.toLocaleString()}</Text>
+            </View>
+            {listing.landlord?.full_name && (
+              <View style={styles.landlordPill}>
+                <Ionicons name="person-outline" size={13} color={COLORS.goldDark} />
+                <Text style={styles.landlordPillText}>{listing.landlord.full_name}</Text>
+              </View>
+            )}
+          </View>
+        </View>
+
+
+        {/* ── Date selectors ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="swap-horizontal-outline" size={20} color={COLORS.gold} />
+            <Text style={styles.cardTitle}>{t('booking.select_dates')}</Text>
+          </View>
+
+          <View style={styles.dateRow}>
+            {/* Start Date block */}
+            <TouchableOpacity
+              style={styles.dateBlock}
+              onPress={() => setShowStartPicker(true)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.dateBlockIconWrap}>
+                <Ionicons name="log-in-outline" size={22} color={COLORS.gold} />
+              </View>
+              <Text style={styles.dateBlockLabel}>{t('booking.move_in')}</Text>
+              <Text style={styles.dateBlockDay}>
+                {startDate.toLocaleDateString(t('common.date_locale'), { day: '2-digit', month: 'short' })}
+              </Text>
+              <Text style={styles.dateBlockYear}>{startDate.getFullYear()}</Text>
+              <View style={styles.dateBlockTapHint}>
+                <Ionicons name="pencil-outline" size={12} color={COLORS.greyMedium} />
+                <Text style={styles.dateBlockTapHintText}>{t('booking.tap_to_change')}</Text>
+              </View>
+            </TouchableOpacity>
+
+            {/* Arrow */}
+            <View style={styles.dateArrow}>
+              <Ionicons name="arrow-forward" size={20} color={COLORS.greyLight} />
+            </View>
+
+            {/* End Date block */}
+            <TouchableOpacity
+              style={styles.dateBlock}
+              onPress={() => setShowEndPicker(true)}
+              activeOpacity={0.75}
+            >
+              <View style={styles.dateBlockIconWrap}>
+                <Ionicons name="log-out-outline" size={22} color={COLORS.gold} />
+              </View>
+              <Text style={styles.dateBlockLabel}>{t('booking.move_out')}</Text>
+              <Text style={styles.dateBlockDay}>
+                {endDate.toLocaleDateString(t('common.date_locale'), { day: '2-digit', month: 'short' })}
+              </Text>
+              <Text style={styles.dateBlockYear}>{endDate.getFullYear()}</Text>
+              <View style={styles.dateBlockTapHint}>
+                <Ionicons name="pencil-outline" size={12} color={COLORS.greyMedium} />
+                <Text style={styles.dateBlockTapHintText}>{t('booking.tap_to_change')}</Text>
+              </View>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Date pickers (native) */}
+        {showStartPicker && (
+          <DateTimePicker
+            value={startDate}
+            mode="date"
+            display="default"
+            minimumDate={new Date()}
+            onChange={(_, date) => {
+              setShowStartPicker(false);
+              if (date) setStartDate(date);
+            }}
+          />
+        )}
+        {showEndPicker && (
+          <DateTimePicker
+            value={endDate}
+            mode="date"
+            display="default"
+            minimumDate={startDate}
+            onChange={(_, date) => {
+              setShowEndPicker(false);
+              if (date) setEndDate(date);
+            }}
+          />
+        )}
+
+        {/* ── Estimated total ── */}
+        {totals !== null && (
+          <>
+            <View style={styles.totalCard}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.totalLabel}>{t('booking.estimated_total')}</Text>
+                {totals.durationType === 'yearly' && (
+                  <Text style={styles.discountNote}>{t('booking.yearly_discount_applied')}</Text>
+                )}
+                <Text style={{ fontSize: 13, color: COLORS.goldDark, marginTop: 4 }}>
+                  Rent: {totals.rentAmount.toLocaleString()} + Escrow: {totals.cautionFee.toLocaleString()}
+                </Text>
+              </View>
+              <Text style={styles.totalAmount}>{t('listing.fcfa')} {totals.total.toLocaleString()}</Text>
+            </View>
+
+            <TouchableOpacity
+              style={styles.feeInfoButton}
+              onPress={() => setShowFeeModal(true)}
+              activeOpacity={0.78}
+            >
+              <View>
+                <Text style={styles.feeInfoQuestion}>
+                  {t('booking.fee_info_button', {
+                    amount: `${t('listing.fcfa')} ${totals.total.toLocaleString()}`,
+                  })}
+                </Text>
+              </View>
+              <Ionicons name="information-circle-outline" size={20} color={COLORS.goldDark} />
+            </TouchableOpacity>
+          </>
+        )}
+
+        {/* ── Terms & Conditions ── */}
+        <View style={styles.card}>
+          <View style={styles.cardHeader}>
+            <Ionicons name="document-text-outline" size={20} color={COLORS.gold} />
+            <Text style={styles.cardTitle}>{t('booking.terms_title')}</Text>
+          </View>
+
+          <ScrollView
+            style={styles.termsBox}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator={false}
+          >
+            <Text style={styles.termsText}>
+              {terms || t('booking.no_terms')}
+            </Text>
+          </ScrollView>
+
+          <TouchableOpacity
+            style={styles.viewContractButton}
+            onPress={() => setShowContractModal(true)}
+            activeOpacity={0.85}
+          >
+            <Text style={styles.viewContractButtonText}>{t('booking.view_agreement')}</Text>
+          </TouchableOpacity>
+
+          {/* ── Download PDF button ── */}
+          <TouchableOpacity
+            style={[styles.pdfButton, pdfLoading && styles.pdfButtonLoading]}
+            onPress={handleDownloadPDF}
+            disabled={pdfLoading}
+            activeOpacity={0.8}
+          >
+            {pdfLoading ? (
+              <ActivityIndicator color={COLORS.gold} />
+            ) : (
+              <>
+                <View style={styles.pdfIconCircle}>
+                  <Ionicons name="download-outline" size={22} color={COLORS.white} />
+                </View>
+                <View style={styles.pdfButtonContent}>
+                  <Text style={styles.pdfButtonTitle}>{t('booking.download_pdf')}</Text>
+                  <Text style={styles.pdfButtonSub}>{t('booking.save_pdf_sub')}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={COLORS.gold} />
+              </>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.signatureCard}
+            onPress={() => setShowSignatureModal(true)}
+            activeOpacity={0.85}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={styles.signatureCardTitle}>
+                {signatureAccepted ? t('booking.signature_summary_title') : t('booking.sign_agreement')}
+              </Text>
+              <Text style={styles.signatureCardText}>
+                {signatureAccepted
+                  ? t('booking.signature_summary_sub', { date: signedAt ? new Date(signedAt).toLocaleString() : '' })
+                  : t('booking.signature_prompt')}
+              </Text>
+            </View>
+            <Ionicons
+              name={signatureAccepted ? 'checkmark-circle' : 'pencil-outline'}
+              size={22}
+              color={signatureAccepted ? COLORS.success : COLORS.goldDark}
+            />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.bottomSpacer} />
+      </ScrollView>
+
+      {/* ─── Modals ────────────────────────────────────────────────────────── */}
+      {/* Contract Modal */}
+      <Modal
+        visible={showContractModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowContractModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowContractModal(false)} />
+          <View style={styles.contractModalContentWrapper}>
+            <View style={styles.contractModalContent}>
+              <View style={styles.contractModalHeader}>
+                <Text style={styles.contractModalTitle} numberOfLines={2}>
+                  {t('booking.contract_view_title')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalCloseIcon}
+                  onPress={() => setShowContractModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={20} color={COLORS.greyDark} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                style={styles.contractModalScroll}
+                contentContainerStyle={styles.contractModalScrollContent}
+                showsVerticalScrollIndicator
+              >
+                {renderContractText()}
+              </ScrollView>
+              <View style={styles.contractModalFooter}>
+                <TouchableOpacity
+                  style={[styles.modalCloseButton, styles.modalFooterButton]}
+                  onPress={() => setShowContractModal(false)}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Fee Info Modal */}
+      <Modal
+        visible={showFeeModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFeeModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowFeeModal(false)} />
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>
+              {t('booking.fee_info_title', {
+                amount: `${t('listing.fcfa')} ${totals?.total.toLocaleString()}`,
+              })}
+            </Text>
+            <Text style={styles.modalDescription}>
+              {t('booking.fee_info_description', {
+                landlordName: listing.landlord?.full_name || t('booking.landlord_placeholder'),
+                rentAmount: `${t('listing.fcfa')} ${totals?.rentAmount.toLocaleString()}`,
+                cautionFee: `${t('listing.fcfa')} ${totals?.cautionFee.toLocaleString()}`,
+              })}
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={styles.learnMoreButton}
+                onPress={() => {
+                  setShowFeeModal(false);
+                  navigation.navigate('Legal');
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.learnMoreButtonText}>{t('booking.learn_more')}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.modalCloseButton}
+                onPress={() => setShowFeeModal(false)}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.modalCloseButtonText}>{t('common.cancel')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Signature Modal */}
+      <Modal
+        visible={showSignatureModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowSignatureModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity style={styles.modalDismissArea} onPress={() => setShowSignatureModal(false)} />
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 70 : 50}
+            style={styles.modalContentWrapper}
+          >
+            <View style={[styles.modalContent, styles.signatureModalContent]}>
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, styles.modalHeaderTitle]} numberOfLines={2}>
+                  {signatureAccepted ? t('booking.signature_review_title') : t('booking.signature_prompt_title')}
+                </Text>
+                <TouchableOpacity
+                  style={styles.modalCloseIcon}
+                  onPress={() => setShowSignatureModal(false)}
+                  activeOpacity={0.7}
+                >
+                  <Ionicons name="close" size={20} color={COLORS.greyDark} />
+                </TouchableOpacity>
+              </View>
+              <ScrollView
+                style={styles.signatureModalScroll}
+                contentContainerStyle={styles.signatureModalBody}
+                keyboardShouldPersistTaps="handled"
+                keyboardDismissMode="on-drag"
+                showsVerticalScrollIndicator={false}
+              >
+                <Text style={styles.modalDescription}>
+                  {signatureAccepted
+                    ? t('booking.signature_review_description')
+                    : t('booking.signature_description')}
+                </Text>
+
+                {!signatureAccepted ? (
+                  <>
+                    <TextInput
+                      style={styles.signatureInput}
+                      multiline
+                      numberOfLines={3}
+                      placeholder={t('booking.signature_placeholder')}
+                      value={signatureText}
+                      onChangeText={(value) => {
+                        setSignatureText(value);
+                        if (signatureError) setSignatureError(null);
+                      }}
+                      placeholderTextColor={COLORS.greyMedium}
+                      textAlignVertical="top"
+                      returnKeyType="done"
+                      blurOnSubmit
+                    />
+                    {signatureError ? <Text style={styles.signatureError}>{signatureError}</Text> : null}
+                  </>
+                ) : (
+                  <View style={styles.signatureSummary}>
+                    <View style={styles.signatureDetailRow}>
+                      <Text style={styles.signatureDetailLabel}>{t('booking.agreement_id_label')}</Text>
+                      <Text selectable style={styles.signatureDetailValue}>{agreementId}</Text>
+                    </View>
+                    <View style={styles.signatureDetailRow}>
+                      <Text style={styles.signatureDetailLabel}>{t('booking.signed_at_label')}</Text>
+                      <Text style={styles.signatureDetailValue}>{signedAt ? new Date(signedAt).toLocaleString() : ''}</Text>
+                    </View>
+                    <View style={styles.signatureDetailRow}>
+                      <Text style={styles.signatureDetailLabel}>{t('booking.signature_method_label')}</Text>
+                      <Text style={styles.signatureDetailValue}>{t('booking.signature_method_typed')}</Text>
+                    </View>
+                    {agreementId ? (
+                      <View style={styles.qrContainer}>
+                        <QRCode value={`DHUB-AGREEMENT:${agreementId}`} size={112} />
+                        <Text style={styles.qrLabel}>{t('booking.qr_code_label')}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                )}
+              </ScrollView>
+              <View style={styles.signatureModalFooter}>
+                {!signatureAccepted ? (
+                  <>
+                    <TouchableOpacity
+                      style={[styles.learnMoreButton, styles.signaturePrimaryButton]}
+                      onPress={handleSignAgreement}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.learnMoreButtonText}>{t('booking.sign_now')}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalCloseButton, styles.signatureSecondaryButton]}
+                      onPress={() => setShowSignatureModal(false)}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
+                    </TouchableOpacity>
+                  </>
+                ) : (
+                  <TouchableOpacity
+                    style={[styles.modalCloseButton, styles.modalFooterButton]}
+                    onPress={() => setShowSignatureModal(false)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.modalCloseButtonText}>{t('common.close')}</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+
+      {/* ── Polished Unverified Listing Modal ── */}
+      <Modal
+        visible={showUnverifiedModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowUnverifiedModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.unverifiedModalContent}>
+            <View style={styles.unverifiedIconContainer}>
+              <Ionicons name="shield-half-outline" size={32} color={COLORS.danger} />
+            </View>
+            
+            <Text style={styles.unverifiedModalTitle}>{t('screens.booking.unverified_property')}</Text>
+            <Text style={styles.unverifiedModalDesc}>
+              This listing has not been physically verified by DHUB. Booking unverified properties carries risks:
+            </Text>
+
+            <View style={styles.unverifiedRiskList}>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>{t('screens.booking.property_may_not_match_th')}</Text>
+              </View>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>{t('screens.booking.promised_amenities_could')}</Text>
+              </View>
+              <View style={styles.riskItem}>
+                <Ionicons name="close-circle" size={18} color={COLORS.danger} style={styles.riskIcon} />
+                <Text style={styles.riskText}>{t('screens.booking.you_may_risk_losing_your')}</Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.unverifiedLearnMore}
+              onPress={() => {
+                setShowUnverifiedModal(false);
+                navigation.navigate('Legal');
+              }}
+            >
+              <Text style={styles.unverifiedLearnMoreText}>{t('screens.booking.read_our_safety_guideline')}</Text>
+              <Ionicons name="arrow-forward" size={14} color={COLORS.gold} />
+            </TouchableOpacity>
+
+            <View style={styles.unverifiedActions}>
+              <TouchableOpacity
+                style={styles.unverifiedCancelBtn}
+                onPress={() => setShowUnverifiedModal(false)}
+              >
+                <Text style={styles.unverifiedCancelBtnText}>{t('screens.booking.cancel_booking')}</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={styles.unverifiedProceedBtn}
+                onPress={() => {
+                  setShowUnverifiedModal(false);
+                  performBooking();
+                }}
+              >
+                <Text style={styles.unverifiedProceedBtnText}>{t('screens.booking.proceed_anyway')}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Sticky footer CTA ── */}
+      <View style={styles.footer}>
+        {totals !== null && (
+          <View style={styles.footerAmountRow}>
+            <Text style={styles.footerAmountLabel}>{t('booking.total')}</Text>
+            <Text style={styles.footerAmountValue}>{t('listing.fcfa')} {totals.total.toLocaleString()}</Text>
+          </View>
+        )}
+        <TouchableOpacity
+          style={[styles.bookButton, (!signatureAccepted || submitting) && styles.bookButtonDisabled]}
+          onPress={handleCreateBooking}
+          disabled={!signatureAccepted || submitting}
+          activeOpacity={0.85}
+        >
+          {submitting ? (
+            <ActivityIndicator color={COLORS.white} />
+          ) : (
+            <>
+              <Ionicons name="checkmark-circle-outline" size={22} color={COLORS.white} />
+              <Text style={styles.bookButtonText}>{t('booking.confirm')}</Text>
+            </>
+          )}
+        </TouchableOpacity>
+        {!signatureAccepted && (
+          <Text style={styles.footerHint}>{t('booking.signature_required_hint')}</Text>
+        )}
+      </View>
+    </SafeAreaView>
+  );
+};
+
+// ─── Styles ───────────────────────────────────────────────────────────────────
+const getStyles = (COLORS: any) => StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: COLORS.background },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  loadingText: { marginTop: 14, fontSize: 16, color: COLORS.greyMedium },
+  errorTitle: {
+    fontSize: 20, fontWeight: '600', color: COLORS.greyDark,
+    marginTop: 16, marginBottom: 24,
+  },
+  outlineButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 24, paddingVertical: 12,
+    borderRadius: 12, borderWidth: 1.5, borderColor: COLORS.gold,
+  },
+  outlineButtonText: { color: COLORS.gold, fontSize: 15, fontWeight: '600' },
+
+  // Header
+  header: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: COLORS.white,
+    borderBottomWidth: 1, borderBottomColor: COLORS.border,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '600', color: COLORS.greyDark },
+  headerBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.offWhite, justifyContent: 'center', alignItems: 'center',
+  },
+
+  // Scroll
+  scrollContent: { padding: 16, paddingBottom: 24 },
+
+  // Property card
+  propertyCard: {
+    backgroundColor: COLORS.white, borderRadius: 20, marginBottom: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 8, elevation: 3,
+    overflow: 'hidden',
+  },
+  propertyCardTop: {
+    flexDirection: 'row', alignItems: 'flex-start', gap: 14, padding: 20,
+  },
+  propertyIcon: {
+    width: 52, height: 52, borderRadius: 16,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: 'center', alignItems: 'center',
+  },
+  propertyInfo: { flex: 1, paddingTop: 2 },
+  propertyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.greyDark, marginBottom: 6 },
+  propertyMeta: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  propertyMetaText: { fontSize: 13, color: COLORS.greyMedium },
+  propertyDivider: { height: 1, backgroundColor: COLORS.border, marginHorizontal: 20 },
+  propertyFooter: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    padding: 20, paddingTop: 14,
+  },
+  priceLabel: { fontSize: 12, color: COLORS.greyMedium, marginBottom: 2 },
+  priceValue: { fontSize: 20, fontWeight: '700', color: COLORS.gold },
+  landlordPill: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    paddingHorizontal: 12, paddingVertical: 6,
+    backgroundColor: COLORS.goldLight, borderRadius: 20,
+  },
+  landlordPillText: { fontSize: 12, fontWeight: '600', color: COLORS.goldDark },
+
+  // Generic card
+  card: {
+    backgroundColor: COLORS.white, borderRadius: 20, padding: 20, marginBottom: 16,
+    borderWidth: 1, borderColor: COLORS.border,
+    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 8, elevation: 3,
+  },
+  cardHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 16,
+  },
+  cardTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: COLORS.greyDark },
+
+  // Duration pills
+  durationRow: { flexDirection: 'row', gap: 12 },
+  durationPill: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 8, paddingVertical: 14, borderRadius: 14,
+    borderWidth: 1.5, borderColor: COLORS.border, backgroundColor: COLORS.offWhite,
+  },
+  durationPillActive: {
+    backgroundColor: COLORS.gold, borderColor: COLORS.goldDark,
+  },
+  durationPillYearly: { backgroundColor: COLORS.yearly, borderColor: COLORS.yearly },
+  durationPillText: { fontSize: 15, fontWeight: '600', color: COLORS.greyMedium },
+  durationPillTextActive: { color: COLORS.white },
+  durationDiscount: { fontSize: 11, color: COLORS.greyMedium, textAlign: 'center' },
+  durationDiscountActive: { color: 'rgba(255,255,255,0.85)' },
+
+  // Date picker — card blocks
+  dateRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  dateBlock: {
+    flex: 1, alignItems: 'center', paddingVertical: 18, paddingHorizontal: 10,
+    backgroundColor: COLORS.offWhite, borderRadius: 16,
+    borderWidth: 1.5, borderColor: COLORS.border,
+  },
+  dateBlockIconWrap: {
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: COLORS.goldLight,
+    justifyContent: 'center', alignItems: 'center',
+    marginBottom: 10,
+  },
+  dateBlockLabel: {
+    fontSize: 11, fontWeight: '600', color: COLORS.greyMedium,
+    textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6,
+  },
+  dateBlockDay: {
+    fontSize: 22, fontWeight: '800', color: COLORS.greyDark, lineHeight: 26,
+  },
+  dateBlockYear: {
+    fontSize: 13, color: COLORS.greyMedium, marginTop: 2, marginBottom: 10,
+  },
+  dateBlockTapHint: {
+    flexDirection: 'row', alignItems: 'center', gap: 3,
+  },
+  dateBlockTapHintText: { fontSize: 11, color: COLORS.greyMedium },
+  dateArrow: { alignItems: 'center', justifyContent: 'center', paddingTop: 4 },
+
+  // Estimated total banner
+  totalCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    backgroundColor: COLORS.goldLight, borderRadius: 16, padding: 18,
+    marginBottom: 16, borderWidth: 1, borderColor: '#E8D57E',
+  },
+  totalLabel: { fontSize: 14, color: COLORS.goldDark, fontWeight: '600', marginBottom: 2 },
+  discountNote: { fontSize: 12, color: COLORS.goldDark },
+  totalAmount: { fontSize: 22, fontWeight: '800', color: COLORS.goldDark },
+  feeInfoButton: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingVertical: 14, borderRadius: 16,
+    backgroundColor: COLORS.offWhite, borderWidth: 1, borderColor: COLORS.border,
+    marginBottom: 16,
+  },
+  feeInfoQuestion: {
+    flex: 1, fontSize: 14, fontWeight: '600', color: COLORS.greyDark,
+    marginRight: 10,
+  },
+
+  // Terms box
+  termsBox: {
+    maxHeight: 200, backgroundColor: COLORS.offWhite,
+    padding: 14, borderRadius: 12,
+    borderWidth: 1, borderColor: COLORS.border, marginBottom: 16,
+  },
+  termsText: { fontSize: 14, lineHeight: 22, color: COLORS.greyMedium },
+  viewContractButton: {
+    marginTop: 16,
+    borderRadius: 14,
+    paddingVertical: 14,
+    alignItems: 'center',
+    backgroundColor: COLORS.goldLight,
+    borderWidth: 1,
+    borderColor: COLORS.gold,
+  },
+  viewContractButtonText: {
+    color: COLORS.goldDark,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+
+  // PDF button — full width prominent
+  pdfButton: {
+    flexDirection: 'row', alignItems: 'center', gap: 14,
+    paddingVertical: 16, paddingHorizontal: 16,
+    borderRadius: 14, borderWidth: 1.5, borderColor: COLORS.gold,
+    backgroundColor: COLORS.goldLight, marginBottom: 16,
+  },
+  pdfButtonLoading: { justifyContent: 'center' },
+  pdfIconCircle: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: COLORS.gold,
+    justifyContent: 'center', alignItems: 'center',
+    flexShrink: 0,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.35)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16,
+  },
+  modalDismissArea: StyleSheet.absoluteFillObject,
+  contractModalContentWrapper: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  contractModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    maxHeight: '88%',
+    width: '100%',
+    maxWidth: 520,
+    overflow: 'hidden',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 20,
+  },
+  contractModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  contractModalTitle: {
+    flex: 1,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: '800',
+    color: COLORS.greyDark,
+    marginRight: 12,
+  },
+  contractModalScroll: { flexShrink: 1 },
+  contractModalScrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 24,
+  },
+  contractModalText: {
+    fontSize: 14,
+    lineHeight: 22,
+    color: COLORS.greyDark,
+  },
+  contractModalTextBold: {
+    fontWeight: '700',
+    color: COLORS.greyDark,
+  },
+  contractModalFooter: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  modalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 22,
+    padding: 24,
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 20,
+    width: '100%',
+    maxWidth: 400,
+    alignSelf: 'center',
+  },
+  signatureModalContent: {
+    alignSelf: 'center',
+    maxHeight: '88%',
+    minHeight: 0,
+    justifyContent: 'flex-start',
+    overflow: 'hidden',
+    padding: 0,
+  },
+  modalTitle: { fontSize: 17, fontWeight: '700', color: COLORS.greyDark, marginBottom: 12 },
+  modalHeaderTitle: { flex: 1, marginRight: 12, marginBottom: 0 },
+  modalDescription: { fontSize: 14, color: COLORS.greyMedium, lineHeight: 22, marginBottom: 16 },
+  modalActions: { flexDirection: 'row', justifyContent: 'flex-end', gap: 12, flexWrap: 'wrap' },
+  learnMoreButton: {
+    backgroundColor: COLORS.gold,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  learnMoreButtonText: { color: COLORS.white, fontSize: 14, fontWeight: '700' },
+  modalCloseButton: {
+    backgroundColor: COLORS.offWhite,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalCloseButtonText: { color: COLORS.greyDark, fontSize: 14, fontWeight: '600' },
+  exitButton: { marginTop: 10 },
+  modalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+  },
+  modalCloseIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORS.offWhite,
+  },
+  modalContentWrapper: {
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+  },
+  modalScrollContent: { flexGrow: 1, justifyContent: 'flex-start', paddingVertical: 18, paddingBottom: 40 },
+  signatureModalScroll: { flexShrink: 1 },
+  signatureModalBody: {
+    paddingHorizontal: 20,
+    paddingTop: 18,
+    paddingBottom: 12,
+  },
+  signatureModalFooter: {
+    flexDirection: 'row',
+    gap: 10,
+    flexWrap: 'wrap',
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    backgroundColor: COLORS.white,
+  },
+  signaturePrimaryButton: { flex: 1, minWidth: 150 },
+  signatureSecondaryButton: { flex: 1, minWidth: 120 },
+  modalFooterButton: { width: '100%' },
+  pdfButtonContent: { flex: 1 },
+  pdfButtonTitle: { fontSize: 15, fontWeight: '700', color: COLORS.goldDark },
+  pdfButtonSub: { fontSize: 12, color: COLORS.goldDark, marginTop: 2 },
+  signatureCard: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    borderRadius: 18, borderWidth: 1, borderColor: COLORS.border,
+    backgroundColor: COLORS.offWhite, padding: 16,
+  },
+  signatureCardTitle: { fontSize: 15, fontWeight: '700', color: COLORS.greyDark, marginBottom: 4 },
+  signatureCardText: { fontSize: 13, color: COLORS.greyMedium, lineHeight: 20 },
+  signatureInput: {
+    minHeight: 110, backgroundColor: COLORS.offWhite,
+    borderRadius: 16, borderWidth: 1, borderColor: COLORS.border,
+    padding: 16, color: COLORS.greyDark,
+    marginBottom: 10,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  signatureError: { color: COLORS.danger, marginBottom: 10, fontSize: 13 },
+  signatureSummary: { marginTop: 0 },
+  signatureDetailRow: { marginBottom: 10 },
+  signatureDetailLabel: { fontSize: 12, color: COLORS.greyMedium, marginBottom: 4 },
+  signatureDetailValue: { fontSize: 13, lineHeight: 19, color: COLORS.greyDark, fontWeight: '600' },
+  qrContainer: {
+    alignItems: 'center', justifyContent: 'center', marginTop: 12,
+    padding: 14, borderRadius: 18, backgroundColor: COLORS.white,
+    borderWidth: 1, borderColor: COLORS.border,
+  },
+  qrLabel: { marginTop: 10, fontSize: 12, color: COLORS.greyMedium, textAlign: 'center' },
+
+  // bullet list for unverified modal
+  bulletList: { marginVertical: 12, paddingLeft: 8 },
+  bulletItem: { fontSize: 14, color: COLORS.greyDark, marginBottom: 4, lineHeight: 20 },
+
+  // Footer
+  footer: {
+    backgroundColor: COLORS.white, paddingHorizontal: 20, paddingVertical: 16,
+    borderTopWidth: 1, borderTopColor: COLORS.border,
+    shadowColor: COLORS.shadow, shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.06, shadowRadius: 10, elevation: 12,
+  },
+  footerAmountRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 10,
+  },
+  footerAmountLabel: { fontSize: 14, color: COLORS.greyMedium },
+  footerAmountValue: { fontSize: 18, fontWeight: '700', color: COLORS.gold },
+  bookButton: {
+    backgroundColor: COLORS.gold, borderRadius: 16, paddingVertical: 16,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10,
+    shadowColor: COLORS.gold, shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35, shadowRadius: 8, elevation: 6,
+  },
+  bookButtonDisabled: { opacity: 0.55, shadowOpacity: 0 },
+  bookButtonText: { color: COLORS.white, fontSize: 17, fontWeight: '700', letterSpacing: 0.3 },
+  footerHint: { textAlign: 'center', marginTop: 8, fontSize: 13, color: COLORS.greyMedium },
+
+  bottomSpacer: { height: 8 },
+
+  // Unverified Modal Styles
+  unverifiedModalContent: {
+    backgroundColor: COLORS.white,
+    borderRadius: 24,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: COLORS.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 24,
+  },
+  unverifiedIconContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: '#FEE2E2', // Light red background
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  unverifiedModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: COLORS.greyDark,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  unverifiedModalDesc: {
+    fontSize: 14,
+    color: COLORS.greyMedium,
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+  },
+  unverifiedRiskList: {
+    width: '100%',
+    backgroundColor: COLORS.offWhite,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    gap: 12,
+  },
+  riskItem: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  riskIcon: {
+    marginRight: 10,
+    marginTop: 2,
+  },
+  riskText: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.greyDark,
+    fontWeight: '500',
+    lineHeight: 20,
+  },
+  unverifiedLearnMore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+    gap: 6,
+  },
+  unverifiedLearnMoreText: {
+    fontSize: 14,
+    color: COLORS.gold,
+    fontWeight: '700',
+  },
+  unverifiedActions: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
+  },
+  unverifiedCancelBtn: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unverifiedCancelBtnText: {
+    color: COLORS.greyDark,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  unverifiedProceedBtn: {
+    flex: 1,
+    backgroundColor: COLORS.danger,
+    paddingVertical: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  unverifiedProceedBtnText: {
+    color: COLORS.white,
+    fontSize: 15,
+    fontWeight: '700',
+  },
+});
+
+export default BookingScreen;
 </file>
 
 <file path="src/screens/student/HomeScreen.tsx">
@@ -33342,299 +33452,6 @@ h1 { font-size: 22px; font-weight: 800; line-height: 1.25; margin-bottom: 8px; }
 });
 </file>
 
-<file path="src/components/MapView.web.tsx">
-import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-
-// Safely load Google Maps JS API with loading=async
-let googleMapsPromise: Promise<void> | null = null;
-
-const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
-  if (typeof window === 'undefined') {
-    return Promise.resolve();
-  }
-
-  if ((window as any).google?.maps?.Map) {
-    return Promise.resolve();
-  }
-
-  if (googleMapsPromise) {
-    return googleMapsPromise;
-  }
-
-  googleMapsPromise = new Promise((resolve, reject) => {
-    const callbackName = '__dhubGoogleMapsLoaded';
-
-    // Safari ITP / iOS timeout guard: if the callback has not fired within
-    // 12 seconds, check if the API actually loaded (it can load silently
-    // without firing the callback on some Safari versions).
-    const timeoutId = setTimeout(() => {
-      if ((window as any).google?.maps?.Map) {
-        delete (window as any)[callbackName];
-        resolve();
-      } else {
-        googleMapsPromise = null;
-        reject(new Error('Google Maps script timed out on this browser.'));
-      }
-    }, 12000);
-
-    (window as any)[callbackName] = () => {
-      clearTimeout(timeoutId);
-      delete (window as any)[callbackName];
-
-      if ((window as any).google?.maps?.Map) {
-        resolve();
-      } else {
-        googleMapsPromise = null;
-        reject(new Error('Google Maps loaded but google.maps.Map is unavailable.'));
-      }
-    };
-
-    // Also handle the case where google.maps is already available
-    // (e.g. Safari cached the script but didn't fire our callback again)
-    if ((window as any).google?.maps?.Map) {
-      clearTimeout(timeoutId);
-      delete (window as any)[callbackName];
-      resolve();
-      return;
-    }
-
-    const script = document.createElement('script');
-
-    // Note: omit `loading=async` so the callback fires reliably on Safari iOS.
-    // Use `libraries=places` so the full Maps API surface is available.
-    script.src =
-      `https://maps.googleapis.com/maps/api/js` +
-      `?key=${encodeURIComponent(apiKey)}` +
-      `&libraries=places` +
-      `&callback=${callbackName}`;
-
-    script.async = true;
-    script.defer = true;
-
-    script.onerror = () => {
-      clearTimeout(timeoutId);
-      delete (window as any)[callbackName];
-      googleMapsPromise = null;
-      reject(new Error('Failed to load Google Maps JavaScript API.'));
-    };
-
-    document.head.appendChild(script);
-  });
-
-  return googleMapsPromise;
-};
-
-const MapContext = createContext<any>(null);
-
-interface MapViewProps {
-  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
-  initialRegion?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
-  liteMode?: boolean;
-  mapType?: 'standard' | 'satellite' | 'hybrid' | 'terrain';
-  customMapStyle?: any[];
-  children?: React.ReactNode;
-  style?: any;
-  showsUserLocation?: boolean;
-  followsUserLocation?: boolean;
-  onPress?: (e: any) => void;
-  onRegionChangeComplete?: (region: any) => void;
-  scrollEnabled?: boolean;
-  zoomEnabled?: boolean;
-  rotateEnabled?: boolean;
-  pitchEnabled?: boolean;
-}
-
-export const MapView: React.FC<MapViewProps> = ({
-  region,
-  initialRegion,
-  mapType = 'standard',
-  children,
-  style,
-  onRegionChangeComplete,
-  onPress,
-  scrollEnabled = true,
-  zoomEnabled = true,
-  rotateEnabled = true,
-  pitchEnabled = true,
-}) => {
-  const mapRef = useRef<HTMLDivElement>(null);
-  const [mapInstance, setMapInstance] = useState<any>(null);
-  const isMapInitialized = useRef(false);
-  const apiKey =
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB ||
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID ||
-    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
-
-  useEffect(() => {
-    let isMounted = true;
-
-    loadGoogleMapsScript(apiKey).then(() => {
-      // Defensive initialization gate: check component mount state,
-      // DOM Element validity, and initialization locks.
-      if (!isMounted || !mapRef.current || !(mapRef.current instanceof Element) || isMapInitialized.current) {
-        return;
-      }
-
-      const center = region || initialRegion;
-      if (!center) return;
-
-      isMapInitialized.current = true;
-
-      const gestureHandling =
-        !scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled
-          ? 'none'
-          : 'greedy';
-
-      const map = new window.google.maps.Map(mapRef.current, {
-        center: { lat: center.latitude, lng: center.longitude },
-        zoom: 10,
-        mapTypeId:
-          mapType === 'satellite'
-            ? 'satellite'
-            : mapType === 'hybrid'
-              ? 'hybrid'
-              : mapType === 'terrain'
-                ? 'terrain'
-                : 'roadmap',
-        mapTypeControl: false,
-        streetViewControl: false,
-        fullscreenControl: false,
-        gestureHandling: gestureHandling,
-        zoomControl: zoomEnabled,
-        rotateControl: rotateEnabled,
-        tilt: 0,
-      });
-
-      if (isMounted) {
-        setMapInstance(map);
-      }
-
-      if (onPress) {
-        map.addListener('click', (e: any) => {
-          if (e.latLng) {
-            onPress({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
-          }
-        });
-      }
-
-      if (onRegionChangeComplete) {
-        map.addListener('idle', () => {
-          const newCenter = map.getCenter();
-          if (newCenter) {
-            onRegionChangeComplete({
-              latitude: newCenter.lat(),
-              longitude: newCenter.lng(),
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            });
-          }
-        });
-      }
-    });
-
-    return () => {
-      isMounted = false;
-      isMapInitialized.current = false;
-    };
-  }, [apiKey]);
-
-  // Dynamically update map type
-  useEffect(() => {
-    if (mapInstance && mapType) {
-      const googleMapType =
-        mapType === 'satellite'
-          ? 'satellite'
-          : mapType === 'hybrid'
-            ? 'hybrid'
-            : mapType === 'terrain'
-              ? 'terrain'
-              : 'roadmap';
-      mapInstance.setMapTypeId(googleMapType);
-    }
-  }, [mapInstance, mapType]);
-
-  // Dynamically update map center
-  useEffect(() => {
-    if (mapInstance && region) {
-      mapInstance.panTo({ lat: region.latitude, lng: region.longitude });
-    }
-  }, [mapInstance, region]);
-
-  return (
-    <View style={[styles.container, style]} pointerEvents="auto">
-      <div ref={mapRef} style={{ width: '100%', height: '100%', touchAction: 'manipulation' }} />
-      <MapContext.Provider value={mapInstance}>
-        {mapInstance && children}
-      </MapContext.Provider>
-    </View>
-  );
-};
-
-export const Marker: React.FC<{
-  coordinate: { latitude: number; longitude: number };
-  title?: string;
-  description?: string;
-  pinColor?: string;
-  onPress?: () => void;
-  draggable?: boolean;
-  onDragEnd?: (e: any) => void;
-}> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd, draggable }) => {
-  const map = useContext(MapContext);
-  useEffect(() => {
-    if (!map) return;
-    const marker = new window.google.maps.Marker({
-      position: { lat: coordinate.latitude, lng: coordinate.longitude },
-      map: map,
-      title: title,
-      draggable: draggable || false,
-      // Fixed mixed content error by enforcing HTTPS
-      icon: pinColor === 'gold' ? 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png' : undefined,
-    });
-    if (onPress) marker.addListener('click', onPress);
-    if (onDragEnd) {
-      marker.addListener('dragend', (e: any) => {
-        if (e.latLng) {
-          onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
-        }
-      });
-    }
-    return () => {
-      marker.setMap(null);
-    };
-  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor, draggable]);
-  return null;
-};
-
-export const Polyline: React.FC<{
-  coordinates: { latitude: number; longitude: number }[];
-  strokeColor?: string;
-  strokeWidth?: number;
-}> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
-  const map = useContext(MapContext);
-  useEffect(() => {
-    if (!map || coordinates.length === 0) return;
-    const path = coordinates.map((c) => ({ lat: c.latitude, lng: c.longitude }));
-    const polyline = new window.google.maps.Polyline({
-      path: path,
-      strokeColor: strokeColor,
-      strokeWeight: strokeWidth,
-      map: map,
-    });
-    return () => {
-      polyline.setMap(null);
-    };
-  }, [map, coordinates, strokeColor, strokeWidth]);
-  return null;
-};
-
-const styles = StyleSheet.create({
-  container: { flex: 1, width: '100%', height: '100%' },
-});
-
-export default MapView;
-</file>
-
 <file path="src/screens/student/BookingDetails.tsx">
 import { showAlert } from '../../utils/alert';
 // src/screens/student/BookingDetails.tsx
@@ -35766,10 +35583,321 @@ const getStyles = (COLORS: any) => StyleSheet.create({
 });
 </file>
 
+<file path="src/components/MapView.web.tsx">
+import React, { createContext, useContext, useEffect, useRef, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+
+// Safely load Google Maps JS API with loading=async
+let googleMapsPromise: Promise<void> | null = null;
+
+const loadGoogleMapsScript = (apiKey: string): Promise<void> => {
+  if (typeof window === 'undefined') {
+    return Promise.resolve();
+  }
+
+  if ((window as any).google?.maps?.Map) {
+    return Promise.resolve();
+  }
+
+  if (googleMapsPromise) {
+    return googleMapsPromise;
+  }
+
+  googleMapsPromise = new Promise((resolve, reject) => {
+    const callbackName = '__dhubGoogleMapsLoaded';
+
+    // Safari ITP / iOS timeout guard: if the callback has not fired within
+    // 12 seconds, check if the API actually loaded (it can load silently
+    // without firing the callback on some Safari versions).
+    const timeoutId = setTimeout(() => {
+      if ((window as any).google?.maps?.Map) {
+        delete (window as any)[callbackName];
+        resolve();
+      } else {
+        googleMapsPromise = null;
+        reject(new Error('Google Maps script timed out on this browser.'));
+      }
+    }, 12000);
+
+    (window as any)[callbackName] = () => {
+      clearTimeout(timeoutId);
+      delete (window as any)[callbackName];
+
+      if ((window as any).google?.maps?.Map) {
+        resolve();
+      } else {
+        googleMapsPromise = null;
+        reject(new Error('Google Maps loaded but google.maps.Map is unavailable.'));
+      }
+    };
+
+    // Also handle the case where google.maps is already available
+    // (e.g. Safari cached the script but didn't fire our callback again)
+    if ((window as any).google?.maps?.Map) {
+      clearTimeout(timeoutId);
+      delete (window as any)[callbackName];
+      resolve();
+      return;
+    }
+
+    const script = document.createElement('script');
+
+    // Note: omit `loading=async` so the callback fires reliably on Safari iOS.
+    // Use `libraries=places` so the full Maps API surface is available.
+    script.src =
+      `https://maps.googleapis.com/maps/api/js` +
+      `?key=${encodeURIComponent(apiKey)}` +
+      `&libraries=places` +
+      `&callback=${callbackName}`;
+
+    script.async = true;
+    script.defer = true;
+
+    script.onerror = () => {
+      clearTimeout(timeoutId);
+      delete (window as any)[callbackName];
+      googleMapsPromise = null;
+      reject(new Error('Failed to load Google Maps JavaScript API.'));
+    };
+
+    document.head.appendChild(script);
+  });
+
+  return googleMapsPromise;
+};
+
+const MapContext = createContext<any>(null);
+
+interface MapViewProps {
+  region?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  initialRegion?: { latitude: number; longitude: number; latitudeDelta: number; longitudeDelta: number };
+  liteMode?: boolean;
+  mapType?: 'standard' | 'satellite' | 'hybrid' | 'terrain';
+  customMapStyle?: any[];
+  children?: React.ReactNode;
+  style?: any;
+  showsUserLocation?: boolean;
+  followsUserLocation?: boolean;
+  onPress?: (e: any) => void;
+  onRegionChangeComplete?: (region: any) => void;
+  scrollEnabled?: boolean;
+  zoomEnabled?: boolean;
+  rotateEnabled?: boolean;
+  pitchEnabled?: boolean;
+}
+
+export const MapView: React.FC<MapViewProps> = ({
+  region,
+  initialRegion,
+  mapType = 'standard',
+  children,
+  style,
+  onRegionChangeComplete,
+  onPress,
+  scrollEnabled = true,
+  zoomEnabled = true,
+  rotateEnabled = true,
+  pitchEnabled = true,
+}) => {
+  const mapRef = useRef<HTMLDivElement>(null);
+  const [mapInstance, setMapInstance] = useState<any>(null);
+  const isMapInitialized = useRef(false);
+  const apiKey =
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_WEB ||
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_ANDROID ||
+    process.env.EXPO_PUBLIC_GOOGLE_MAPS_API_KEY_IOS;
+
+  useEffect(() => {
+    let isMounted = true;
+
+    loadGoogleMapsScript(apiKey).then(() => {
+      // Defensive initialization gate: check component mount state,
+      // DOM Element validity, and initialization locks.
+      if (!isMounted || !mapRef.current || !(mapRef.current instanceof Element) || isMapInitialized.current) {
+        return;
+      }
+
+      const center = region || initialRegion;
+      if (!center) return;
+
+      isMapInitialized.current = true;
+
+      const gestureHandling =
+        !scrollEnabled && !zoomEnabled && !rotateEnabled && !pitchEnabled
+          ? 'none'
+          : 'greedy';
+
+      const map = new window.google.maps.Map(mapRef.current, {
+        center: { lat: center.latitude, lng: center.longitude },
+        zoom: 10,
+        mapTypeId:
+          mapType === 'satellite'
+            ? 'satellite'
+            : mapType === 'hybrid'
+              ? 'hybrid'
+              : mapType === 'terrain'
+                ? 'terrain'
+                : 'roadmap',
+        mapTypeControl: false,
+        streetViewControl: false,
+        fullscreenControl: false,
+        gestureHandling: gestureHandling,
+        zoomControl: zoomEnabled,
+        rotateControl: rotateEnabled,
+        tilt: 0,
+      });
+
+      if (isMounted) {
+        setMapInstance(map);
+      }
+
+      if (onPress) {
+        map.addListener('click', (e: any) => {
+          if (e.latLng) {
+            onPress({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+          }
+        });
+        // Safari on iOS does not reliably fire 'click' on maps. Add touchend fallback.
+        if (mapRef.current) {
+          mapRef.current.addEventListener('touchend', (ev: TouchEvent) => {
+            ev.preventDefault();
+            if (!ev.changedTouches.length || !onPress) return;
+            const touch = ev.changedTouches[0];
+            const bounds = map.getBounds();
+            if (!bounds) return;
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+            const xRatio = (touch.clientX - rect.left) / rect.width;
+            const yRatio = (touch.clientY - rect.top) / rect.height;
+            const lat = ne.lat() - (ne.lat() - sw.lat()) * yRatio;
+            const lng = sw.lng() + (ne.lng() - sw.lng()) * xRatio;
+            onPress({ nativeEvent: { coordinate: { latitude: lat, longitude: lng } } });
+          }, { passive: false });
+        }
+      }
+
+      if (onRegionChangeComplete) {
+        map.addListener('idle', () => {
+          const newCenter = map.getCenter();
+          if (newCenter) {
+            onRegionChangeComplete({
+              latitude: newCenter.lat(),
+              longitude: newCenter.lng(),
+              latitudeDelta: 0.01,
+              longitudeDelta: 0.01,
+            });
+          }
+        });
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      isMapInitialized.current = false;
+    };
+  }, [apiKey]);
+
+  // Dynamically update map type
+  useEffect(() => {
+    if (mapInstance && mapType) {
+      const googleMapType =
+        mapType === 'satellite'
+          ? 'satellite'
+          : mapType === 'hybrid'
+            ? 'hybrid'
+            : mapType === 'terrain'
+              ? 'terrain'
+              : 'roadmap';
+      mapInstance.setMapTypeId(googleMapType);
+    }
+  }, [mapInstance, mapType]);
+
+  // Dynamically update map center
+  useEffect(() => {
+    if (mapInstance && region) {
+      mapInstance.panTo({ lat: region.latitude, lng: region.longitude });
+    }
+  }, [mapInstance, region]);
+
+  return (
+    <View style={[styles.container, style]} pointerEvents="auto">
+      <div ref={mapRef} style={{ width: '100%', height: '100%', touchAction: 'manipulation' }} />
+      <MapContext.Provider value={mapInstance}>
+        {mapInstance && children}
+      </MapContext.Provider>
+    </View>
+  );
+};
+
+export const Marker: React.FC<{
+  coordinate: { latitude: number; longitude: number };
+  title?: string;
+  description?: string;
+  pinColor?: string;
+  onPress?: () => void;
+  draggable?: boolean;
+  onDragEnd?: (e: any) => void;
+}> = ({ coordinate, title, pinColor = 'red', onPress, onDragEnd, draggable }) => {
+  const map = useContext(MapContext);
+  useEffect(() => {
+    if (!map) return;
+    const marker = new window.google.maps.Marker({
+      position: { lat: coordinate.latitude, lng: coordinate.longitude },
+      map: map,
+      title: title,
+      draggable: draggable || false,
+      // Fixed mixed content error by enforcing HTTPS
+      icon: pinColor === 'gold' ? 'https://maps.google.com/mapfiles/ms/icons/yellow-dot.png' : undefined,
+    });
+    if (onPress) marker.addListener('click', onPress);
+    if (onDragEnd) {
+      marker.addListener('dragend', (e: any) => {
+        if (e.latLng) {
+          onDragEnd({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
+        }
+      });
+    }
+    return () => {
+      marker.setMap(null);
+    };
+  }, [map, coordinate.latitude, coordinate.longitude, title, pinColor, draggable]);
+  return null;
+};
+
+export const Polyline: React.FC<{
+  coordinates: { latitude: number; longitude: number }[];
+  strokeColor?: string;
+  strokeWidth?: number;
+}> = ({ coordinates, strokeColor = '#000', strokeWidth = 2 }) => {
+  const map = useContext(MapContext);
+  useEffect(() => {
+    if (!map || coordinates.length === 0) return;
+    const path = coordinates.map((c) => ({ lat: c.latitude, lng: c.longitude }));
+    const polyline = new window.google.maps.Polyline({
+      path: path,
+      strokeColor: strokeColor,
+      strokeWeight: strokeWidth,
+      map: map,
+    });
+    return () => {
+      polyline.setMap(null);
+    };
+  }, [map, coordinates, strokeColor, strokeWidth]);
+  return null;
+};
+
+const styles = StyleSheet.create({
+  container: { flex: 1, width: '100%', height: '100%' },
+});
+
+export default MapView;
+</file>
+
 <file path="src/screens/landlord/UploadListingScreen.tsx">
 // src/screens/landlord/UploadListingScreen.tsx
 import { Ionicons } from '@expo/vector-icons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { showAlert } from '../../utils/alert';
@@ -35798,6 +35926,7 @@ const UploadListingScreen: React.FC = () => {
   const scrollViewRef = useRef<ScrollView>(null);
 
   const [loading, setLoading] = useState(false);
+  const [kycStatus, setKycStatus] = useState<'loading' | 'approved' | 'pending' | 'rejected' | 'none'>('loading');
   const [showMap, setShowMap] = useState(false);
   const [mapLoading, setMapLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
