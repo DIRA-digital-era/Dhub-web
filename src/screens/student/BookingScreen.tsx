@@ -377,6 +377,36 @@ const handleDownloadPDF = async () => {
 
       console.log('[BookingScreen] Inserting booking payload:', JSON.stringify(bookingPayload, null, 2));
 
+
+      // -- Guard 1: Confirmed booking block --
+      const { data: confirmedCheck } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('listing_id', listing!.id)
+        .eq('status', 'confirmed')
+        .maybeSingle();
+      if (confirmedCheck) {
+        showAlert('Already Booked', 'This property has already been booked.');
+        setSubmitting(false);
+        return;
+      }
+
+      // -- Guard 2: 15-minute escrow lock --
+      const fifteenMinutesAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      const { data: pendingCheck } = await supabase
+        .from('bookings')
+        .select('id')
+        .eq('listing_id', listing!.id)
+        .eq('status', 'pending')
+        .neq('student_id', user!.id)
+        .gte('created_at', fifteenMinutesAgo)
+        .maybeSingle();
+      if (pendingCheck) {
+        showAlert('Booking In Progress', 'Someone else is currently booking this property. Please try again in 15 minutes.');
+        setSubmitting(false);
+        return;
+      }
+
       const { data: booking, error } = await supabase
         .from('bookings')
         .insert(bookingPayload)

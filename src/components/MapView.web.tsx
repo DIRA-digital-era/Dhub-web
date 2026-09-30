@@ -171,6 +171,24 @@ export const MapView: React.FC<MapViewProps> = ({
             onPress({ nativeEvent: { coordinate: { latitude: e.latLng.lat(), longitude: e.latLng.lng() } } });
           }
         });
+        // Safari on iOS does not reliably fire 'click' on maps. Add touchend fallback.
+        if (mapRef.current) {
+          mapRef.current.addEventListener('touchend', (ev: TouchEvent) => {
+            ev.preventDefault();
+            if (!ev.changedTouches.length || !onPress) return;
+            const touch = ev.changedTouches[0];
+            const bounds = map.getBounds();
+            if (!bounds) return;
+            const ne = bounds.getNorthEast();
+            const sw = bounds.getSouthWest();
+            const rect = (ev.currentTarget as HTMLElement).getBoundingClientRect();
+            const xRatio = (touch.clientX - rect.left) / rect.width;
+            const yRatio = (touch.clientY - rect.top) / rect.height;
+            const lat = ne.lat() - (ne.lat() - sw.lat()) * yRatio;
+            const lng = sw.lng() + (ne.lng() - sw.lng()) * xRatio;
+            onPress({ nativeEvent: { coordinate: { latitude: lat, longitude: lng } } });
+          }, { passive: false });
+        }
       }
 
       if (onRegionChangeComplete) {
